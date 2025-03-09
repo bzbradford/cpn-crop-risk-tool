@@ -1,10 +1,22 @@
 
+:root {
+  --headingFont: 'Red Hat Display';
+  --textFont: 'Red Hat Text';
+  --headingHeight: 50px;
+  --minHeight: calc(max(100vw, 100vh) * .4);
+  --maxHeight: max(calc(100vh - var(--headingHeight) - 2rem), var(--minHeight));
+}
+
 /*--- UW STYLE ---*/
 
-:root {
-  --uwHeaderColor: #c5050c;
-  --uwTextFont: Red Hat Text, sans-serif;
-  --uwDisplayFont: Red Hat Display, sans-serif;
+@font-face {
+  font-family: var(--headingFont);
+  src: url('fonts/redhat-display-latin.v14.woff2') format('woff2');
+}
+
+@font-face {
+  font-family: var(--textFont);
+  src: url('fonts/redhat-text-latin.v13.woff2') format('woff2');
 }
 
 html, body, div, span, applet, object, iframe,
@@ -19,11 +31,11 @@ table, caption, tbody, tfoot, thead, tr, th, td {
 }
 
 html, body, header {
-  font-family: var(--uwTextFont);
+  font-family: var(--headingFont);
 }
 
 h1, h2, h3, h4, h5, h6 {
-  font-family: var(--uwDisplayFont);
+  font-family: var(--textFont);
 }
 
 
@@ -31,9 +43,8 @@ h1, h2, h3, h4, h5, h6 {
 
 header {
   width: 100%;
-  height: 50px;
+  height: var(--headingHeight);
   padding: 5px;
-  background-color: var(--uwHeaderColor);
   color: white;
   font-weight: bold;
   font-size: 2rem;
@@ -45,7 +56,7 @@ header {
 
 .uw-title {
   display: inline-flex;
-  gap: 5px;
+  column-gap: 10px;
 }
 
 .uw-title img {
@@ -70,8 +81,16 @@ header {
 
 /*--- FOOTER ---*/
 
-.footer {
+footer {
+  width: 100%;
   padding: 10px;
+  padding-top: 0px;
+  display: inline-flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.credits {
   text-align: right;
   color: #888;
   font-style: italic;
@@ -101,10 +120,8 @@ header {
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   overflow: auto;
-}
-
-.column.map-container {
-  padding: 0;
+  min-height: var(--minHeight);
+  max-height: var(--maxHeight);
 }
 
 .column h2 {
@@ -116,12 +133,16 @@ header {
 
 .sidebar-container {
   flex: 0 0 calc(20% - 0.67rem);
+  max-height: var(--maxHeight);
+}
+
+.column.map-container {
+  padding: 0;
 }
 
 .map-container {
   flex: 0 0 calc(40% - 0.67rem);
   position: relative;
-  min-height: min(800px, 100vh, 100vw);
 }
 
 .data-container {
@@ -147,6 +168,12 @@ header {
   }
 }
 
+.inline-flex {
+  display: inline-flex;
+  gap: 20px;
+  flex-wrap: wrap;
+}
+
 .flex-down {
   display: flex;
   flex-direction: column;
@@ -158,12 +185,18 @@ header {
   display: flex;
   flex-direction: row;
   flex-wrap: wrap;
-/*  justify-content: space-between;*/
   gap: 10px;
 }
 
 .flex-across > .btn {
   flex: 1;
+}
+
+/* crop type button spacing fix */
+.btn-group-container-sw {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
 }
 
 
@@ -217,6 +250,15 @@ table {
 .modal-dialog {
   width: 800px;
   max-width: 90vw;
+}
+
+.shiny-output-error-validation {
+  border: 1px solid rgb(39, 128, 227);
+  border-radius: 5px;
+  margin: 20px 0px;
+  padding: 10px;
+  background: rgb(236, 244, 252);
+  color: #222;
 }
 
 
