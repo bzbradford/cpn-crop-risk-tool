@@ -110,13 +110,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         req(crop %in% crops$white_mold)
 
         irrig_choices <- list("Dry" = "dry", "Irrigated" = "irrig")
-        if (crop == "corn") {
-          spacing_label <- "Row spacing:"
-          spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
-        } else {
-          spacing_label <- "Canopy closure:"
-          spacing_choices <- list("Open" = "30", "Closed" = "15")
-        }
+        spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
         div(
           class = "inline-flex",
@@ -132,7 +126,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             "input['risk-irrigation'] == 'irrig'",
             radioButtons(
               inputId = ns("spacing"),
-              label = spacing_label,
+              label = "Row spacing:",
               choices = spacing_choices,
               selected = input$spacing %||% "30",
               inline = TRUE
@@ -213,15 +207,12 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
               mutate(risk_label = sprintf("%s: %s (%.0f%%)", name, risk, value * 100))
             risk_date <- first(last_value$date)
             risk_info <- paste(last_value$risk_label, collapse = ", ")
-            plt <- disease_plot(df, xrange = c(dates$start, dates$end))
+            plts <- disease_plot(df, xrange = c(dates$start, dates$end))
 
-            tagList(
-              plt,
-              div(
-                style = "margin-top: 10px; font-style: italic;",
-                strong(paste0("For ", format(risk_date, "%b %d, %Y"), ":")),
-                risk_info
-              )
+            div(
+              class = "flex-down",
+              plts,
+              em(strong(paste0("For ", format(risk_date, "%b %d, %Y"), ":")), risk_info)
             )
           } else {
             strong("No data downloaded yet for this site.")

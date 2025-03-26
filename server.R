@@ -217,7 +217,8 @@ server <- function(input, output, session) {
         select(all_of(names(sites_template))) %>%
         filter(validate_ll(lat, lng)) %>%
         distinct() %>%
-        head(OPTS$max_sites)
+        head(OPTS$max_sites) %>%
+        mutate(id = row_number())
       req(nrow(sites) > 0)
       rv$sites <- sites
       rv$selected_site <- first(sites$id)

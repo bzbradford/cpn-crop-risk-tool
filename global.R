@@ -1,12 +1,5 @@
 #-- global.R --#
 
-# dev ----
-# shiny::devmode(TRUE)
-# renv::snapshot()
-# renv::update()
-# renv::clean()
-
-
 suppressPackageStartupMessages({
   library(tidyverse)
   library(janitor) # name cleaning
@@ -32,8 +25,18 @@ suppressPackageStartupMessages({
   # library(gt)
 })
 
+## development mode
+# shiny::devmode(TRUE)
+
+## RENV
+# renv::update()
+# renv::snapshot()
+# renv::clean()
+
+## turn warnings into errors
 # options(warn = 2)
 
+## test the CPN skin
 # Sys.setenv("CPN_MODE" = TRUE)
 # Sys.unsetenv("CPN_MODE")
 
@@ -157,8 +160,17 @@ OPTS <- lst(
   } else {
     img(src = "uw-logo.svg", height = "40px")
   },
-  ibm_endpoint = "https://api.weather.com/v3/wx/hod/r1/direct",
-  ibm_key = Sys.getenv("ibm_key"),
+
+  ibm_keys = list(
+    org_id = Sys.getenv("ibm_org_id"),
+    tenant_id = Sys.getenv("ibm_tenant_id"),
+    api_key = Sys.getenv("ibm_api_key")
+  ),
+  ibm_auth_endpoint = "https://api.ibm.com/saascore/run/authentication-retrieve/api-key",
+  ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
+  # max hours per api call
+  ibm_chunk_size = 999,
+
   google_key = Sys.getenv("google_places_key"),
 
   ibm_ignore_cols = c(
@@ -225,13 +237,13 @@ OPTS <- lst(
   validation_weather_ready = "No weather data downloaded yet for the selected dates. Click 'Fetch Weather' to download.",
 
   # data types
-  data_type_choices = list(
+  data_type_choices = as.list(c(
     "Hourly" = "hourly",
     "Daily" = "daily",
     "Moving averages" = "ma",
     "Growing degree days" = "gdd",
-    "Disease models" = "disease"
-  ),
+    { if (!cpn_mode) "Disease models" = "disease" }
+  )),
 
 
   #-- Disease risk tab
@@ -259,7 +271,7 @@ OPTS <- lst(
   risk_info = list(
     general = "Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments. Changing the irrigation and row spacing options below will affect the white mold model output.",
     corn = "Corn diseases include tarspot and gray leaf spot. Risk assessment is only applicable when corn is in the growth stages V10-R3.",
-    soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3, and vulnerable to frogeye leaf spot when in R1-R5.",
+    soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering), and vulnerable to frogeye leaf spot when in R1-R5.",
     drybean = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
     potato = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to white mold, early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
     carrot = "Carrots are susceptible to the foliar disease Alternaria leaf blight. Alternaria risk depends on the number of disease severity values generated in the last 7 days.",
@@ -280,19 +292,6 @@ OPTS <- lst(
   daily_attr_cols = c("date", "yday", "year", "month", "day"),
   plot_default_cols = c("temperature", "temperature_mean", "temperature_mean_7day", "base_50_upper_86_cumulative"),
   plot_ignore_cols = c(site_attr_cols, grid_attr_cols, date_attr_cols),
-  plot_title_font = list(
-    family = "Red Hat Display",
-    size = 16
-  ),
-  plot_axis_font = list(
-    family = "Red Hat Text",
-    size = 14
-  ),
-  plot_legend_font = list(
-    family = "Red Hat Text",
-    size = 12
-  ),
-
 )
 
 
@@ -305,15 +304,68 @@ OPTS <- lst(
 #' @returns list of two-element formatted datetime strings
 ibm_chunks <- function(start_date, end_date, tz = "UTC") {
   start_dttm <- as_datetime(start_date, tz = tz)
-  end_dttm <- as_datetime(end_date, tz = tz) + hours(23)
-  chunks <- seq(start_dttm, end_dttm, by = as.difftime(hours(999)))
+  end_dttm <- as_datetime(end_date, tz = tz) + minutes(23.5 * 60)
+  chunks <- seq(start_dttm, end_dttm, by = as.difftime(hours(OPTS$ibm_chunk_size)))
   chunks <- lapply(1:length(chunks), function(i) {
-    c(chunks[i], ifelse(i < length(chunks), chunks[i + 1], end_dttm))
+    c(chunks[i], ifelse(i < length(chunks), chunks[i + 1] - minutes(30), end_dttm))
   })
   lapply(chunks, function(chunk) format(chunk, "%Y-%m-%dT%H:%M:%S%z"))
 }
 
 # ibm_chunks("2024-1-1", Sys.Date())
+
+
+#' Get the authorization token from the authentication server
+#' @param url IBM authentication endpoint
+#' @param keys list with org_id, tenant_id, and api_key
+refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
+  ibm_auth <<- tryCatch({
+    req <- request(url) %>%
+      req_url_query(orgId = keys$org_id) %>%
+      req_headers_redacted(
+        "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
+        "x-api-key" = keys$api_key
+      )
+    resp <- req_perform(req)
+    message("Authorization token refreshed at ", now("UTC"))
+    list(
+      timestamp = now("UTC"),
+      status = resp_status(resp),
+      token = resp_body_string(resp)
+    )
+  }, catch = function(e) {
+    message("Failed to get authorization token: ", e$message)
+    list(
+      timestamp = 1,
+      status = 500,
+      token = NULL
+    )
+  })
+  saveRDS(ibm_auth, "ibm_auth.rds")
+}
+
+# refresh_auth()
+
+
+# Get the current IBM token or refresh if needed
+# token is valid for 1 hour
+get_ibm_token <- function() {
+  # look for a stored token if available
+  if (!exists("ibm_auth")) {
+    if (file.exists("ibm_auth.rds")) {
+      ibm_auth <<- read_rds("ibm_auth.rds")
+    } else {
+      refresh_auth()
+    }
+  }
+
+  # if token is stale get a new one
+  if (ibm_auth$timestamp < now("UTC") - minutes(59)) refresh_auth()
+
+  ibm_auth$token
+}
+
+# get_ibm_token()
 
 
 #' Fetch hourly weather data from IBM
@@ -323,37 +375,69 @@ ibm_chunks <- function(start_date, end_date, tz = "UTC") {
 #' @param start_date date or date string
 #' @param end_date date or date string
 #' @returns tibble, either with hourly data if successful or empty if failed
-get_ibm <- function(lat, lng, start_date, end_date) {
+get_ibm <- function(lat, lng, start_date, end_date, url = OPTS$ibm_weather_endpoint) {
   stime <- Sys.time()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
   chunks <- ibm_chunks(start_date, end_date, tz)
-  reqs <- lapply(chunks, function(dates) {
-    request(OPTS$ibm_endpoint) %>%
-      req_url_query(
-        format = "json",
-        geocode = str_glue("{lat},{lng}"),
-        startDateTime = dates[1],
-        endDateTime = dates[2],
-        units = "m",
-        apiKey = OPTS$ibm_key
-      ) %>%
-      req_timeout(10)
+
+  responses <- tryCatch({
+    token <- get_ibm_token()
+    if (!is.character(token)) stop("Failed to get IBM token.")
+
+    reqs <- lapply(chunks, function(dates) {
+      request(url) %>%
+        req_headers_redacted(
+          "x-ibm-client-id" = sprintf("geospatial-%s", OPTS$ibm_keys$tenant_id),
+          "Authorization" = sprintf("Bearer %s", token)
+        ) %>%
+        req_url_query(
+          format = "json",
+          geocode = str_glue("{lat},{lng}"),
+          startDateTime = dates[1],
+          endDateTime = dates[2],
+          units = "m"
+        ) %>%
+        req_timeout(10)
+    })
+
+    # perform parallel requests for each time chunk
+    resps <- req_perform_parallel(reqs, on_error = "continue", progress = F)
+
+    # gather response data
+    lapply(resps, function(resp) {
+      tryCatch({
+        if (resp_status(resp) != 200) stop(paste0("Received status ", resp_status(resp), " with message ", resp_status_desc(resp)))
+        resp_body_json(resp, simplifyVector = T) %>% as_tibble()
+      }, error = function(e) {
+        message(e$message)
+        tibble()
+      })
+    })
+  }, error = function(e) {
+    message(e$message)
+    tibble()
   })
-  resps <- req_perform_parallel(reqs, on_error = "continue", progress = F)
-  responses <- lapply(resps, function(resp) {
-    tryCatch({
-      if (resp_status(resp) != 200) {
-        message("Received status ", resp_status(resp), " with message ", resp_status_desc(resp))
-        stop()
-      }
-      resp_body_json(resp, simplifyVector = T) %>% as_tibble()
-    }, error = function(e) return(tibble()))
-  })
+
   wx <- bind_rows(responses)
-  msg <- str_glue("weather for {lat}, {lng} from {start_date} to {end_date} in {Sys.time() - stime}")
-  message(ifelse(nrow(wx) > 0, "OK ==> Got ", "FAIL ==> Could not get "), msg)
+  msg <- if (nrow(wx) > 0) {
+    str_glue("OK ==> Got weather for {lat}, {lng} from {start_date} to {end_date} in {round(Sys.time() - stime, 3)} using {length(chunks)} calls")
+  } else {
+    str_glue("FAIL ==> Could not get weather for {lat}, {lng} from {start_date} to {end_date}")
+  }
+  message(msg)
   wx
 }
+
+# should succeed
+# get_ibm(43.0731, -89.4012, "2024-1-1", "2024-1-2")
+# df <- get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31") %>% clean_ibm()
+# ggplot(df, aes(x = datetime_local, y = temperature)) + geom_line()
+
+# should fail
+# get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31", url = 'foo')
+
+# should partially fail because start date is before earliest data 2015-6-29
+# get_ibm(43.0731, -89.4012, "2015-1-1", "2015-8-1")
 
 
 #' Does some minimal processing on the IBM response to set local time and date
@@ -384,7 +468,7 @@ clean_ibm <- function(ibm_response) {
 build_grids <- function(wx) {
   req(nrow(wx) > 0)
   wx %>%
-    distinct(grid_id, grid_lat, grid_lng) %>%
+    distinct(grid_id, grid_lat, grid_lng, time_zone) %>%
     rowwise() %>%
     mutate(geometry = ll_to_grid(grid_lat, grid_lng)) %>%
     ungroup() %>%
@@ -399,7 +483,7 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
   if (nrow(wx) == 0) return(tibble(grid_id = NA, needs_download = TRUE))
   wx %>%
     summarize(
-      tz = first_truthy(first(time_zone), "UTC"),
+      tz = coalesce(first(time_zone), "UTC"),
       date_min = min(date),
       date_max = max(date),
       days_expected = length(dates_expected),
@@ -418,7 +502,8 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
       stale = hours_stale > OPTS$ibm_stale_hours,
       needs_download = stale | days_missing > 0,
       .by = grid_id
-    )
+    ) %>%
+    select(-tz)
 }
 
 #' Update weather for sites list and date range
@@ -441,12 +526,16 @@ fetch_weather <- function(sites, start_date, end_date) {
     if (nrow(wx) > 0) {
       grids <- build_grids(wx)
       wx_status <- weather_status(wx, start_date, end_date)
-      site <- st_join(site, grids) %>%
-        left_join(wx_status, join_by(grid_id)) %>%
-        replace_na(list(needs_download = TRUE))
-      if (site$needs_download == FALSE) next
-      if (!is.na(site$grid_id)) {
-        tz <- site$tz
+      grid_status <- grids %>%
+        left_join(wx_status, join_by(grid_id))
+      site <- st_join(site, grid_status)
+
+      # if weather is up to date don't download
+      if (isFALSE(site$needs_download)) next
+
+      # if there is at least one day already downloaded check each date for completeness
+      if (isTruthy(site$days_actual)) {
+        tz <- site$time_zone
         date_status <- wx %>%
           filter(grid_id == site$grid_id) %>%
           filter(between(date, start_date, end_date)) %>%
@@ -597,19 +686,35 @@ logistic <- function(logit) exp(logit) / (1 + exp(logit))
 ## Corn/Bean ----
 
 #' White mold, dryland model - Any crop
-#' Growth stage: Corn V10-R3, Soy R1-R3
+#' Growth stage: Soy R1-R3
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' No risk: Fungicide app in last 14 days, min temp <32F
 #' @param MaxAT_30ma 30-day moving average of daily maximum temperature, Celsius
 #' @param MaxWS_30ma 30-day moving average of daily maximum wind speed, m/s
+#' @param MaxRH_30ma 30-day moving average of daily maximum relative humidity, 0-100%
 #' @returns probability of spore presence
-predict_whitemold_dry <- function(MaxAT_30ma, MaxWS_30ma) {
-  mu <- -0.47 * MaxAT_30ma - 1.01 * MaxWS_30ma + 16.65
-  logistic(mu)
+predict_whitemold_dry <- function(MaxAT_30ma, MaxWS_30ma, MaxRH_30ma) {
+  m1 <- -.47 * MaxAT_30ma - 1.01 * MaxWS_30ma + 16.65
+  m2 <- -.68 * MaxAT_30ma + 17.19
+  m3 <- -.86 * MaxAT_30ma + 0.1 * MaxRH_30ma - 0.75 * MaxWS_30ma + 8.2
+  (logistic(m1) + logistic(m2) + logistic(m3)) / 3
 }
 
+# expand_grid(temp = 0:40, wind = 0:20, rh = (0:10) * 10) %>%
+#   mutate(prob = predict_whitemold_dry(temp, wind, rh)) %>%
+#   ggplot(aes(x = temp, y = wind, fill = prob)) +
+#   geom_tile() +
+#   scale_fill_distiller(palette = "Spectral", limits = c(0, 1)) +
+#   coord_cartesian(expand = F) +
+#   facet_wrap(~rh, labeller = "label_both")
+
+# predict_whitemold_dry_old <- function(MaxAT_30ma, MaxWS_30ma) {
+#   mu <- -0.47 * MaxAT_30ma - 1.01 * MaxWS_30ma + 16.65
+#   logistic(mu)
+# }
+#
 # expand_grid(temp = 0:40, wind = 0:20) %>%
-#   mutate(prob = sporecaster_dry(temp, wind)) %>%
+#   mutate(prob = predict_whitemold_dry_old(temp, wind)) %>%
 #   ggplot(aes(x = temp, y = wind, fill = prob)) +
 #   geom_tile() +
 #   scale_fill_distiller(palette = "Spectral") +
@@ -843,12 +948,12 @@ calc_cercospora_div <- function(temp, h) {
 
 assign_risk <- function(model, value) {
   switch(model,
-    "white_mold_dry_prob"      = risk_for_fieldcrops(value, 40, 20, 5),
-    "white_mold_irrig_30_prob" = risk_for_fieldcrops(value, 40, 20, 5),
-    "white_mold_irrig_15_prob" = risk_for_fieldcrops(value, 40, 20, 5),
-    "gray_leaf_spot_prob"      = risk_for_fieldcrops(value, 60, 40, 1),
-    "tarspot_prob"             = risk_for_fieldcrops(value, 35, 20, 1),
-    "frogeye_leaf_spot_prob"   = risk_for_fieldcrops(value, 50, 40, 1),
+    "white_mold_dry_prob"      = risk_for_fieldcrops(value, .01, 20, 35),
+    "white_mold_irrig_30_prob" = risk_for_fieldcrops(value, .01, 5, 10),
+    "white_mold_irrig_15_prob" = risk_for_fieldcrops(value, .01, 5, 10),
+    "gray_leaf_spot_prob"      = risk_for_fieldcrops(value, 1, 40, 60),
+    "tarspot_prob"             = risk_for_fieldcrops(value, 1, 20, 35),
+    "frogeye_leaf_spot_prob"   = risk_for_fieldcrops(value, 1, 40, 50),
     "potato_pdays"             = risk_for_earlyblight(value),
     "late_blight_dsv"          = risk_for_lateblight(value),
     "alternaria_dsv"           = risk_for_alternaria(value),
@@ -860,13 +965,16 @@ assign_risk <- function(model, value) {
 ## Field crops ----
 
 # for field crops models
-risk_from_prob <- function(prob, high, med, low) {
-  cut(
-    prob * 100,
-    breaks = c(0, low, med, high, 100),
-    labels = c("Very low risk", "Low risk", "Medium risk", "High risk"),
-    include.lowest = TRUE,
-    right = FALSE
+risk_from_prob <- function(prob, low, med, high) {
+  tibble(
+    risk = cut(
+      prob * 100,
+      breaks = c(0, low, med, high, 100),
+      labels = c("Very low risk", "Low risk", "Medium risk", "High risk"),
+      include.lowest = TRUE,
+      right = FALSE
+    ),
+    risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk)
   )
 }
 
@@ -878,7 +986,7 @@ risk_from_prob <- function(prob, high, med, low) {
 
 risk_for_fieldcrops <- function(value, high, med, low) {
   tibble(
-    risk = risk_from_prob(value, high, med, low),
+    risk_from_prob(value, high, med, low),
     value_label = sprintf("%.0f%% (%s)", value * 100, risk)
   )
 }
@@ -888,17 +996,32 @@ risk_for_fieldcrops <- function(value, high, med, low) {
 #   risk_for_fieldcrops(value, 40, 20, 5)
 # )
 
+# reduces spore probability as temperature falls below 10C
+attenuate_prob <- function(value, temp) {
+  case_when(
+    temp > 10 ~ value,
+    temp > 0 ~ value * temp / 10,
+    TRUE ~ 0
+  )
+}
+
+# tibble(value = c(10:1, 2:10), temp = c(1:10, 9:1) * 3) %>%
+#   mutate(new_value = attenuate_prob(value, temp))
+
 
 
 ## Vegetables ----
 
 risk_from_severity <- function(severity) {
-  cut(
-    severity,
-    breaks = 0:5,
-    labels = c("Very low", "Low", "Medium", "High", "Very high"),
-    include.lowest = TRUE,
-    right = FALSE
+  tibble(
+    risk = cut(
+      severity,
+      breaks = 0:5,
+      labels = c("Very low", "Low", "Medium", "High", "Very high"),
+      include.lowest = TRUE,
+      right = FALSE
+    ),
+    risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk)
   )
 }
 
@@ -923,7 +1046,7 @@ risk_for_earlyblight <- function(value) {
         (total >= 200) +
         (total >= 250)
     ),
-    risk = risk_from_severity(severity),
+    risk_from_severity(severity),
     value_label = sprintf("%.1f P-days, 7-day avg: %.1f, Total: %.0f (%s risk)", value, avg7, total, risk)
   )
 }
@@ -949,7 +1072,7 @@ risk_for_lateblight <- function(value) {
       total14 >= 1 ~ 1,
       TRUE ~ 0
     ),
-    risk = risk_from_severity(severity),
+    risk_from_severity(severity),
     value_label = sprintf("%s DSV, 14-day: %s, Total: %s (%s risk)", value, total14, total, risk)
   )
 }
@@ -974,7 +1097,7 @@ risk_for_alternaria <- function(value) {
       (total7 >= 10) +
       (total7 >= 15) +
       (total7 >= 20),
-    risk = risk_from_severity(severity),
+    risk_from_severity(severity),
     value_label = sprintf("%s DSV, 7-day: %s, Total: %s (%s risk)", value, total7, total, risk)
   )
 }
@@ -1001,7 +1124,7 @@ risk_for_cercospora <- function(value) {
       avg7 >= .5 | avg2 >= 1 ~ 1,
       TRUE ~ 0
     ),
-    risk = risk_from_severity(severity),
+    risk_from_severity(severity),
     value_label = sprintf("%s DIV, 2-day avg: %.1f, 7-day avg: %.1f, Total: %s (%s risk)", value, avg2, avg7, total, risk),
   )
 }
@@ -1195,7 +1318,8 @@ build_disease_from_daily <- function(daily) {
     mutate(
       # corn/soybean/drybean
       white_mold_dry_prob =
-        predict_whitemold_dry(temperature_max_30day, kmh_to_mps(wind_speed_max_30day)),
+        predict_whitemold_dry(temperature_max_30day, kmh_to_mps(wind_speed_max_30day), relative_humidity_max_30day) %>%
+        attenuate_prob(temperature_min_21day),
       white_mold_irrig_30_prob =
         predict_whitemold_irrig(temperature_max_30day, relative_humidity_max_30day, "30"),
       white_mold_irrig_15_prob =
@@ -1204,13 +1328,8 @@ build_disease_from_daily <- function(daily) {
       gray_leaf_spot_prob =
         predict_gls(temperature_min_21day, dew_point_min_30day),
       tarspot_prob =
-        predict_tarspot(temperature_mean_30day, relative_humidity_max_30day, hours_rh_over_90_night_14day),
-      # adjust tarspot probability down when min temp < 10C
-      tarspot_prob = case_when(
-        temperature_min_21day > 10 ~ tarspot_prob,
-        temperature_min_21day > 0 ~ tarspot_prob * (temperature_min_21day) / 10,
-        TRUE ~ 0
-      ),
+        predict_tarspot(temperature_mean_30day, relative_humidity_max_30day, hours_rh_over_90_night_14day) %>%
+        attenuate_prob(temperature_min_21day),
       # soybean
       frogeye_leaf_spot_prob =
         predict_fls(temperature_max_30day, hours_rh_over_80_30day),
@@ -1359,11 +1478,13 @@ site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_
 
 # data should have cols: date, name, value, value_label, risk
 disease_plot <- function(data, xrange = NULL) {
-
   # expand the range by amt %
   yrange <- function(lo, hi, amt = .05) {
     c(lo - abs(hi - lo) * amt, hi + abs(hi - lo) * amt)
   }
+
+  title_font <- list(family = "Redhat Display", size = 14)
+  axis_font <- list(family = "Redhat Text", size = 12)
 
   # axis config
   x <- y1 <- y2 <- list(
@@ -1372,10 +1493,12 @@ disease_plot <- function(data, xrange = NULL) {
     showgrid = FALSE,
     showline = FALSE,
     zeroline = FALSE,
-    fixedrange = TRUE
+    fixedrange = TRUE,
+    tickfont = axis_font
   )
   x$showticklabels <- TRUE
   x$range <- xrange
+  x$hoverformat <- "<b>%b %d, %Y</b>"
   y1$range <- yrange(0, 1)
   y2$range <- yrange(0, 4)
   y2$overlaying <- "y"
@@ -1383,50 +1506,43 @@ disease_plot <- function(data, xrange = NULL) {
   if (!("severity" %in% names(data))) data$severity <- NA
   data <- data %>%
     mutate(
-      yaxis = case_when(
-        grepl("_prob", model) ~ "y1",
-        !is.na(severity) ~ "y2"
-      ),
+      yaxis = if_else(grepl("_prob", model), "y1", "y2"),
       value = coalesce(severity, value)
     )
 
-  plt <-
-    plot_ly(height = 100) %>%
-    layout(
-      margin = list(l = 0, r = 0, b = 0, t = 0, pad = 5),
-      paper_bgcolor = 'rgba(0,0,0,0)',
-      plot_bgcolor = 'rgba(0,0,0,0)',
-      xaxis = x,
-      yaxis = y1,
-      yaxis2 = y2,
-      hovermode = "x unified",
-      showlegend = TRUE,
-      legend = list(
-        height = 100,
-        itemsizing = "constant",
-        font = OPTS$plot_legend_font
-      )
-    ) %>%
-    config(displayModeBar = FALSE)
-
-  for (model in unique(data$model)) {
-    df <- filter(data, model == !!model)
+  models <- unique(data$model)
+  lapply(models, function(model) {
+    df <- data %>% filter(model == !!model)
     yaxis <- first(df$yaxis)
-    plt <- plt %>% add_trace(
-      data = df,
-      x = ~date,
-      y = ~value,
-      name = ~name,
-      text = ~value_label,
-      type = 'scatter',
-      mode = 'lines',
-      line = list(width = 2),
-      hovertemplate = "%{text}",
-      yaxis = yaxis
-    )
-  }
-
-  plt
+    plot_ly(df, x = ~date, y = ~value, height = 100) %>%
+      add_trace(
+        name = ~name,
+        text = ~value_label,
+        type = "scatter",
+        mode = "lines+markers",
+        marker = list(color = ~risk_color),
+        line = list(width = 2),
+        hovertemplate = "%{text}",
+        hoverinfo = "text",
+        yaxis = yaxis
+      ) %>%
+      layout(
+        title = list(
+          text = ~sprintf("<b>%s</b>", first(name)),
+          x = 0,
+          y = .99,
+          yanchor = "top",
+          font = title_font
+        ),
+        margin = list(l = 5, r = 5, b = 5, t = 5, pad = 5),
+        xaxis = x,
+        yaxis = y1,
+        yaxis2 = y2,
+        hovermode = "x unified",
+        showlegend = FALSE
+      ) %>%
+      config(displayModeBar = FALSE)
+  })
 }
 
 

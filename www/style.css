@@ -1,7 +1,7 @@
 
 :root {
-  --headingFont: 'Red Hat Display';
-  --textFont: 'Red Hat Text';
+  --headingFont: Redhat Display;
+  --textFont: Redhat Text;
   --headingHeight: 50px;
   --minHeight: calc(max(100vw, 100vh) * .4);
   --maxHeight: max(calc(100vh - var(--headingHeight) - 2rem), var(--minHeight));
@@ -10,13 +10,13 @@
 /*--- UW STYLE ---*/
 
 @font-face {
-  font-family: var(--headingFont);
-  src: url('fonts/redhat-display-latin.v14.woff2') format('woff2');
+  font-family: 'Redhat Display';
+  src: url('redhat-display-latin.v14.woff2') format('woff2');
 }
 
 @font-face {
-  font-family: var(--textFont);
-  src: url('fonts/redhat-text-latin.v13.woff2') format('woff2');
+  font-family: 'Redhat Text';
+  src: url('redhat-text-latin.v13.woff2') format('woff2');
 }
 
 html, body, div, span, applet, object, iframe,
@@ -120,7 +120,6 @@ footer {
   box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
   box-sizing: border-box;
   overflow: auto;
-  min-height: var(--minHeight);
   max-height: var(--maxHeight);
 }
 
@@ -143,6 +142,7 @@ footer {
 .map-container {
   flex: 0 0 calc(40% - 0.67rem);
   position: relative;
+  min-height: var(--minHeight);
 }
 
 .data-container {
@@ -150,6 +150,9 @@ footer {
 }
 
 @media (max-width: 1200px) {
+  .column {
+    max-height: unset;
+  }
   .sidebar-container, .map-container {
     flex: 0 0 calc(50% - .5rem); /* Two columns side by side */
   }
@@ -158,11 +161,10 @@ footer {
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 700px) {
   .column {
     flex: 0 0 100%; /* All columns stack vertically */
   }
-
   .uw-title h1 {
     font-size: 2rem;
   }
