@@ -45,8 +45,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         wx <- wx_data()
         req(nrow(wx$daily) > 0)
         list(
-          ma_center = build_ma_from_daily(wx$daily, "center"),
-          ma_right = build_ma_from_daily(wx$daily, "right")
+          ma_center = build_ma_from_daily(wx$daily_full, "center"),
+          ma_right = build_ma_from_daily(wx$daily_full, "right")
         )
       })
 

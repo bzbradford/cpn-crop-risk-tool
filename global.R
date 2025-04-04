@@ -75,14 +75,17 @@ calc_sum <- function(x) {
   if (all(is.na(x))) return(NA)
   sum(x, na.rm = TRUE)
 }
+
 calc_min <- function(x) {
   if (all(is.na(x))) return(NA)
   min(x, na.rm = TRUE)
 }
+
 calc_mean <- function(x) {
   if (all(is.na(x))) return(NA)
   mean(x, na.rm = TRUE)
 }
+
 calc_max <- function(x) {
   if (all(is.na(x))) return(NA)
   max(x, na.rm = TRUE)
@@ -152,13 +155,13 @@ ll_to_grid <- function(lat, lon, d = 1/45.5) {
 
 OPTS <- lst(
   cpn_mode = Sys.getenv("CPN_MODE") == "TRUE",
-  app_title = ifelse(cpn_mode, "Disease Risk Tool", "Researcher's Weather Data Tool"),
+  app_title = ifelse(cpn_mode, "Crop Risk Tool", "Researcher's Weather Data Tool"),
   app_header_color = ifelse(cpn_mode, "#00693c", "#c5050c"),
   app_header_badge = ifelse(cpn_mode, "cpn-badge.png", "uw-crest.svg"),
   app_footer_badge = if (cpn_mode) {
-    a(img(src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")
+    a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")
   } else {
-    img(src = "uw-logo.svg", height = "40px")
+    a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank")
   },
 
   ibm_keys = list(
@@ -169,7 +172,7 @@ OPTS <- lst(
   ibm_auth_endpoint = "https://api.ibm.com/saascore/run/authentication-retrieve/api-key",
   ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
   # max hours per api call
-  ibm_chunk_size = 999,
+  ibm_chunk_size = 1000,
 
   google_key = Sys.getenv("google_places_key"),
 
@@ -242,7 +245,7 @@ OPTS <- lst(
     "Daily" = "daily",
     "Moving averages" = "ma",
     "Growing degree days" = "gdd",
-    { if (!cpn_mode) "Disease models" = "disease" }
+    "Disease models" = { if (!cpn_mode) "disease" }
   )),
 
 
@@ -269,8 +272,8 @@ OPTS <- lst(
   ),
 
   risk_info = list(
-    general = "Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments. Changing the irrigation and row spacing options below will affect the white mold model output.",
-    corn = "Corn diseases include tarspot and gray leaf spot. Risk assessment is only applicable when corn is in the growth stages V10-R3.",
+    general = "Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments.",
+    corn = "Corn diseases include tarspot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
     soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering), and vulnerable to frogeye leaf spot when in R1-R5.",
     drybean = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
     potato = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to white mold, early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
@@ -296,24 +299,6 @@ OPTS <- lst(
 
 
 # IBM API interface ------------------------------------------------------------
-
-#' Breaks up longer time periods into 1000 hour chunks
-#' API will only return 1000 hours at a time
-#' @param start_date date or YYYY-MM-DD string
-#' @param end_date date or YYYY-MM-DD string
-#' @returns list of two-element formatted datetime strings
-ibm_chunks <- function(start_date, end_date, tz = "UTC") {
-  start_dttm <- as_datetime(start_date, tz = tz)
-  end_dttm <- as_datetime(end_date, tz = tz) + minutes(23.5 * 60)
-  chunks <- seq(start_dttm, end_dttm, by = as.difftime(hours(OPTS$ibm_chunk_size)))
-  chunks <- lapply(1:length(chunks), function(i) {
-    c(chunks[i], ifelse(i < length(chunks), chunks[i + 1] - minutes(30), end_dttm))
-  })
-  lapply(chunks, function(chunk) format(chunk, "%Y-%m-%dT%H:%M:%S%z"))
-}
-
-# ibm_chunks("2024-1-1", Sys.Date())
-
 
 #' Get the authorization token from the authentication server
 #' @param url IBM authentication endpoint
@@ -347,8 +332,9 @@ refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
 # refresh_auth()
 
 
-# Get the current IBM token or refresh if needed
-# token is valid for 1 hour
+#' Get the current IBM token or refresh if needed
+#' token is valid for 1 hour
+#' @returns auth token
 get_ibm_token <- function() {
   # look for a stored token if available
   if (!exists("ibm_auth")) {
@@ -368,23 +354,111 @@ get_ibm_token <- function() {
 # get_ibm_token()
 
 
+#' Convert vector of dates to vector of hourly datetimes
+dates_to_dttm <- function(dates, tz = "UTC") {
+  max_len <- OPTS$ibm_chunk_size
+  offset <- minutes(20)
+  dttms <- seq(
+    from = as_datetime(min(dates), tz = tz) + offset,
+    to = as_datetime(max(dates), tz = tz) + hours(23) + offset,
+    by = as.difftime(hours(1))
+  )
+  if (length(dttms) > max_len) warning("Sequence length of ", length(dttms), " longer than maximum ", max_len)
+  dttms
+}
+
+# dates_to_dttm(seq.Date(today() - days(30), today(), 1))
+
+
+#' Breaks up longer time periods into 1000 hour chunks
+#' API will only return 1000 hours at a time
+#' @param dates_need vector of dates needed
+#' @param dates_have vector of dates already downloaded
+#' @param tz time zone to use
+#' @returns list of lists `list(start, end, length)`
+ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
+  if (all(dates_need %in% dates_have)) return(NULL)
+
+  chunk_size <- 40 # days
+  dates <- seq.Date(min(dates_need), max(dates_need), 1)
+  n_chunks <- ceiling(length(dates) / chunk_size)
+  i <- 1
+  date_chunks <- list()
+
+  while (length(dates) > 0) {
+    # pick chunks from outside in
+    if (i %% 2 != 0) {
+      picked <- dates[1:min(chunk_size, length(dates))]
+    } else {
+      picked <- dates[max(1, length(dates) - chunk_size):length(dates)]
+    }
+    dates <- as_date(setdiff(dates, picked))
+    date_chunks[[i]] <- picked
+    i <- i + 1
+  }
+
+  # remove any chunks we already have covered
+  if (length(dates_have) > 0) {
+    date_chunks <- lapply(date_chunks, function(chunk) {
+      if (all(chunk %in% dates_have)) NULL else chunk
+    }) %>% compact()
+  }
+
+  dttm_chunks <- lapply(date_chunks, function(chunk) dates_to_dttm(chunk, tz))
+  lapply(dttm_chunks, function(chunk) {
+    list(
+      start = format(first(chunk), "%Y-%m-%dT%H:%M:%S%z"),
+      end = format(last(chunk), "%Y-%m-%dT%H:%M:%S%z"),
+      length = length(chunk)
+    )
+  })
+}
+
+# # should show 4 chunks
+# ibm_chunks(
+#   dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
+# )
+#
+# # should show 2 chunks (2 are covered)
+# ibm_chunks(
+#   dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1),
+#   dates_have = seq.Date(as_date("2024-4-1"), as_date("2024-7-1"), by = 1)
+# )
+#
+# # should be null (all dates covered)
+# ibm_chunks(
+#   dates_need = seq.Date(as_date("2024-5-1"), as_date("2024-7-1"), by = 1),
+#   dates_have = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
+# )
+
+
+
 #' Fetch hourly weather data from IBM
 #' API documentation: https://docs.google.com/document/d/13HTLgJDpsb39deFzk_YCQ5GoGoZCO_cRYzIxbwvgJLI/edit?tab=t.0
 #' @param lat latitude of point
 #' @param lng longitude of point
-#' @param start_date date or date string
-#' @param end_date date or date string
+#' @param dates_need vector of dates needed
+#' @param dates_have vector of dates already downloaded
+#' @param url endpoint, changed only for testing failures
 #' @returns tibble, either with hourly data if successful or empty if failed
-get_ibm <- function(lat, lng, start_date, end_date, url = OPTS$ibm_weather_endpoint) {
+get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_endpoint) {
   stime <- Sys.time()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
-  chunks <- ibm_chunks(start_date, end_date, tz)
+  chunks <- ibm_chunks(dates_need, dates_have, tz)
+
+  if (length(chunks) == 0) {
+    message(str_glue("Already had weather for {lat}, {lng}"))
+    return(tibble())
+  }
+
+  start_date <- min(dates_need)
+  end_date <- max(dates_need)
 
   responses <- tryCatch({
     token <- get_ibm_token()
     if (!is.character(token)) stop("Failed to get IBM token.")
 
-    reqs <- lapply(chunks, function(dates) {
+    reqs <- lapply(chunks, function(chunk) {
       request(url) %>%
         req_headers_redacted(
           "x-ibm-client-id" = sprintf("geospatial-%s", OPTS$ibm_keys$tenant_id),
@@ -393,8 +467,8 @@ get_ibm <- function(lat, lng, start_date, end_date, url = OPTS$ibm_weather_endpo
         req_url_query(
           format = "json",
           geocode = str_glue("{lat},{lng}"),
-          startDateTime = dates[1],
-          endDateTime = dates[2],
+          startDateTime = chunk$start,
+          endDateTime = chunk$end,
           units = "m"
         ) %>%
         req_timeout(10)
@@ -440,6 +514,7 @@ get_ibm <- function(lat, lng, start_date, end_date, url = OPTS$ibm_weather_endpo
 # get_ibm(43.0731, -89.4012, "2015-1-1", "2015-8-1")
 
 
+
 #' Does some minimal processing on the IBM response to set local time and date
 #' @param ibm_response hourly weather data received from API
 #' @returns tibble
@@ -461,10 +536,9 @@ clean_ibm <- function(ibm_response) {
     mutate(date = as_date(datetime_local), .after = datetime_local)
 }
 
-#' Summarize downloaded wether data by grid cell and creates sf object
-#' used to intersect site points with existing weather data
-#' @param ibm_hourly hourly weather data from `clean_ibm` function
-#' @param selected_dates list with start and end dates
+
+
+
 build_grids <- function(wx) {
   req(nrow(wx) > 0)
   wx %>%
@@ -477,6 +551,13 @@ build_grids <- function(wx) {
 
 # saved_weather %>% build_grids()
 
+
+#' Summarize downloaded weather data by grid cell and creates sf object
+#' used to intersect site points with existing weather data
+#' @param wx hourly weather data from `clean_ibm` function
+#' @param start_date start of expected date range
+#' @param end_date end of expected date range
+#' @returns tibble
 weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date)) {
   dates_expected <- seq.Date(start_date, end_date, 1)
   wx <- filter(wx, between(date, start_date, end_date))
@@ -506,13 +587,39 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
     select(-tz)
 }
 
+
+#' similar to weather_status but returns number of hours per day
+#' @param wx hourly weather data
+#' @param tz time
+daily_status <- function(wx, tz = "UTC") {
+  if (length(unique(wx$grid_id)) > 1) warning("More than 1 gridpoint sent to daily_status")
+  wx %>%
+    summarize(hours = n(), .by = date) %>%
+    mutate(
+      start_hour = ymd_hms(paste(date, "00:20:00"), tz = tz),
+      end_hour = ymd_hms(paste(date, "23:20:00"), tz = tz),
+      hours_expected = if_else(
+        date == today(),
+        as.integer(difftime(now(tzone = tz), start_hour, "hours")),
+        as.integer(difftime(end_hour, start_hour, "hours"))
+      ) + 1,
+      hours_missing = hours_expected - hours
+    )
+}
+
+# saved_weather %>%
+#   filter(grid_id == sample(grid_id, 1)) %>%
+#   daily_status()
+
+
+
 #' Update weather for sites list and date range
 #' @param sites sf with site locs
-#' @param date_range list with $start and $end dates
+#' @param start_date
+#' @param end_date
 fetch_weather <- function(sites, start_date, end_date) {
-
-  status <- "ok"
-  dates_need <- seq.Date(start_date, end_date, 1)
+  status_msg <- NULL
+  all_dates <- seq.Date(start_date, end_date, 1)
   wx <- saved_weather
   sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
 
@@ -521,7 +628,8 @@ fetch_weather <- function(sites, start_date, end_date) {
     site <- slice(sites, i)
 
     # already have some weather? find dates to download
-    dates <- dates_need
+    dates_need <- all_dates
+    dates_have <- Date()
 
     if (nrow(wx) > 0) {
       grids <- build_grids(wx)
@@ -539,38 +647,24 @@ fetch_weather <- function(sites, start_date, end_date) {
         date_status <- wx %>%
           filter(grid_id == site$grid_id) %>%
           filter(between(date, start_date, end_date)) %>%
-          summarize(hours = n(), .by = date) %>%
-          mutate(
-            start_hour = ymd_hms(paste(date, "00:20:00"), tz = tz),
-            end_hour = ymd_hms(paste(date, "23:20:00"), tz = tz),
-            hours_expected = if_else(
-              date == today(),
-              as.integer(difftime(now(tzone = tz), start_hour, "hours")),
-              as.integer(difftime(end_hour, start_hour, "hours"))
-            ) + 1,
-            hours_missing = hours_expected - hours
-          ) %>%
-          filter(hours_missing > 2)
+          daily_status()
         dates_have <- date_status %>%
-          filter(hours_missing > 2) %>%
+          filter(hours_missing <= 2) %>%
           pull(date)
-        dates_need <- as_date(setdiff(dates_need, dates_have))
+        dates_need <- as_date(setdiff(all_dates, dates_have))
       }
     }
 
-    #TODO: build ibm chunks and strike any that aren't needed?
-    # or send list of dates to get_ibm and have it pick chunks...?
-
     # get weather if needed
-    if (length(dates) > 0) {
-      resp <- get_ibm(site$lat, site$lng, first(dates), last(dates))
+    if (length(dates_need) > 0) {
+      resp <- get_ibm(site$lat, site$lng, dates_need, dates_have)
       incProgress(1)
       if (nrow(resp) == 0) {
-        status <- sprintf("Unable to get some/all weather for %.2f, %.2f from %s to %s.", site$lat, site$lng, first(dates), last(dates))
+        status_msg <- sprintf("Unable to get some/all weather for %.2f, %.2f from %s to %s.", site$lat, site$lng, start_date, end_date)
         next
       }
       new_wx <- clean_ibm(resp)
-      wx <- bind_rows(wx, new_wx) %>%
+      wx <- bind_rows(new_wx, wx) %>%
         distinct(grid_id, datetime_utc, .keep_all = T) %>%
         arrange(grid_lat, grid_lng, datetime_utc)
     }
@@ -578,7 +672,7 @@ fetch_weather <- function(sites, start_date, end_date) {
 
   saved_weather <<- wx
   write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
-  return(status)
+  return(status_msg)
 }
 
 # saved_weather %>%
@@ -707,18 +801,6 @@ predict_whitemold_dry <- function(MaxAT_30ma, MaxWS_30ma, MaxRH_30ma) {
 #   scale_fill_distiller(palette = "Spectral", limits = c(0, 1)) +
 #   coord_cartesian(expand = F) +
 #   facet_wrap(~rh, labeller = "label_both")
-
-# predict_whitemold_dry_old <- function(MaxAT_30ma, MaxWS_30ma) {
-#   mu <- -0.47 * MaxAT_30ma - 1.01 * MaxWS_30ma + 16.65
-#   logistic(mu)
-# }
-#
-# expand_grid(temp = 0:40, wind = 0:20) %>%
-#   mutate(prob = predict_whitemold_dry_old(temp, wind)) %>%
-#   ggplot(aes(x = temp, y = wind, fill = prob)) +
-#   geom_tile() +
-#   scale_fill_distiller(palette = "Spectral") +
-#   coord_cartesian(expand = F)
 
 
 #' White mold, irrigated model - Any crop
@@ -1296,9 +1378,9 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 
 #' Plant diseases that use daily values as inputs
 #' units must be metric: temperature degC, wind speed km/hr
-#' @param daily accepts daily dataset from `build_daily()`
+#' @param daily accepts daily dataset from `build_daily()` but should start 30 days before first disease estimate is desired
 #' @returns tibble
-build_disease_from_daily <- function(daily) {
+build_disease_from_ma <- function(daily) {
   roll_mean <- function(vec, width) rollapplyr(vec, width, \(x) mean(x, na.rm = T), fill = NA, partial = T)
   # retain attribute cols
   attr <- daily %>% select(grid_id, date)
@@ -1333,6 +1415,33 @@ build_disease_from_daily <- function(daily) {
       # soybean
       frogeye_leaf_spot_prob =
         predict_fls(temperature_max_30day, hours_rh_over_80_30day),
+      .keep = "none", .by = grid_id
+    ) %>%
+    select(sort(names(.))) %>%
+    select(-grid_id)
+
+  # bind attributes
+  bind_cols(attr, disease)
+}
+
+# saved_weather %>%
+#   build_hourly() %>%
+#   build_daily() %>%
+#   build_disease_from_ma()
+
+
+#' Plant diseases that use daily values as inputs
+#' units must be metric: temperature degC, wind speed km/hr
+#' @param daily accepts daily dataset from `build_daily()`
+#' @returns tibble
+build_disease_from_daily <- function(daily) {
+  roll_mean <- function(vec, width) rollapplyr(vec, width, \(x) mean(x, na.rm = T), fill = NA, partial = T)
+  # retain attribute cols
+  attr <- daily %>% select(grid_id, date)
+
+  # generate disease models and add cumulative sums where appropriate
+  disease <- daily %>%
+    mutate(
       # potato/tomato
       potato_pdays =
         calc_pdays(temperature_min, temperature_max),

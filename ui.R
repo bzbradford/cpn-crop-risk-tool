@@ -57,10 +57,6 @@ ui <- fluidPage(
     div(
       class = "column data-container",
       if (OPTS$cpn_mode) {
-        # tagList(
-        #   h2("Crop risk models"),
-        #   riskUI()
-        # )
         tabsetPanel(
           tabPanel("Crop risk models", riskUI()),
           tabPanel("Weather charts", dataUI()),

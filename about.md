@@ -6,9 +6,9 @@ Most values can be shown in either imperial or metric units. Temperature and dew
 
 ### Hourly data
 
-Hourly data includes the timestamp in UTC and an adjustment to local time based on the timezone associated with the GPS coordinates. This is accomplished using the `tz_lookup_coords` function from the `lutz` package. This method may not correctly assign the time zone at timezone borders. Hourly weather parameters include air temperature, dew point, dew point depression (difference between air temperature and dew point), relative humidity, precipitation, snow accumulation, wind speed, wind gusts, wind direction, barometric pressure (mean sea level), and pressure change since the previous hour.
+Hourly data includes the timestamp in UTC and an adjustment to local time based on the timezone associated with the GPS coordinates. Hourly weather parameters include air temperature, dew point, dew point depression (difference between air temperature and dew point), relative humidity, precipitation, snow accumulation, wind speed, wind gusts, wind direction, barometric pressure (mean sea level), and pressure change since the previous hour.
 
-Note: A wind gust is defined as a brief increase in wind speed that is at least 10 mph (16 km/h, 4.5 m/s) faster than the average wind speed and peaks above 18 mph (30 km/h, 8 m/s). Due to these definitions not every hour or day will have recorded wind gusts.
+Note: A wind gust is defined as a brief increase in wind speed that is at least 10 mph (16 km/h) faster than the average wind speed and peaks above 18 mph (30 km/h). Due to these definitions not every hour or day will have recorded wind gusts.
 
 ### Daily data
 
@@ -34,3 +34,13 @@ Selected field crops and vegetable disease model outputs are provided. These mod
 -   Late blight disease severity values - risk of disease increased with accumulated severity values since last fungicide application. Uses the Wallin BLITECAST algorithm. More information: <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
 -   Carrot foliar disease severity values - risk of disease increases with accumulated values. More information: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
 -   Cercospora leaf spot daily infection values - risk of disease increases with accumulated values. Based on the model outlined in [A Cerospora Leaf Spot Model for Sugar Beet: In Practice by an Industry](https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716). More information about Cercospora leaf spot: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
+
+## Credits and Contacts
+
+-   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu){.email}
+-   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu){.email}
+-   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org){.email}
+
+## Funding Sources
+
+This project is partial supported by the National Predictive Modeling Tool Initiative, National Corn Growers Association, North Central Soybean Research Program, and United Soybean Board. This tool also relies on contributions from the University of Wisconsin-Madison Department of Entomology.
