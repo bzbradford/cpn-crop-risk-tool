@@ -36,9 +36,6 @@ suppressPackageStartupMessages({
 ## turn warnings into errors
 # options(warn = 2)
 
-## test the CPN skin
-# Sys.setenv("CPN_MODE" = TRUE)
-# Sys.unsetenv("CPN_MODE")
 
 
 # Functions --------------------------------------------------------------------
@@ -153,13 +150,21 @@ ll_to_grid <- function(lat, lon, d = 1/45.5) {
 
 # Settings ----
 
+## test the CPN skin
+# Sys.setenv("CPN_MODE" = TRUE)
+# Sys.unsetenv("CPN_MODE")
+
 OPTS <- lst(
   cpn_mode = Sys.getenv("CPN_MODE") == "TRUE",
   app_title = ifelse(cpn_mode, "Crop Risk Tool", "Researcher's Weather Data Tool"),
   app_header_color = ifelse(cpn_mode, "#00693c", "#c5050c"),
   app_header_badge = ifelse(cpn_mode, "cpn-badge.png", "uw-crest.svg"),
   app_footer_badge = if (cpn_mode) {
-    a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")
+    div(
+      style = "display: inline-flex; gap: 10px; align-items: center;",
+      a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank"),
+      a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank")
+    )
   } else {
     a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank")
   },

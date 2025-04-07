@@ -22,7 +22,7 @@ For each hourly weather parameter, the minimum, mean, and maximum value are gene
 
 The single sine method is used to calculate growing degree days from daily minimum and maximum air temperature values. For each base temperature, a model is provided with and without the common 86°F upper threshold temperature (horizontal cutoff). The single sine method differs from the simple average method only when the minimum temperature is below the lower threshold temperature, or the maximum temperature is above the upper threshold temperature. In such cases, the single sine method will more accurately reflect the amount of heat energy available, relative to the simple average method.
 
-## Plant disease models
+### Plant disease models
 
 Selected field crops and vegetable disease model outputs are provided. These models are subject to change. The calculations used to generate each model prediction can be viewed in the source code.
 
@@ -35,12 +35,12 @@ Selected field crops and vegetable disease model outputs are provided. These mod
 -   Carrot foliar disease severity values - risk of disease increases with accumulated values. More information: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
 -   Cercospora leaf spot daily infection values - risk of disease increases with accumulated values. Based on the model outlined in [A Cerospora Leaf Spot Model for Sugar Beet: In Practice by an Industry](https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716). More information about Cercospora leaf spot: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
 
-## Credits and Contacts
+### Credits and Contacts
 
--   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu){.email}
--   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu){.email}
--   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org){.email}
+-   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
+-   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
+-   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
 
-## Funding Sources
+### Funding Sources
 
 This project is partial supported by the National Predictive Modeling Tool Initiative, National Corn Growers Association, North Central Soybean Research Program, and United Soybean Board. This tool also relies on contributions from the University of Wisconsin-Madison Department of Entomology.

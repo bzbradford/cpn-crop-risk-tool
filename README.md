@@ -22,9 +22,9 @@ These data can be retrieved for individual locations, or multiple locations can 
 
 ### Credits and Contacts
 
--   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu){.email}
--   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu){.email}
--   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org){.email}
+-   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
+-   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
+-   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
 
 ### Funding Sources
 
