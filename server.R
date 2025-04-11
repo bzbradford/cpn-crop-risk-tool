@@ -53,6 +53,9 @@ server <- function(input, output, session) {
     # for controlling messages on modules
     sites_ready = FALSE,
     weather_ready = FALSE,
+
+    # which grids have been retrieved this session, for displaying on map
+    grid_ids = c(),
   )
 
   ## control if the data view is ready ----
@@ -61,6 +64,17 @@ server <- function(input, output, session) {
     if (rv$sites_ready != sr) rv$sites_ready <- sr
   })
 
+
+  ## rv$grid_ids ----
+  # keep record of which grid_ids have are associated with sites this session
+  observe({
+    sites <- sites_sf()
+    cur_grids <- na.omit(unique(sites$grid_id))
+    all_grids <- sort(unique(c(rv$grid_ids, cur_grids)))
+    if (!setequal(all_grids, rv$grid_ids)) {
+      rv$grid_ids <- all_grids
+    }
+  })
 
   ## selected_dates ----
   observe({
@@ -835,10 +849,12 @@ server <- function(input, output, session) {
   })
 
   ## Show weather data grids ----
+  # will only show grids that the user has interacted with in the session
   observe({
     map <- leafletProxy("map")
     clearGroup(map, "grid")
-    grids <- grids_with_status()
+    grids <- grids_with_status() %>%
+      filter(grid_id %in% rv$grid_ids)
 
     if (nrow(grids) > 0) {
       grids <- grids %>%
