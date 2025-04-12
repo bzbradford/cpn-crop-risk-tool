@@ -1,4 +1,4 @@
-Use this tool to easily download hourly weather data for any point in the United States and Canada (below 60°N latitude). Weather data is provided by a subscription to IBM's Environmental Intelligence Suite API. From this hourly weather data, we compute daily values, moving averages, growing degree days, and selected plant disease risk values.
+Use this tool to easily download hourly weather data for any point in the United States and Canada (below 60°N latitude). Weather data is provided by a subscription to IBM's Environmental Intelligence Suite API, and 7-day forecasts are sourced freely from NOAA (where available). From this hourly weather data, we compute daily values, moving averages, growing degree days, and selected plant disease risk values.
 
 ### Units
 
@@ -9,6 +9,10 @@ Most values can be shown in either imperial or metric units. Temperature and dew
 Hourly data includes the timestamp in UTC and an adjustment to local time based on the timezone associated with the GPS coordinates. Hourly weather parameters include air temperature, dew point, dew point depression (difference between air temperature and dew point), relative humidity, precipitation, snow accumulation, wind speed, wind gusts, wind direction, barometric pressure (mean sea level), and pressure change since the previous hour.
 
 Note: A wind gust is defined as a brief increase in wind speed that is at least 10 mph (16 km/h) faster than the average wind speed and peaks above 18 mph (30 km/h). Due to these definitions not every hour or day will have recorded wind gusts.
+
+### 7-day hourly forecast
+
+When the End Date is set to today's date, 7-day forecasts are retrieved from [NOAA's API](https://www.weather.gov/documentation/services-web-api) (available for most locations in the United States) and incorporated into charts and calculations. Forecasted parameters include temperature, dew point, relative humidity, wind speed, and wind direction.
 
 ### Daily data
 

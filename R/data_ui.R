@@ -4,13 +4,22 @@ dataUI <- function() {
   tagList(
     div(
       style = "margin-top: 10px; margin-bottom: 10px; font-style: italic;",
-      "Most values may be shown in either metric or imperial units. Press the (i) button above for more information."
+      "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
     ),
-    materialSwitch(
-      inputId = ns("metric"),
-      label = "Use metric",
-      value = TRUE,
-      status = "primary"
+    div(
+      class = "flex-across", style = "gap: 30px;",
+      materialSwitch(
+        inputId = ns("metric"),
+        label = "Use metric",
+        value = TRUE,
+        status = "primary"
+      ),
+      materialSwitch(
+        inputId = ns("forecast"),
+        label = "Show forecast",
+        value = TRUE,
+        status = "primary"
+      ),
     ),
     radioGroupButtons(
       inputId = ns("data_type"),
@@ -90,6 +99,9 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           select(-grid_id) %>%
           mutate(across(where(is.numeric), ~signif(.x)))
 
+        if (isFALSE(input$forecast)) {
+          df <- df %>% filter(date <= today())
+        }
         if (input$metric) df else convert_measures(df)
       })
 
@@ -256,7 +268,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           dates = wx$dates,
           date_range = c(
             ymd_hms(paste(dates$start, "00:00:00")),
-            ymd_hms(paste(dates$end, "23:00:00"))
+            ymd_hms(paste(max(df$date), "23:00:00"))
           ),
           data_type = req(input$data_type),
           data_name = invert(OPTS$data_type_choices)[[data_type]],
@@ -385,7 +397,12 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           }
         }
 
-        plt
+        # indicate forecast
+        if (now() < opts$date_range[2]) {
+          plt %>% plotly_show_forecast(xmax = opts$date_range[2])
+        } else {
+          plt
+        }
       })
 
       ## download_data // downloadHandler ----

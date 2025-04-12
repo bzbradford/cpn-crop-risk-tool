@@ -5,9 +5,9 @@ account: bbradford
 server: connect.doit.wisc.edu
 hostUrl: https://connect.doit.wisc.edu/__api__
 appId: 399
-bundleId: 3559
+bundleId: 3572
 url: https://connect.doit.wisc.edu/weather-tool/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .RData|data/saved_weather.fst|assets
+ignoredFiles: .RData|assets

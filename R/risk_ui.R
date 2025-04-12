@@ -203,11 +203,11 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             df <- df %>%
               mutate(assign_risk(first(model), value), .by = model)
             last_value <- df %>%
-              filter(date == max(date)) %>%
+              filter(date == min(today(), max(date))) %>%
               mutate(risk_label = sprintf("%s: %s (%.0f%%)", name, risk, value * 100))
             risk_date <- first(last_value$date)
             risk_info <- paste(last_value$risk_label, collapse = ", ")
-            plts <- disease_plot(df, xrange = c(dates$start, dates$end))
+            plts <- disease_plot(df, xrange = c(min(df$date), max(df$date)))
 
             div(
               class = "flex-down",

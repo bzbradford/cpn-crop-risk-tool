@@ -38,6 +38,33 @@ suppressPackageStartupMessages({
 
 
 
+# Startup ----------------------------------------------------------------------
+
+## Load files ----
+
+saved_weather <- if (file.exists("data/saved_weather.fst")) {
+  as_tibble(read_fst("data/saved_weather.fst"))
+} else {
+  tibble()
+}
+
+# EPSG 4326 for use in Leaflet
+service_bounds <- read_rds("data/us_ca_clip.rds")
+
+# transform to EPSG 3857 web mercator for intersecting points
+service_bounds_3857 <- st_transform(service_bounds, 3857)
+
+## Sites template ----
+sites_template <- tibble(
+  id = integer(),
+  name = character(),
+  lat = numeric(),
+  lng = numeric(),
+  temp = logical()
+)
+
+
+
 # Functions --------------------------------------------------------------------
 
 ## Utility ----
@@ -91,13 +118,40 @@ calc_max <- function(x) {
 
 ## Unit conversions ----
 
+f_to_c <- function(x) (x - 32) / 1.8
 c_to_f <- function(x) x * 1.8 + 32
 mm_to_in <- function(x) x / 25.4
 cm_to_in <- function(x) x / 2.54
-# km_to_mi <- function(x) x / 1.609
+mi_to_km <- function(x) x * 1.609
+km_to_mi <- function(x) x / 1.609
 kmh_to_mps <- function(x) x / 3.6
 mps_to_mph <- function(x) x * 2.237
 mbar_to_inHg <- function(x) x / 33.864
+
+compass_directions <- list(
+  "N"   = 0,
+  "NNE" = 22.5,
+  "NE"  = 45,
+  "ENE" = 67.5,
+  "E"   = 90,
+  "ESE" = 112.5,
+  "SE"  = 135,
+  "SSE" = 157.5,
+  "S"   = 180,
+  "SSW" = 202.5,
+  "SW"  = 225,
+  "WSW" = 247.5,
+  "W"   = 270,
+  "WNW" = 292.5,
+  "NW"  = 315,
+  "NNW" = 337.5
+)
+
+wind_dir_to_deg <- function(dirs) {
+  sapply(dirs, function(dir) {
+    if (dir %in% names(compass_directions)) compass_directions[[dir]] else NA
+  })
+}
 
 
 ## Location helpers ----
@@ -303,6 +357,101 @@ OPTS <- lst(
 )
 
 
+# NOAA forecast api ------------------------------------------------------------
+
+noaa_point_url <- function(lat, lng) {
+  sprintf("https://api.weather.gov/points/%.6g,%.6g", lat, lng)
+}
+
+# noaa_point_url(45, -89)
+
+
+noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
+  tryCatch({
+    stopifnot(validate_ll(lat, lng))
+    req <- request(url) %>%
+      req_timeout(5) %>%
+      req_retry(max_tries = 2, retry_on_failure = TRUE)
+    t <- now()
+    resp <- req_perform(req) %>% resp_body_json()
+    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    resp$properties$forecastHourly
+  }, error = function(e) {
+    message("Failed to retrieve ", url, ": ", e$message)
+    echo(e)
+    if ("httr2_http_404" %in% class(e)) "404" else NULL
+  })
+}
+
+# # should succeed
+# noaa_get_forecast_url(45, -89)
+# noaa_get_forecast_url(38, -121)
+#
+# # should fail due to lat/lng
+# noaa_get_forecast_url(1, 1)
+#
+# # should fail due to 404
+# noaa_get_forecast_url(50, -90)
+
+# units: temperature = F, wind_speed = mph
+noaa_parse_forecast <- function(periods) {
+  periods %>%
+    lapply(function(p) {
+      # hoist the nested values
+      p$probabilityOfPrecipitation <- p$probabilityOfPrecipitation$value
+      # dewpoint is provided in Celsius
+      p$dewpoint <- p$dewpoint$value
+      p$relativeHumidity <- p$relativeHumidity$value
+      p$windSpeed <- as.numeric(str_split_i(p$windSpeed, " ", 1))
+      p
+    }) %>%
+    enframe() %>%
+    select(value) %>%
+    unnest_wider("value") %>%
+    janitor::clean_names() %>%
+    mutate(
+      across(c(start_time, end_time), parse_datetime),
+      across(c(start_time, end_time), ~.x + minutes(20)),
+      across(temperature, f_to_c),
+      across(wind_speed, mi_to_km),
+      across(wind_direction, wind_dir_to_deg)
+    ) %>%
+    select(
+      datetime_utc = start_time,
+      temperature,
+      temperature_dew_point = dewpoint,
+      relative_humidity,
+      wind_speed,
+      wind_direction
+    )
+}
+
+noaa_get_forecast <- function(lat = NULL, lng = NULL, url = noaa_get_forecast_url(lat, lng)) {
+  tryCatch({
+    req <- request(url) %>%
+      req_timeout(5) %>%
+      req_retry(max_tries = 2, retry_on_failure = TRUE)
+    t <- now()
+    resp <- req_perform(req) %>% resp_body_json()
+    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    noaa_parse_forecast(resp$properties$periods)
+  }, error = function(e) {
+    message("Failed to get forecast from ", url, ": ", e$message)
+    echo(e)
+    tibble()
+  })
+}
+
+# # should succeed
+# noaa_get_forecast(45, -89)
+# noaa_get_forecast(38, -121)
+#
+# # should fail
+# noaa_get_forecast(1, 1)
+# noaa_get_forecast()
+
+
+
 # IBM API interface ------------------------------------------------------------
 
 #' Get the authorization token from the authentication server
@@ -315,7 +464,8 @@ refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
       req_headers_redacted(
         "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
         "x-api-key" = keys$api_key
-      )
+      ) %>%
+      req_timeout(5)
     resp <- req_perform(req)
     message("Authorization token refreshed at ", now("UTC"))
     list(
@@ -540,8 +690,6 @@ clean_ibm <- function(ibm_response) {
     mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
     mutate(date = as_date(datetime_local), .after = datetime_local)
 }
-
-
 
 
 build_grids <- function(wx) {
@@ -1590,6 +1738,46 @@ site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_
 # site_action_link("edit", 1, "foo")
 
 
+# add forecast annotation
+plotly_show_forecast <- function(plt, xmax) {
+  if ("Date" %in% class(xmax)) {
+    x <- today()
+    label <- "Today"
+  } else {
+    x <- now()
+    label <- "Now"
+  }
+
+  text <- list(list(
+    yref = "y domain",
+    x = x, y = 1,
+    text = label,
+    showarrow = F,
+    opacity = .5
+  ))
+
+  vline <- list(list(
+    type = "line", yref = "y domain",
+    x0 = x, x1 = x, y0 = 0, y1 = .95,
+    line = list(color = "black", dash = "dash"),
+    opacity = .25
+  ))
+
+  area <- list(list(
+    type = "rect",
+    fillcolor = "orange",
+    line = list(opacity = 0),
+    opacity = 0.05,
+    yref = "y domain",
+    x0 = x, x1 = xmax,
+    y0 = 0, y1 = 1,
+    layer = "below"
+  ))
+
+  plt %>% layout(shapes = c(vline, area), annotations = text)
+}
+
+
 # data should have cols: date, name, value, value_label, risk
 disease_plot <- function(data, xrange = NULL) {
   # expand the range by amt %
@@ -1655,37 +1843,10 @@ disease_plot <- function(data, xrange = NULL) {
         hovermode = "x unified",
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = FALSE) %>%
+      plotly_show_forecast(xmax = xrange[2])
   })
 }
-
-
-
-# Startup ----------------------------------------------------------------------
-
-## Load files ----
-
-saved_weather <- if (file.exists("data/saved_weather.fst")) {
-  as_tibble(read_fst("data/saved_weather.fst"))
-} else {
-  tibble()
-}
-
-# EPSG 4326 for use in Leaflet
-service_bounds <- read_rds("data/us_ca_clip.rds")
-
-# transform to EPSG 3857 web mercator for intersecting points
-service_bounds_3857 <- st_transform(service_bounds, 3857)
-
-## Sites template ----
-sites_template <- tibble(
-  id = integer(),
-  name = character(),
-  lat = numeric(),
-  lng = numeric(),
-  temp = logical()
-)
-
 
 
 # cat_names(test_hourly)

@@ -1,7 +1,7 @@
 
 server <- function(input, output, session) {
 
-  # Functions ----
+  # Functions ------------------------------------------------------------------
 
   # try to enforce site attributes
   create_site <- function(loc) {
@@ -30,185 +30,7 @@ server <- function(input, output, session) {
   }
 
 
-  # Reactive values ----
-
-  ## rv ----
-  rv <- reactiveValues(
-    # IBM hourly weather, lightly modified
-    weather = saved_weather,
-
-    # table storing site locations
-    sites = sites_template,
-
-    # id of last-clicked site
-    selected_site = 1,
-
-    # sidebar site upload UI
-    show_upload = FALSE, # toggle upload ui
-    upload_msg = NULL, # error message
-
-    start_date = NULL,
-    end_date = NULL,
-
-    # for controlling messages on modules
-    sites_ready = FALSE,
-    weather_ready = FALSE,
-
-    # which grids have been retrieved this session, for displaying on map
-    grid_ids = c(),
-  )
-
-  ## control if the data view is ready ----
-  observe({
-    sr <- nrow(rv$sites) > 0
-    if (rv$sites_ready != sr) rv$sites_ready <- sr
-  })
-
-
-  ## rv$grid_ids ----
-  # keep record of which grid_ids have are associated with sites this session
-  observe({
-    sites <- sites_sf()
-    cur_grids <- na.omit(unique(sites$grid_id))
-    all_grids <- sort(unique(c(rv$grid_ids, cur_grids)))
-    if (!setequal(all_grids, rv$grid_ids)) {
-      rv$grid_ids <- all_grids
-    }
-  })
-
-  ## selected_dates ----
-  observe({
-    start <- req(input$start_date)
-    end <- req(input$end_date)
-    req(start <= end)
-    rv$status_msg <- NULL
-    rv$start_date <- start
-    rv$end_date <- end
-  })
-
-  selected_dates <- reactive({
-    # get an extra 30 days before initial date
-    dates <- list(
-      start = req(rv$start_date) - days(30),
-      end = req(rv$end_date)
-    )
-    if ((dates$end - (dates$start + days(30)) > years(1))) {
-      rv$status_msg <- "Date range must be less than 1 year"
-      req(FALSE)
-    }
-    dates
-  })
-
-  selected_weather <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    dates <- selected_dates()
-    wx %>% filter(between(date, dates$start, dates$end))
-  })
-
-  ## wx_grids ----
-  wx_grids <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    build_grids(wx)
-  })
-
-  ## sites_sf ----
-  sites_sf <- reactive({
-    sites <- rv$sites
-    if (nrow(sites) == 0) return(NULL)
-    wx <- rv$weather
-    sf <- sites %>%
-      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
-
-    if (nrow(wx) > 0) {
-      sf %>% st_join(wx_grids())
-    } else {
-      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
-    }
-  })
-
-  ## wx_status ----
-  # will be blocked when no weather or weather in date range
-  wx_status <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    dates <- selected_dates()
-    weather_status(wx, dates$start, dates$end)
-  })
-
-  ## grids_with_status ----
-  # will be blocked when no weather in date range
-  grids_with_status <- reactive({
-    status <- wx_status()
-    wx_grids() %>%
-      filter(grid_id %in% status$grid_id) %>%
-      left_join(status, join_by(grid_id))
-  })
-
-  ## sites_with_status ----
-  # will be blocked when no weather in date range
-  sites_with_status <- reactive({
-    req(sites_sf()) %>%
-      left_join(wx_status(), join_by(grid_id)) %>%
-      replace_na(list(needs_download = TRUE))
-  })
-
-  ## wx_data ----
-  # will be blocked when no weather
-  # will return only sites/dates/hourly when no weather in date range
-
-  # these inputs uniquely determine the weather data output
-  wx_hash <- reactive({
-    list(
-      weather = rlang::hash(rv$weather),
-      sites = rlang::hash(rv$sites),
-      dates = selected_dates()
-    )
-  })
-
-  wx_data <- reactive({
-    weather <- rv$weather
-    sites <- sites_with_status()
-    fetched_dates <- selected_dates()
-    dates <- list(
-      start = fetched_dates$start + days(30),
-      end = fetched_dates$end
-    )
-
-    req(nrow(weather) > 0)
-    req(nrow(sites) > 0)
-
-    wx <- list()
-    wx$sites <- sites
-    wx$dates <- dates
-
-    # allow up to 30 days before selected start date
-    hourly <- weather %>%
-      filter(grid_id %in% sites$grid_id) %>%
-      filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
-      build_hourly()
-
-    wx$hourly <- hourly %>% filter(between(date, dates$start, dates$end))
-
-    if (nrow(hourly) == 0 || nrow(wx$hourly) == 0) return(wx)
-
-    wx$daily_full <- build_daily(hourly)
-    wx$daily <- wx$daily_full %>% filter(between(date, dates$start, dates$end))
-
-    disease1 <- build_disease_from_ma(wx$daily_full)
-    disease2 <- build_disease_from_daily(wx$daily)
-    wx$disease <- disease1 %>%
-      left_join(disease2, join_by(grid_id, date)) %>%
-      filter(between(date, dates$start, dates$end))
-
-    wx$gdd <- build_gdd_from_daily(wx$daily)
-    wx
-  }) %>% bindCache(wx_hash())
-
-
-
-  ## Cookie handling ----
+  # Cookie handling ------------------------------------------------------------
 
   set_cookie <- function(sites) {
     sites_json <- jsonlite::toJSON(sites)
@@ -258,7 +80,298 @@ server <- function(input, output, session) {
   })
 
 
-  # Help UI ----
+  # Reactive values ------------------------------------------------------------
+
+  ## rv ----
+  rv <- reactiveValues(
+    # IBM hourly weather, lightly modified
+    weather = saved_weather,
+
+    # table storing site locations
+    sites = sites_template,
+
+    # id of last-clicked site
+    selected_site = 1,
+
+    # sidebar site upload UI
+    show_upload = FALSE, # toggle upload ui
+    upload_msg = NULL, # error message
+
+    start_date = NULL,
+    end_date = NULL,
+
+    # for controlling messages on modules
+    sites_ready = FALSE,
+    weather_ready = FALSE,
+
+    # which grids have been retrieved this session, for displaying on map
+    grids = tibble(),
+
+    # forecasts for sites
+    # keyed by grid_id
+    noaa_urls = list(),
+
+    # keyed by forecast url
+    noaa_forecasts = list(),
+  )
+
+  ## rv$sites_ready handler ----
+  #' control if the data view is ready
+  observe({
+    sr <- nrow(rv$sites) > 0
+    if (rv$sites_ready != sr) rv$sites_ready <- sr
+  })
+
+  ## selected_dates ----
+  observe({
+    start <- req(input$start_date)
+    end <- req(input$end_date)
+    req(start <= end)
+    rv$status_msg <- NULL
+    rv$start_date <- start
+    rv$end_date <- end
+  })
+
+  selected_dates <- reactive({
+    # get an extra 30 days before initial date
+    dates <- list(
+      start = req(rv$start_date) - days(30),
+      end = req(rv$end_date)
+    )
+    if ((dates$end - (dates$start + days(30)) > years(1))) {
+      rv$status_msg <- "Date range must be less than 1 year"
+      req(FALSE)
+    }
+    dates
+  })
+
+  # selected_weather <- reactive({
+  #   wx <- rv$weather
+  #   req(nrow(wx) > 0)
+  #   dates <- selected_dates()
+  #   wx %>% filter(between(date, dates$start, dates$end))
+  # })
+
+  ## wx_grids ----
+  wx_grids <- reactive({
+    wx <- rv$weather
+    req(nrow(wx) > 0)
+    build_grids(wx)
+  })
+
+  ## sites_sf ----
+  sites_sf <- reactive({
+    sites <- rv$sites
+    if (nrow(sites) == 0) return(NULL)
+    wx <- rv$weather
+    sf <- sites %>%
+      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+
+    if (nrow(wx) > 0) {
+      sf %>% st_join(wx_grids())
+    } else {
+      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+    }
+  })
+
+  ## rv$grids handler ----
+  # keep record of which grid_ids have are associated with sites this session
+  # used by forecasts and map
+  observe({
+    sites <- sites_sf()
+    req(nrow(sites) > 0)
+
+    sites <- sites %>%
+      st_drop_geometry() %>%
+      drop_na(grid_id) %>%
+      distinct(grid_id, grid_lat, grid_lng)
+    req(nrow(sites) > 0)
+
+    rv$grids <- rv$grids %>%
+      bind_rows(sites) %>%
+      distinct(grid_id, grid_lat, grid_lng)
+  })
+
+  ## wx_status ----
+  # will be blocked when no weather or weather in date range
+  wx_status <- reactive({
+    wx <- rv$weather
+    req(nrow(wx) > 0)
+    dates <- selected_dates()
+    weather_status(wx, dates$start, dates$end)
+  })
+
+  ## grids_with_status ----
+  # will be blocked when no weather in date range
+  grids_with_status <- reactive({
+    status <- wx_status()
+    wx_grids() %>%
+      filter(grid_id %in% status$grid_id) %>%
+      left_join(status, join_by(grid_id))
+  })
+
+  ## sites_with_status ----
+  # will be blocked when no weather in date range
+  sites_with_status <- reactive({
+    req(sites_sf()) %>%
+      left_join(wx_status(), join_by(grid_id)) %>%
+      replace_na(list(needs_download = TRUE))
+  })
+
+
+  # NOAA forecasts ----
+
+  ### rv$noaa_urls handler ----
+  # query NOAA for forecast urls for each gridpoint
+  observe({
+    grids <- rv$grids
+    req(nrow(grids) > 0)
+
+    isolate({
+      lapply(1:nrow(grids), function(i) {
+        grid <- slice(grids, i)
+        if (!isTruthy(rv$noaa_urls[[grid$grid_id]])) {
+          url <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
+          rv$noaa_urls[[grid$grid_id]] <- url
+        }
+      })
+    })
+  })
+
+  # observe(echo(rv$noaa_urls))
+
+
+  ### rv$noaa_forecasts handler ----
+  #' get forecast data for each forecast url stored rv$noaa_urls
+  observe({
+    urls <- rv$noaa_urls
+    req(length(urls) > 0)
+
+    # only pull forecasts when end date is today
+    req(selected_dates()$end == today())
+
+    isolate({
+      lapply(urls, function(url) {
+        if (is.character(url) && url != "404" && !isTruthy(rv$noaa_forecasts[[url]])) {
+          rv$noaa_forecasts[[url]] <- noaa_get_forecast(url = url)
+        }
+      })
+    })
+  })
+
+  # observe(echo(rv$noaa_forecasts))
+
+
+  # Weather data ----
+
+  ## wx_forecasts ----
+  wx_forecasts <- reactive({
+    sites <- sites_sf()
+    req(nrow(sites) > 0)
+
+    grids <- sites %>%
+      st_drop_geometry() %>%
+      as_tibble() %>%
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
+
+    urls <- rv$noaa_urls
+    fcs <- rv$noaa_forecasts
+
+    if (length(fcs) == 0) {
+      # message("no forecasts")
+      return(tibble())
+    }
+
+    if (!(any(names(urls) %in% grids$grid_id))) {
+      # message('no forecasts for selected sites')
+      return(tibble())
+    }
+
+    fc_data <- bind_rows(fcs, .id = "url")
+    fc <- tibble(
+      grid_id = names(urls),
+      url = unlist(urls)
+    ) %>%
+      left_join(fc_data, join_by(url)) %>%
+      select(-url)
+
+    df <- grids %>%
+      drop_na(time_zone) %>%
+      left_join(fc, join_by(grid_id))
+
+    # make sure the forecasts actually joined
+    if (!("datetime_utc" %in% names(df))) return(tibble())
+
+    df %>%
+      mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
+      mutate(date = as_date(datetime_local), .after = datetime_local)
+  })
+
+  # observe(echo(wx_forecasts()))
+
+
+  ## wx_args ----
+  # all inputs to the wx_data function
+  wx_args <- reactive(lst(
+    weather = rv$weather,
+    sites = sites_with_status(),
+    fetched_dates = selected_dates(),
+    dates = list(
+      start = fetched_dates$start + days(30),
+      end = fetched_dates$end,
+      today = today()
+    ),
+    forecast = if (dates$end == today()) wx_forecasts() else tibble()
+  ))
+
+  # observe(echo(wx_args()))
+
+
+  ## wx_data ----
+  #' will be blocked when no weather
+  #' will return only sites/dates/hourly when no weather in date range
+  wx_data <- reactive({
+    args <- wx_args()
+    list2env(args, envir = environment())
+
+    req(nrow(weather) > 0)
+    req(nrow(sites) > 0)
+
+    wx <- list()
+    wx$sites <- sites
+    wx$dates <- dates
+
+    # allow up to 30 days before selected start date
+    hourly <- weather %>%
+      filter(grid_id %in% sites$grid_id) %>%
+      filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
+      bind_rows(forecast) %>%
+      arrange(grid_id, datetime_local) %>%
+      build_hourly()
+
+    # remove the earlier dates that were used for moving averages
+    wx$hourly <- hourly %>% filter(date >= dates$start)
+
+    if (nrow(hourly) == 0 || nrow(wx$hourly) == 0) return(wx)
+
+    wx$daily_full <- build_daily(hourly)
+    wx$daily <- wx$daily_full %>% filter(date >= dates$start)
+
+    disease1 <- build_disease_from_ma(wx$daily_full)
+    disease2 <- build_disease_from_daily(wx$daily)
+    wx$disease <- disease1 %>%
+      left_join(disease2, join_by(grid_id, date)) %>%
+      filter(date >= dates$start)
+
+    wx$gdd <- build_gdd_from_daily(wx$daily)
+    wx
+  }) %>%
+    bindCache(rlang::hash(wx_args()))
+
+  # observe(echo(wx_data()))
+
+
+  # Help UI --------------------------------------------------------------------
 
   observe({
     mod <- modalDialog(
@@ -271,7 +384,7 @@ server <- function(input, output, session) {
   }) %>% bindEvent(input$help)
 
 
-  # Sidebar UI ----
+  # Sidebar UI -----------------------------------------------------------------
 
   ## Sites table ----
 
@@ -662,7 +775,7 @@ server <- function(input, output, session) {
 
 
 
-  # Map UI ----
+  # Map UI ---------------------------------------------------------------------
 
   #* @param map leaflet proxy object
   #* @param bounds named list { lat1, lat2, lng1, lng2 }
@@ -684,21 +797,25 @@ server <- function(input, output, session) {
       }
       map
     }
+
     btn_js <- function(id) {
       JS(paste0("(btn, map) => { Shiny.setInputValue('map_btn', '", id, "', {priority: 'event'}); }"))
     }
+
     btn1 <- easyButton(
       title = "Get my location",
       icon = "fa-location",
       position = "topleft",
       onClick = btn_js("user_loc")
     )
+
     btn2 <- easyButton(
       title = "Fit all sites on the map",
       icon = "fa-expand",
       position = "topleft",
       onClick = btn_js("zoom_sites")
     )
+
     btn3 <- easyButton(
       title = "Show full map",
       icon = "fa-globe",
@@ -715,7 +832,7 @@ server <- function(input, output, session) {
       addMapPane("sites", 430) %>%
       addLayersControl(
         baseGroups = names(OPTS$map_tiles),
-        overlayGroups = unlist(OPTS$map_layers, use.names = F),
+        # overlayGroups = unlist(OPTS$map_layers, use.names = F),
         options = layersControlOptions(collapsed = T)
       ) %>%
       addEasyButtonBar(btn1, btn2, btn3) %>%
@@ -795,7 +912,24 @@ server <- function(input, output, session) {
   })
 
 
-  # Map layers ----
+  # Map handlers ---------------------------------------------------------------
+
+  fly_to <- function(loc) {
+    leafletProxy("map") %>%
+      flyTo(loc$lng, loc$lat, max(10, isolate(input$map_zoom)))
+  }
+
+  fit_sites <- function() {
+    sites <- rv$sites
+    req(nrow(sites) > 0)
+    bounds <- list(
+      lat1 = min(sites$lat),
+      lat2 = max(sites$lat),
+      lng1 = min(sites$lng),
+      lng2 = max(sites$lng)
+    )
+    fit_bounds(bounds = bounds, options = list(padding = c(100, 100), maxZoom = 10))
+  }
 
   ## Show site markers ----
   observe({
@@ -854,7 +988,7 @@ server <- function(input, output, session) {
     map <- leafletProxy("map")
     clearGroup(map, "grid")
     grids <- grids_with_status() %>%
-      filter(grid_id %in% rv$grid_ids)
+      filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
 
     if (nrow(grids) > 0) {
       grids <- grids %>%
@@ -884,26 +1018,6 @@ server <- function(input, output, session) {
     }
 
   })
-
-
-  # Map handlers ----
-
-  fly_to <- function(loc) {
-    leafletProxy("map") %>%
-      flyTo(loc$lng, loc$lat, max(10, isolate(input$map_zoom)))
-  }
-
-  fit_sites <- function() {
-    sites <- rv$sites
-    req(nrow(sites) > 0)
-    bounds <- list(
-      lat1 = min(sites$lat),
-      lat2 = max(sites$lat),
-      lng1 = min(sites$lng),
-      lng2 = max(sites$lng)
-    )
-    fit_bounds(bounds = bounds, options = list(padding = c(100, 100), maxZoom = 10))
-  }
 
   ## Handle EasyButton clicks ----
   observe({
@@ -985,7 +1099,10 @@ server <- function(input, output, session) {
 
 
 
-  # Data tab ----
+
+# Module servers ----------------------------------------------------------
+
+  ## Data tab ----
 
   dataServer(
     wx_data = reactive(wx_data()),
@@ -994,7 +1111,7 @@ server <- function(input, output, session) {
   )
 
 
-  # Disease models tab ----
+  ## Disease models tab ----
 
   riskServer(
     wx_data = reactive(wx_data()),
