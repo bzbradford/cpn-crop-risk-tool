@@ -1749,7 +1749,7 @@ plotly_show_forecast <- function(plt, xmax) {
   }
 
   text <- list(list(
-    yref = "y domain",
+    yref = "paper",
     x = x, y = 1,
     text = label,
     showarrow = F,
@@ -1757,7 +1757,7 @@ plotly_show_forecast <- function(plt, xmax) {
   ))
 
   vline <- list(list(
-    type = "line", yref = "y domain",
+    type = "line", yref = "paper",
     x0 = x, x1 = x, y0 = 0, y1 = .95,
     line = list(color = "black", dash = "dash"),
     opacity = .25
@@ -1768,7 +1768,7 @@ plotly_show_forecast <- function(plt, xmax) {
     fillcolor = "orange",
     line = list(opacity = 0),
     opacity = 0.05,
-    yref = "y domain",
+    yref = "paper",
     x0 = x, x1 = xmax,
     y0 = 0, y1 = 1,
     layer = "below"
