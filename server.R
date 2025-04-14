@@ -3,20 +3,7 @@ server <- function(input, output, session) {
 
   # Functions ------------------------------------------------------------------
 
-  # try to enforce site attributes
-  create_site <- function(loc) {
-    sites <- rv$sites
-    loc$id <- create_id(sites$id)
-    loc$temp <- !isTruthy(loc$temp)
 
-    # make sure it has all the attributes
-    stopifnot(all(names(sites_template) %in% names(loc)))
-    loc <- loc[names(loc) %in% names(sites_template)]
-    loc$lat <- loc$lat
-    loc$lng <- loc$lng
-    req(validate_ll(loc$lat, loc$lng))
-    loc
-  }
 
   save_site <- function(site) {
     if (nrow(rv$sites) == OPTS$max_sites) return()
@@ -1053,7 +1040,7 @@ server <- function(input, output, session) {
   # name is already set by script
   observe({
     loc <- req(input$searched_loc)
-    site <- create_site(loc)
+    site <- create_site(loc, rv$sites)
     save_site(site)
     fly_to(loc)
     runjs("
@@ -1078,7 +1065,7 @@ server <- function(input, output, session) {
   ## Save site after getting locality name from geocoding api
   observe({
     loc <- req(input$locality_name)
-    site <- create_site(loc)
+    site <- create_site(loc, rv$sites)
     save_site(site)
     fly_to(site)
     runjs("sendShiny('locality_name', null)")
