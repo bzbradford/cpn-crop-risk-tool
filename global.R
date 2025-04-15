@@ -38,6 +38,33 @@ suppressPackageStartupMessages({
 
 
 
+# Startup ----------------------------------------------------------------------
+
+## Load files ----
+
+saved_weather <- if (file.exists("data/saved_weather.fst")) {
+  as_tibble(read_fst("data/saved_weather.fst"))
+} else {
+  tibble()
+}
+
+# EPSG 4326 for use in Leaflet
+service_bounds <- read_rds("data/us_ca_clip.rds")
+
+# transform to EPSG 3857 web mercator for intersecting points
+service_bounds_3857 <- st_transform(service_bounds, 3857)
+
+## Sites template ----
+sites_template <- tibble(
+  id = integer(),
+  name = character(),
+  lat = numeric(),
+  lng = numeric(),
+  temp = logical()
+)
+
+
+
 # Functions --------------------------------------------------------------------
 
 ## Utility ----
@@ -91,13 +118,40 @@ calc_max <- function(x) {
 
 ## Unit conversions ----
 
-c_to_f <- function(x) x * 1.8 + 32
-mm_to_in <- function(x) x / 25.4
-cm_to_in <- function(x) x / 2.54
-# km_to_mi <- function(x) x / 1.609
-kmh_to_mps <- function(x) x / 3.6
-mps_to_mph <- function(x) x * 2.237
-mbar_to_inHg <- function(x) x / 33.864
+f_to_c       <- \(x) { (x - 32) / 1.8 }
+c_to_f       <- \(x) { x * 1.8 + 32 }
+mm_to_in     <- \(x) { x / 25.4 }
+cm_to_in     <- \(x) { x / 2.54 }
+mi_to_km     <- \(x) { x * 1.609 }
+km_to_mi     <- \(x) { x / 1.609 }
+kmh_to_mps   <- \(x) { x / 3.6 }
+mps_to_mph   <- \(x) { x * 2.237 }
+mbar_to_inHg <- \(x) { x / 33.864 }
+
+compass_directions <- list(
+  "N"   = 0,
+  "NNE" = 22.5,
+  "NE"  = 45,
+  "ENE" = 67.5,
+  "E"   = 90,
+  "ESE" = 112.5,
+  "SE"  = 135,
+  "SSE" = 157.5,
+  "S"   = 180,
+  "SSW" = 202.5,
+  "SW"  = 225,
+  "WSW" = 247.5,
+  "W"   = 270,
+  "WNW" = 292.5,
+  "NW"  = 315,
+  "NNW" = 337.5
+)
+
+wind_dir_to_deg <- function(dirs) {
+  sapply(dirs, function(dir) {
+    if (dir %in% names(compass_directions)) compass_directions[[dir]] else NA
+  })
+}
 
 
 ## Location helpers ----
@@ -131,21 +185,7 @@ validate_ll <- function(lat, lng) {
   }, lat, lng)
 }
 
-#' creates an appropriately sized grid cell based on centroid coordinates
-#' @param lat latitude of point
-#' @param lng longitude of point
-#' @param d decimal degree distance from center to edge of grid
-#' @returns sf object
-ll_to_grid <- function(lat, lon, d = 1/45.5) {
-  m <- list(rbind(
-    c(lon - d, lat + d),
-    c(lon + d, lat + d),
-    c(lon + d, lat - d),
-    c(lon - d, lat - d),
-    c(lon - d, lat + d)
-  ))
-  st_sfc(st_polygon(m), crs = 4326)
-}
+
 
 
 # Settings ----
@@ -303,6 +343,101 @@ OPTS <- lst(
 )
 
 
+# NOAA forecast api ------------------------------------------------------------
+
+noaa_point_url <- function(lat, lng) {
+  sprintf("https://api.weather.gov/points/%.6g,%.6g", lat, lng)
+}
+
+# noaa_point_url(45, -89)
+
+
+noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
+  tryCatch({
+    stopifnot(validate_ll(lat, lng))
+    req <- request(url) %>%
+      req_timeout(5) %>%
+      req_retry(max_tries = 2, retry_on_failure = TRUE)
+    t <- now()
+    resp <- req_perform(req) %>% resp_body_json()
+    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    resp$properties$forecastHourly
+  }, error = function(e) {
+    message("Failed to retrieve ", url, ": ", e$message)
+    echo(e)
+    if ("httr2_http_404" %in% class(e)) "404" else NULL
+  })
+}
+
+# # should succeed
+# noaa_get_forecast_url(45, -89)
+# noaa_get_forecast_url(38, -121)
+#
+# # should fail due to lat/lng
+# noaa_get_forecast_url(1, 1)
+#
+# # should fail due to 404
+# noaa_get_forecast_url(50, -90)
+
+# units: temperature = F, wind_speed = mph
+noaa_parse_forecast <- function(periods) {
+  periods %>%
+    lapply(function(p) {
+      # hoist the nested values
+      p$probabilityOfPrecipitation <- p$probabilityOfPrecipitation$value
+      # dewpoint is provided in Celsius
+      p$dewpoint <- p$dewpoint$value
+      p$relativeHumidity <- p$relativeHumidity$value
+      p$windSpeed <- as.numeric(str_split_i(p$windSpeed, " ", 1))
+      p
+    }) %>%
+    enframe() %>%
+    select(value) %>%
+    unnest_wider("value") %>%
+    janitor::clean_names() %>%
+    mutate(
+      across(c(start_time, end_time), parse_datetime),
+      across(c(start_time, end_time), ~.x + minutes(20)),
+      across(temperature, f_to_c),
+      across(wind_speed, mi_to_km),
+      across(wind_direction, wind_dir_to_deg)
+    ) %>%
+    select(
+      datetime_utc = start_time,
+      temperature,
+      temperature_dew_point = dewpoint,
+      relative_humidity,
+      wind_speed,
+      wind_direction
+    )
+}
+
+noaa_get_forecast <- function(lat = NULL, lng = NULL, url = noaa_get_forecast_url(lat, lng)) {
+  tryCatch({
+    req <- request(url) %>%
+      req_timeout(5) %>%
+      req_retry(max_tries = 2, retry_on_failure = TRUE)
+    t <- now()
+    resp <- req_perform(req) %>% resp_body_json()
+    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    noaa_parse_forecast(resp$properties$periods)
+  }, error = function(e) {
+    message("Failed to get forecast from ", url, ": ", e$message)
+    echo(e)
+    tibble()
+  })
+}
+
+# # should succeed
+# noaa_get_forecast(45, -89)
+# noaa_get_forecast(38, -121)
+#
+# # should fail
+# noaa_get_forecast(1, 1)
+# noaa_get_forecast()
+
+
+
 # IBM API interface ------------------------------------------------------------
 
 #' Get the authorization token from the authentication server
@@ -315,7 +450,8 @@ refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
       req_headers_redacted(
         "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
         "x-api-key" = keys$api_key
-      )
+      ) %>%
+      req_timeout(5)
     resp <- req_perform(req)
     message("Authorization token refreshed at ", now("UTC"))
     list(
@@ -520,104 +656,6 @@ get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_end
 
 
 
-#' Does some minimal processing on the IBM response to set local time and date
-#' @param ibm_response hourly weather data received from API
-#' @returns tibble
-clean_ibm <- function(ibm_response) {
-  if (nrow(ibm_response) == 0) return(tibble())
-  ibm_response %>%
-    select(-OPTS$ibm_ignore_cols) %>%
-    select(
-      grid_id = gridpointId,
-      grid_lat = latitude,
-      grid_lng = longitude,
-      datetime_utc = validTimeUtc,
-      everything()
-    ) %>%
-    clean_names() %>%
-    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
-    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
-    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
-    mutate(date = as_date(datetime_local), .after = datetime_local)
-}
-
-
-
-
-build_grids <- function(wx) {
-  req(nrow(wx) > 0)
-  wx %>%
-    distinct(grid_id, grid_lat, grid_lng, time_zone) %>%
-    rowwise() %>%
-    mutate(geometry = ll_to_grid(grid_lat, grid_lng)) %>%
-    ungroup() %>%
-    st_set_geometry("geometry")
-}
-
-# saved_weather %>% build_grids()
-
-
-#' Summarize downloaded weather data by grid cell and creates sf object
-#' used to intersect site points with existing weather data
-#' @param wx hourly weather data from `clean_ibm` function
-#' @param start_date start of expected date range
-#' @param end_date end of expected date range
-#' @returns tibble
-weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date)) {
-  dates_expected <- seq.Date(start_date, end_date, 1)
-  wx <- filter(wx, between(date, start_date, end_date))
-  if (nrow(wx) == 0) return(tibble(grid_id = NA, needs_download = TRUE))
-  wx %>%
-    summarize(
-      tz = coalesce(first(time_zone), "UTC"),
-      date_min = min(date),
-      date_max = max(date),
-      days_expected = length(dates_expected),
-      days_actual = n_distinct(date),
-      days_missing = days_expected - days_actual,
-      days_missing_pct = days_missing / days_expected,
-      time_min_expected = ymd_hms(paste(start_date, "00:20:00"), tz = tz),
-      time_min_actual = min(datetime_local),
-      time_max_expected = min(now(tzone = tz), ymd_hms(paste(end_date, "23:20:00"), tz = tz)),
-      time_max_actual = max(datetime_local),
-      hours_expected = as.integer(difftime(time_max_expected, time_min_expected, units = "hours")),
-      hours_actual = n(),
-      hours_missing = hours_expected - hours_actual,
-      hours_missing_pct = hours_missing / hours_expected,
-      hours_stale = as.integer(difftime(now(tzone = tz), time_max_actual, units = "hours")),
-      stale = hours_stale > OPTS$ibm_stale_hours,
-      needs_download = stale | days_missing > 0,
-      .by = grid_id
-    ) %>%
-    select(-tz)
-}
-
-
-#' similar to weather_status but returns number of hours per day
-#' @param wx hourly weather data
-#' @param tz time
-daily_status <- function(wx, tz = "UTC") {
-  if (length(unique(wx$grid_id)) > 1) warning("More than 1 gridpoint sent to daily_status")
-  wx %>%
-    summarize(hours = n(), .by = date) %>%
-    mutate(
-      start_hour = ymd_hms(paste(date, "00:20:00"), tz = tz),
-      end_hour = ymd_hms(paste(date, "23:20:00"), tz = tz),
-      hours_expected = if_else(
-        date == today(),
-        as.integer(difftime(now(tzone = tz), start_hour, "hours")),
-        as.integer(difftime(end_hour, start_hour, "hours"))
-      ) + 1,
-      hours_missing = hours_expected - hours
-    )
-}
-
-# saved_weather %>%
-#   filter(grid_id == sample(grid_id, 1)) %>%
-#   daily_status()
-
-
-
 #' Update weather for sites list and date range
 #' @param sites sf with site locs
 #' @param start_date
@@ -680,15 +718,34 @@ fetch_weather <- function(sites, start_date, end_date) {
   return(status_msg)
 }
 
-# saved_weather %>%
-#   filter(grid_id == first(grid_id)) %>%
-#   weather_status()
+
+
+#' Does some minimal processing on the IBM response to set local time and date
+#' @param ibm_response hourly weather data received from API
+#' @returns tibble
+clean_ibm <- function(ibm_response) {
+  if (nrow(ibm_response) == 0) return(tibble())
+  ibm_response %>%
+    select(-OPTS$ibm_ignore_cols) %>%
+    select(
+      grid_id = gridpointId,
+      grid_lat = latitude,
+      grid_lng = longitude,
+      datetime_utc = validTimeUtc,
+      everything()
+    ) %>%
+    clean_names() %>%
+    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
+    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
+    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
+    mutate(date = as_date(datetime_local), .after = datetime_local)
+}
 
 
 
-# Variable selection and unit conversion features ------------------------------
+# Weather helpers ---------------------------------------------------------
 
-#' all possible, and currently enabled weather columns
+#' All possible and currently enabled weather columns
 #' some are renamed for clarity
 ibm_vars <- c(
   "temperature",
@@ -724,25 +781,29 @@ ibm_vars <- c(
   "pressure_change"
 )
 
-#' list of weather variables, unit suffixes, and conversion functions
+
+#' List of weather variables, unit suffixes, and conversion functions
 #' all derivative columns of each of these will start with the same text
 #' e.g. temperature => temperature_min => temperature_min_30ma
 measures <- tribble(
-  ~measure, ~metric, ~imperial, ~conversion,
-  "temperature", "°C", "°F", c_to_f,
-  "dew_point",   "°C", "°F", c_to_f,
-  "relative_humidity", "%", "%", \(x) x,
-  "precip", "mm", "in", mm_to_in,
-  "snow", "cm", "in", cm_to_in,
-  "wind_speed", "m/s", "mph", mps_to_mph,
-  "wind_gust", "m/s", "mph", mps_to_mph,
-  "wind_direction", "°", "°", \(x) x,
+  ~measure,                  ~metric, ~imperial, ~conversion,
+  "temperature",             "°C",   "°F",   c_to_f,
+  "dew_point",               "°C",   "°F",   c_to_f,
+  "relative_humidity",       "%",    "%",    \(x) x, # no conversion
+  "precip",                  "mm",   "in",   mm_to_in,
+  "snow",                    "cm",   "in",   cm_to_in,
+  "wind_speed",              "m/s",  "mph",  mps_to_mph,
+  "wind_gust",               "m/s",  "mph",  mps_to_mph,
+  "wind_direction",          "°",    "°",    \(x) x, # no conversion
   "pressure_mean_sea_level", "mbar", "inHg", mbar_to_inHg,
-  "pressure_change", "mbar", "inHg", mbar_to_inHg,
+  "pressure_change",         "mbar", "inHg", mbar_to_inHg,
 )
 
-#' converts all measures from default metric to imperial values
+
+#' Converts all measures from default metric to imperial values
 #' operates on any of the major datasets
+#' @param df data frame from the hourly set or beyond
+#' @returns df with column data converted
 convert_measures <- function(df) {
   for (i in 1:nrow(measures)) {
     m <- measures[i,]
@@ -751,8 +812,14 @@ convert_measures <- function(df) {
   df
 }
 
-#' returns the unit name for the given column
+# saved_weather %>% build_hourly() %>% convert_measures()
+# saved_weather %>% build_hourly() %>% build_daily() %>% convert_measures()
+
+
+#' Returns the unit name for the given column
 #' used to append unit suffix in plotly
+#' @param col_name data column name that needs a unit suffix
+#' @param unit_system
 find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
   unit_system <- match.arg(unit_system)
   matched <- measures %>%
@@ -761,8 +828,12 @@ find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
   if (nrow(matched) == 1) matched[[unit_system]] else ""
 }
 
-#' adds the unit suffix to each column name where appropriate
+
+#' Adds the unit suffix to each column name where appropriate
 #' for exporting as CSV so unit is documented
+#' @param df from the data pipeline
+#' @param unit_system
+#' @returns df with updated column names
 rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
   unit_system <- match.arg(unit_system)
   for (i in 1:nrow(measures)) {
@@ -777,14 +848,113 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 }
 
 
+#' Creates an appropriately sized grid polygon based on centroid coordinates
+#' @param lat latitude of point
+#' @param lng longitude of point
+#' @param d decimal degree distance from center to edge of grid
+#' @returns sf object
+ll_to_grid <- function(lat, lon, d = 1/45.5) {
+  m <- list(rbind(
+    c(lon - d, lat + d),
+    c(lon + d, lat + d),
+    c(lon + d, lat - d),
+    c(lon - d, lat - d),
+    c(lon - d, lat + d)
+  ))
+  st_sfc(st_polygon(m), crs = 4326)
+}
+
+# ll_to_grid(45, -89)
+
+
+#' Creates grid polygons based on weather data grid centroid
+#' @param wx IBM weather data eg `saved_weather`
+#' @returns sf object of grid cell polygons
+build_grids <- function(wx) {
+  wx %>%
+    distinct(grid_id, grid_lat, grid_lng, time_zone) %>%
+    rowwise() %>%
+    mutate(geometry = ll_to_grid(grid_lat, grid_lng)) %>%
+    ungroup() %>%
+    st_set_geometry("geometry")
+}
+
+# saved_weather %>% build_grids()
+
+
+#' Summarize downloaded weather data by grid cell and creates sf object
+#' used to intersect site points with existing weather data
+#' @param wx hourly weather data from `clean_ibm` function
+#' @param start_date start of expected date range
+#' @param end_date end of expected date range
+#' @returns tibble
+weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date)) {
+  dates_expected <- seq.Date(start_date, end_date, 1)
+  wx <- filter(wx, between(date, start_date, end_date))
+  if (nrow(wx) == 0) return(tibble(grid_id = NA, needs_download = TRUE))
+  wx %>%
+    summarize(
+      tz = coalesce(first(time_zone), "UTC"),
+      date_min = min(date),
+      date_max = max(date),
+      days_expected = length(dates_expected),
+      days_actual = n_distinct(date),
+      days_missing = days_expected - days_actual,
+      days_missing_pct = days_missing / days_expected,
+      time_min_expected = ymd_hms(paste(start_date, "00:20:00"), tz = tz),
+      time_min_actual = min(datetime_local),
+      time_max_expected = min(now(tzone = tz), ymd_hms(paste(end_date, "23:20:00"), tz = tz)),
+      time_max_actual = max(datetime_local),
+      hours_expected = as.integer(difftime(time_max_expected, time_min_expected, units = "hours")),
+      hours_actual = n(),
+      hours_missing = hours_expected - hours_actual,
+      hours_missing_pct = hours_missing / hours_expected,
+      hours_stale = as.integer(difftime(now(tzone = tz), time_max_actual, units = "hours")),
+      stale = hours_stale > OPTS$ibm_stale_hours,
+      needs_download = stale | days_missing > 0,
+      .by = grid_id
+    ) %>%
+    select(-tz)
+}
+
+# weather_status(saved_weather, start_date = ymd("2025-1-1"), end_date = ymd("2025-2-21"))
+# saved_weather %>% weather_status(today() - 7,today())
+
+
+#' Similar to weather_status but returns number of hours per day
+#' to check for any incomplete days
+#' @param wx hourly weather data
+#' @param tz time
+daily_status <- function(wx, tz = "UTC") {
+  if (length(unique(wx$grid_id)) > 1) warning("More than 1 gridpoint sent to daily_status")
+  wx %>%
+    summarize(hours = n(), .by = date) %>%
+    mutate(
+      start_hour = ymd_hms(paste(date, "00:20:00"), tz = tz),
+      end_hour = ymd_hms(paste(date, "23:20:00"), tz = tz),
+      hours_expected = if_else(
+        date == today(),
+        as.integer(difftime(now(tzone = tz), start_hour, "hours")),
+        as.integer(difftime(end_hour, start_hour, "hours"))
+      ) + 1,
+      hours_missing = hours_expected - hours
+    )
+}
+
+# saved_weather %>% filter(grid_id == sample(grid_id, 1)) %>% daily_status()
+
+
+
+
 # Field Crops Disease Models ---------------------------------------------------
 
 # Logistic function to convert logit to probability
 logistic <- function(logit) exp(logit) / (1 + exp(logit))
 
+
 ## Corn/Bean ----
 
-#' White mold, dryland model - Any crop
+#' White mold, dryland model - Corn & Bean
 #' Growth stage: Soy R1-R3
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' No risk: Fungicide app in last 14 days, min temp <32F
@@ -808,7 +978,7 @@ predict_whitemold_dry <- function(MaxAT_30ma, MaxWS_30ma, MaxRH_30ma) {
 #   facet_wrap(~rh, labeller = "label_both")
 
 
-#' White mold, irrigated model - Any crop
+#' White mold, irrigated model - Corn & Bean
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' No risk: Fungicide app in last 14 days, min temp <32F
 #' @param MaxAT_30MA Maximum daily temperature, 30-day moving average, Celsius
@@ -823,7 +993,7 @@ predict_whitemold_irrig <- function(MaxAT_30MA, MaxRH_30ma, spacing = c("15", "3
 
 # expand_grid(temp = 15:40, rh = seq(50, 100, 5), spacing = c("15", "30")) %>%
 #   rowwise() %>%
-#   mutate(prob = sporecaster_irrig(temp, rh, spacing)) %>%
+#   mutate(prob = predict_whitemold_irrig(temp, rh, spacing)) %>%
 #   ggplot(aes(x = temp, y = rh, fill = prob)) +
 #   geom_tile() +
 #   facet_wrap(~spacing, ncol = 1) +
@@ -899,9 +1069,8 @@ predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
 #   coord_cartesian(expand = F)
 
 
-# Vegetable Disease Models -----------------------------------------------------
 
-## Potato/tomato ----
+# Vegetable Disease Models -----------------------------------------------------
 
 #' Potato physiological days
 #' Potato/tomato
@@ -965,9 +1134,8 @@ calc_late_blight_dsv <- function(temp, h) {
 #   coord_cartesian(expand = F)
 
 
-## Carrot ----
-
-#' Carrot foliar disease (Alternaria)
+#' Alternaria leaf blight disease severity values
+#' Carrot
 #' @param temp Mean temperature during hours where RH > 90%, Celsius
 #' @param h Number of hours where RH > 90%
 #' @returns numeric 0-4 dsv
@@ -990,9 +1158,8 @@ calc_alternaria_dsv <- function(temp, h) {
 #   coord_cartesian(expand = F)
 
 
-## Beet ----
-
-#' Cercospora foliar disease daily infection values
+#' Cercospora leaf blight daily infection values
+#' Beet
 #' based on https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716
 #' more information: https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/
 #' @param temp Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
@@ -1032,15 +1199,16 @@ calc_cercospora_div <- function(temp, h) {
 
 
 # Disease severity --------------------------------------------------------
+# Functions for converting model outputs into risk scores (eg low/med/high)
 
 assign_risk <- function(model, value) {
   switch(model,
-    "white_mold_dry_prob"      = risk_for_fieldcrops(value, .01, 20, 35),
-    "white_mold_irrig_30_prob" = risk_for_fieldcrops(value, .01, 5, 10),
-    "white_mold_irrig_15_prob" = risk_for_fieldcrops(value, .01, 5, 10),
-    "gray_leaf_spot_prob"      = risk_for_fieldcrops(value, 1, 40, 60),
-    "tarspot_prob"             = risk_for_fieldcrops(value, 1, 20, 35),
-    "frogeye_leaf_spot_prob"   = risk_for_fieldcrops(value, 1, 40, 50),
+    "white_mold_dry_prob"      = risk_from_prob(value, .01, 20, 35),
+    "white_mold_irrig_30_prob" = risk_from_prob(value, .01, 5, 10),
+    "white_mold_irrig_15_prob" = risk_from_prob(value, .01, 5, 10),
+    "gray_leaf_spot_prob"      = risk_from_prob(value, 1, 40, 60),
+    "tarspot_prob"             = risk_from_prob(value, 1, 20, 35),
+    "frogeye_leaf_spot_prob"   = risk_from_prob(value, 1, 40, 50),
     "potato_pdays"             = risk_for_earlyblight(value),
     "late_blight_dsv"          = risk_for_lateblight(value),
     "alternaria_dsv"           = risk_for_alternaria(value),
@@ -1051,7 +1219,11 @@ assign_risk <- function(model, value) {
 
 ## Field crops ----
 
-# for field crops models
+#' Assign risk for field crops spore probability models
+#' @param prob numeric vector of probabilities between 0 and 1
+#' @param low threshold for low risk, 0-100
+#' @param med threshold for medium risk, 0-100
+#' @param high threhold for high risk, 0-100
 risk_from_prob <- function(prob, low, med, high) {
   tibble(
     risk = cut(
@@ -1061,27 +1233,17 @@ risk_from_prob <- function(prob, low, med, high) {
       include.lowest = TRUE,
       right = FALSE
     ),
-    risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk)
+    risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk),
+    value_label = sprintf("%.0f%% (%s)", prob * 100, risk)
   )
 }
 
 # tibble(
 #   value = runif(10),
-#   risk = risk_from_prob(value, 60, 40, 5)
+#   risk_from_prob(value, 5, 25, 60)
 # )
 
 
-risk_for_fieldcrops <- function(value, high, med, low) {
-  tibble(
-    risk_from_prob(value, high, med, low),
-    value_label = sprintf("%.0f%% (%s)", value * 100, risk)
-  )
-}
-
-# tibble(
-#   value = runif(10),
-#   risk_for_fieldcrops(value, 40, 20, 5)
-# )
 
 # reduces spore probability as temperature falls below 10C
 attenuate_prob <- function(value, temp) {
@@ -1099,6 +1261,9 @@ attenuate_prob <- function(value, temp) {
 
 ## Vegetables ----
 
+#' Convert severity score 0-4 to a risk word and assign a color
+#' @param severity numeric vector of severities
+#' @returns tibble
 risk_from_severity <- function(severity) {
   tibble(
     risk = cut(
@@ -1114,10 +1279,12 @@ risk_from_severity <- function(severity) {
 
 # tibble(
 #   value = round(runif(10, 0, 4)),
-#   risk = risk_from_severity(value)
+#   risk_from_severity(value)
 # )
 
 
+#' Assign risk score for early blight p-day accumulation
+#' @param value dsv from `calc_pdays` function
 risk_for_earlyblight <- function(value) {
   tibble(
     total = cumsum(value),
@@ -1148,6 +1315,8 @@ risk_for_earlyblight <- function(value) {
 #   scale_color_brewer(palette = "Spectral", direction = -1)
 
 
+#' Assign risk score for late blight dsv accumulation
+#' @param value dsv from `calc_late_blight_dsv` function
 risk_for_lateblight <- function(value) {
   tibble(
     total14 = rollapplyr(value, 14, sum, partial = TRUE),
@@ -1175,6 +1344,8 @@ risk_for_lateblight <- function(value) {
 #   scale_color_brewer(palette = "Spectral", direction = -1)
 
 
+#' Assign risk score for alternaria leaf blight
+#' @param value dsv from `calc_alternaria_dsv` function
 risk_for_alternaria <- function(value) {
   tibble(
     total7 = rollapplyr(value, 7, sum, partial = TRUE),
@@ -1199,6 +1370,10 @@ risk_for_alternaria <- function(value) {
 #   scale_color_brewer(palette = "Spectral", direction = -1)
 
 
+#' Cercospora leaf blight
+#' Windels, C. E., Lamey, H. A., Hilde, D., Widner, J., & Knudsen, T. (1998). A Cerospora leaf spot model for sugar beet: in practice by an industry. Plant disease, 82(7), 716-726.
+#' https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716
+#' @param value dsv from `calc_cercospora_div` function
 risk_for_cercospora <- function(value) {
   tibble(
     avg2 = rollapplyr(value, 2, mean, partial = TRUE),
@@ -1228,12 +1403,16 @@ risk_for_cercospora <- function(value) {
 
 
 
+# Botcast - onion
+
+
 
 # Growing degree days ----------------------------------------------------------
 
 #' Single sine method
 #' to create GDDs with an upper threshold, calculate GDDs with the upper threshold
 #' as the base temperature and subtract that value from the GDDs for the base temp
+#' to implement a horizontal cutoff.
 #' @param tmin minimum daily temperature
 #' @param tmax maximum daily temperature
 #' @param base base/lower temperature threshold
@@ -1272,11 +1451,8 @@ gdd_sine <- function(tmin, tmax, base) {
 #   coord_cartesian(expand = F)
 
 
+
 # Data pipeline ----------------------------------------------------------------
-
-# weather_status(saved_weather, start_date = ymd("2025-1-1"), end_date = ymd("2025-2-21")) %>% view()
-
-# saved_weather %>% weather_status(today() - 7,today())
 
 #' Creates the working hourly weather dataset from cleaned ibm response
 #' @param ibm_hourly hourly weather data from `clean_ibm` function
@@ -1304,6 +1480,9 @@ build_hourly <- function(ibm_hourly) {
     mutate(snow_cumulative = cumsum(snow), .after = snow) %>%
     mutate(dew_point_depression = abs(temperature - dew_point), .after = dew_point)
 }
+
+# saved_weather %>% build_hourly()
+
 
 #' Generate daily summary data from hourly weather
 #' @param hourly accepts the cleaned hourly data from `build_hourly()`
@@ -1351,8 +1530,12 @@ build_daily <- function(hourly) {
     arrange(grid_id, date)
 }
 
+# saved_weather %>% build_hourly() %>% build_daily()
+
+
 #' Generate several moving average periods from daily data
 #' @param daily accepts daily data from `build_daily()`
+#' @param align moving average alignment
 #' @returns tibble
 build_ma_from_daily <- function(daily, align = c("center", "right")) {
   align <- match.arg(align)
@@ -1379,6 +1562,8 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   # bind attributes
   bind_cols(attr, ma)
 }
+
+# saved_weather %>% build_hourly() %>% build_daily() %>% build_ma_from_daily()
 
 
 #' Plant diseases that use daily values as inputs
@@ -1429,10 +1614,7 @@ build_disease_from_ma <- function(daily) {
   bind_cols(attr, disease)
 }
 
-# saved_weather %>%
-#   build_hourly() %>%
-#   build_daily() %>%
-#   build_disease_from_ma()
+# saved_weather %>% build_hourly() %>% build_daily() %>% build_disease_from_ma()
 
 
 #' Plant diseases that use daily values as inputs
@@ -1474,10 +1656,7 @@ build_disease_from_daily <- function(daily) {
   bind_cols(attr, disease)
 }
 
-# saved_weather %>%
-#   build_hourly() %>%
-#   build_daily() %>%
-#   build_disease_from_daily()
+# saved_weather %>% build_hourly() %>% build_daily() %>% build_disease_from_daily()
 
 
 #' Generate various growing degree day models with and without an 86F upper threshold
@@ -1514,33 +1693,55 @@ build_gdd_from_daily <- function(daily) {
     )
 }
 
-
-
-# Helper functions --------------------------------------------------------
-
-missing_weather_ui <- function(n = 1) {
-  msg <- ifelse(
-    n == 1,
-    "This site is missing data based on your date selections.",
-    "One or more sites are missing data based on your date selections."
-  )
-
-  div(
-    style = "width: 100%; display: inline-flex; align-items: center; border: 1px solid orange; border-radius: 5px; background-color: white; padding; 5px;",
-    div(style = "color: orange; padding: 10px; font-size: 1.5em;", icon("warning")),
-    div(em(msg, "Press", strong("Fetch weather"), "on the sidebar to download any missing data."))
-  )
-}
+# saved_weather %>% build_hourly() %>% build_daily() %>% build_gdd_from_daily()
 
 
 
+# Site management ---------------------------------------------------------
+
+#' Return the next available id number for creating a new site
+#' @param ids vector of numeric ids that are already in use
 create_id <- function(ids) {
   ids <- as.integer(ids)
   possible_ids <- 1:(length(ids) + 1)
   setdiff(possible_ids, ids)
 }
 
-# try read sites from csv
+# # should return 4
+# create_id(c(1, 2, 3, 5))
+
+
+#' Validate and fill in defaults for new sites
+#' @param loc named list with location attributes
+create_site <- function(loc, sites) {
+  loc$id <- create_id(sites$id)
+  loc$temp <- !isTruthy(loc$temp)
+
+  # make sure it has all the attributes
+  missing_attr <- setdiff(names(sites_template), names(loc))
+  if (isTruthy(missing_attr)) stop("Loc is missing ", missing_attr)
+
+  # validate lat/lng
+  req(validate_ll(loc$lat, loc$lng))
+
+  # keep only approved names
+  loc <- loc[names(loc) %in% names(sites_template)]
+
+  loc
+}
+
+# # should succeed and assign id 1
+# create_site(list(lat = 45, lng = -89, name = "foo"), sites_template)
+#
+# # should fail, invalid lat/lng
+# create_site(list(lat = -45, lng = -89, name = "foo"), sites_template)
+#
+# # should fail, loc is missing keys
+# create_site(list(), sites_template)
+
+
+#' Try read sites list from csv
+#' @param fpath location of csv to read
 load_sites <- function(fpath) {
   df <- read_csv(fpath, col_types = "c", show_col_types = F)
   if (nrow(df) == 0) stop("File was empty")
@@ -1560,12 +1761,52 @@ load_sites <- function(fpath) {
     head(OPTS$max_sites)
 }
 
-# load_sites("data/example-sites.csv")
-# load_sites("dev/wisconet stns.csv")
+# # should succeed
+# load_sites("test/example-sites.csv")
+# load_sites("test/wisconet stns.csv")
 
-sanitize_loc_names <- function(vec) {
-  str_trunc(htmltools::htmlEscape(vec), 30)
+
+#' Make sure names read from csv are valid and safe to display
+#' adds a counter after any duplicate names
+#' @param str character vector of names
+sanitize_loc_names <- function(str) {
+  str <- trimws(gsub("<[^>]+>", "", str))
+  str <- str_trunc(str, 30)
+  Encoding(str) <- "UTF-8"
+  tibble(name = str) %>%
+    mutate(count = row_number(), .by = name) %>%
+    mutate(name = if_else(count > 1, paste0(name, " (", count, ")"), name)) %>%
+    pull(name)
 }
+
+# # should include "foo (2)"
+# sanitize_loc_names(c("foo", "foo", "bar"))
+#
+# # should strip html
+# sanitize_loc_names(c("foo", "bar", "<a href='bad'>baz</a>"))
+
+
+
+# UI builders -------------------------------------------------------------
+
+#' Create the missing data element based on number of sites missing
+missing_weather_ui <- function(n = 1) {
+  msg <- ifelse(
+    n == 1,
+    "This site is missing data based on your date selections.",
+    "One or more sites are missing data based on your date selections."
+  )
+
+  div(
+    style = "width: 100%; display: inline-flex; align-items: center; border: 1px solid orange; border-radius: 5px; background-color: white; padding; 5px;",
+    div(style = "color: orange; padding: 10px; font-size: 1.5em;", icon("warning")),
+    div(em(msg, "Press", strong("Fetch weather"), "on the sidebar to download any missing data."))
+  )
+}
+
+# missing_weather_ui(1)
+# missing_weather_ui(2)
+
 
 site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_name = "") {
   action <- match.arg(action)
@@ -1588,6 +1829,51 @@ site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_
 }
 
 # site_action_link("edit", 1, "foo")
+# site_action_link("save", 1, "foo")
+# site_action_link("trash", 1, "foo")
+
+
+
+# Plotly ------------------------------------------------------------------
+
+# add forecast annotation
+plotly_show_forecast <- function(plt, xmax) {
+  if ("Date" %in% class(xmax)) {
+    x <- today()
+    label <- "Today"
+  } else {
+    x <- now()
+    label <- "Now"
+  }
+
+  text <- list(list(
+    yref = "paper",
+    x = x, y = 1,
+    text = label,
+    showarrow = F,
+    opacity = .5
+  ))
+
+  vline <- list(list(
+    type = "line", yref = "paper",
+    x0 = x, x1 = x, y0 = 0, y1 = .95,
+    line = list(color = "black", dash = "dash"),
+    opacity = .25
+  ))
+
+  area <- list(list(
+    type = "rect",
+    fillcolor = "orange",
+    line = list(opacity = 0),
+    opacity = 0.05,
+    yref = "paper",
+    x0 = x, x1 = xmax,
+    y0 = 0, y1 = 1,
+    layer = "below"
+  ))
+
+  plt %>% layout(shapes = c(vline, area), annotations = text)
+}
 
 
 # data should have cols: date, name, value, value_label, risk
@@ -1655,47 +1941,15 @@ disease_plot <- function(data, xrange = NULL) {
         hovermode = "x unified",
         showlegend = FALSE
       ) %>%
-      config(displayModeBar = FALSE)
+      config(displayModeBar = FALSE) %>%
+      plotly_show_forecast(xmax = xrange[2])
   })
 }
 
 
 
-# Startup ----------------------------------------------------------------------
 
-## Load files ----
-
-saved_weather <- if (file.exists("data/saved_weather.fst")) {
-  as_tibble(read_fst("data/saved_weather.fst"))
-} else {
-  tibble()
-}
-
-# EPSG 4326 for use in Leaflet
-service_bounds <- read_rds("data/us_ca_clip.rds")
-
-# transform to EPSG 3857 web mercator for intersecting points
-service_bounds_3857 <- st_transform(service_bounds, 3857)
-
-## Sites template ----
-sites_template <- tibble(
-  id = integer(),
-  name = character(),
-  lat = numeric(),
-  lng = numeric(),
-  temp = logical()
-)
-
-
-
-# cat_names(test_hourly)
-# cat_names(test_daily)
-# cat_names(test_ma)
-# cat_names(test_probs)
-
-
-
-# Setup ------------------------------------------------------------------------
+# Archive ------------------------------------------------------------------------
 
 ## County shapefile ----
 

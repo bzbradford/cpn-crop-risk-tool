@@ -293,10 +293,10 @@ table {
   font-weight: bold;
 }
 
-.leaflet-control-layers-overlays::before {
+/*.leaflet-control-layers-overlays::before {
   content: 'Layers:';
   font-weight: bold;
-}
+}*/
 
 
 /*--- PLOTLY ---*/
