@@ -624,40 +624,53 @@ server <- function(input, output, session) {
     )
   })
 
+
+  ### date_presets // reactive ----
+  date_presets <- reactive({
+    d <- today()
+    y <- year(d)
+    list(
+      "week" = c(d - 7, d),
+      "month" = c(d - 30, d),
+      "thisyear" = c(make_date(y, 1, 1), d),
+      "fullyear" = c(d - 365, d),
+      "lastyear" = c(make_date(y - 1, 1, 1), make_date(y - 1, 12, 31)),
+      "lastseason" = c(make_date(y - 1, 5, 1), make_date(y - 1, 10, 31))
+    )
+  })
+
   ### date_btns_ui // renderUI ----
+  date_btn <- function(value, label, btn_class = c("default", "primary")) {
+    btn_class <- match.arg(btn_class)
+    HTML(str_glue("<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"))
+  }
+
   output$date_btns_ui <- renderUI({
-    btn <- function(id, label) actionButton(id, label, class = "btn btn-sm")
+    btn_opts <- OPTS$date_btn_choices
+    cur_dates <- c(req(input$start_date), req(input$end_date))
+    presets <- date_presets()
+
     div(
-      class = "flex-across",
-      btn("date_last_year", "Last year"),
-      # btn("date_last_season", "Last season"),
-      btn("date_this_year", "This year"),
-      btn("date_past_month", "Past month")
+      class = "date-btns",
+      lapply(names(btn_opts), function(label) {
+        value <- btn_opts[[label]]
+        selected <- setequal(cur_dates, presets[[value]])
+        date_btn(value, label, btn_class = ifelse(selected, "primary", "default"))
+      })
     )
   })
 
   ### Handle date buttons ----
-  observeEvent(input$date_last_year, {
-    yr <- year(today()) - 1
-    updateDateInput(inputId = "start_date", value = make_date(yr, 1, 1))
-    updateDateInput(inputId = "end_date", value = make_date(yr, 12, 31))
-  })
-
-  # observeEvent(input$date_last_season, {
-  #   yr <- year(today()) - 1
-  #   updateDateInput(inputId = "start_date", value = make_date(yr, 5, 1))
-  #   updateDateInput(inputId = "end_date", value = make_date(yr, 10, 31))
-  # })
-
-  observeEvent(input$date_this_year, {
-    yr <- year(today())
-    updateDateInput(inputId = "start_date", value = make_date(yr, 1, 1))
-    updateDateInput(inputId = "end_date", value = min(make_date(yr, 12, 31), today()) )
-  })
-
-  observeEvent(input$date_past_month, {
-    updateDateInput(inputId = "start_date", value = today() - 30)
-    updateDateInput(inputId = "end_date", value = today())
+  observeEvent(input$date_preset, {
+    val <- input$date_preset
+    presets <- date_presets()
+    if (val %in% names(presets)) {
+      dates <- presets[[val]]
+      updateDateInput(inputId = "start_date", value = dates[1])
+      updateDateInput(inputId = "end_date", value = dates[2])
+    } else {
+      warning("Unknown date preset '", val, "'")
+    }
   })
 
 
@@ -731,7 +744,7 @@ server <- function(input, output, session) {
     )
   })
 
-  ### alaready_fetched // reactive ----
+  ### already_fetched // reactive ----
   already_fetched <- reactive({
     args <- fetch_args()
     rlang::hash(args) %in% rv$fetch_hashes

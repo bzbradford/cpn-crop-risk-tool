@@ -5,6 +5,8 @@
   --headingHeight: 50px;
   --minHeight: calc(max(100vw, 100vh) * .4);
   --maxHeight: max(calc(100vh - var(--headingHeight) - 2rem), var(--minHeight));
+  --wide: 1200px;
+  --narrow: 700px;
 }
 
 /*--- UW STYLE ---*/
@@ -85,17 +87,40 @@ footer {
   width: 100%;
   padding: 10px;
   padding-top: 0px;
-  display: inline-flex;
+  display: flex;
+  flex-direction: row;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
 }
 
+.badges {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .credits {
+  flex: 1;
   text-align: right;
   color: #888;
   font-style: italic;
   font-size: 1rem;
+}
+
+@media (max-width: 500px) {
+  footer {
+    flex-direction: column;
+  }
+
+  .badges {
+    justify-content: space-evenly;
+  }
+
+  .credits {
+    text-align: center;
+  }
 }
 
 
@@ -103,6 +128,7 @@ footer {
 
 .container-fluid {
   padding: 0;
+  min-width: 400px;
 }
 
 .main-container {
@@ -200,6 +226,12 @@ footer {
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+}
+
+.date-btns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(33% - 20px), 1fr));
+  gap: 10px;
 }
 
 

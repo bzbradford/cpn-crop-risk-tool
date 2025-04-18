@@ -72,10 +72,16 @@ ui <- fluidPage(
     )
   ),
   tags$footer(
-    div(OPTS$app_footer_badge),
+    div(
+      class = "badges",
+      OPTS$app_footer_badge
+    ),
     div(
       class = "credits",
-      HTML("Developed by <a href='https://entomology.wisc.edu/directory/ben-bradford/' target='_blank'>Ben Bradford</a>, UW-Madison Entomology<br>"),
+      HTML("Developed by <a href='https://entomology.wisc.edu/directory/ben-bradford/' target='_blank'>Ben Bradford</a>, UW-Madison Entomology"),
+      br(),
+      HTML("Feedback welcome! <a href='https://forms.gle/LZDg9E39UdinLVq17' target='_blank'>Click here to take our survey</a>"),
+      br(),
       HTML("<a href='https://github.com/bzbradford/weather-tool' target='_blank'>View source code</a>"),
     )
 

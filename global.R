@@ -200,10 +200,9 @@ OPTS <- lst(
   app_header_color = ifelse(cpn_mode, "#00693c", "#c5050c"),
   app_header_badge = ifelse(cpn_mode, "cpn-badge.png", "uw-crest.svg"),
   app_footer_badge = if (cpn_mode) {
-    div(
-      style = "display: inline-flex; gap: 10px; align-items: center;",
-      a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank"),
-      a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank")
+    tagList(
+      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")),
+      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank"))
     )
   } else {
     a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank")
@@ -234,6 +233,14 @@ OPTS <- lst(
   # dates
   earliest_date = ymd("2015-1-1"),
   default_start_date = today() - 30,
+  date_btn_choices = list(
+    "Past week" = "week",
+    "Past month" = "month",
+    "This year" = "thisyear",
+    "Full year" = "fullyear",
+    "Last year" = "lastyear",
+    "Last season" = "lastseason"
+  ),
 
   # map
   # state_colors = {
