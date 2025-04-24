@@ -100,7 +100,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           mutate(across(where(is.numeric), ~signif(.x)))
 
         if (isFALSE(input$forecast)) {
-          df <- df %>% filter(date <= today())
+          df <- if (opts$data_type == "hourly") {
+            filter(df, datetime_utc < now())
+          } else {
+            filter(df, date <= today())
+          }
         }
         if (input$metric) df else convert_measures(df)
       })
@@ -398,7 +402,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
 
         # indicate forecast
-        if (now() < opts$date_range[2]) {
+        if (input$forecast) {
           plt %>% plotly_show_forecast(xmax = opts$date_range[2])
         } else {
           plt

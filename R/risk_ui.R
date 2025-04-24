@@ -50,7 +50,8 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
           if (crop %in% crops$early_blight) c("Early blight" = "potato_pdays"),
           if (crop %in% crops$late_blight) c("Late blight" = "late_blight_dsv"),
           if (crop %in% crops$alternaria) c("Alternaria leaf blight" = "alternaria_dsv"),
-          if (crop %in% crops$cercospora) c("Cercospora leaf blight" = "cercospora_div")
+          if (crop %in% crops$cercospora) c("Cercospora leaf blight" = "cercospora_div"),
+          if (crop %in% crops$botrytis) c("Botrytis leaf blight" = "botrytis_dsi")
         )
       })
 
@@ -204,7 +205,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
               mutate(assign_risk(first(model), value), .by = model)
             last_value <- df %>%
               filter(date == min(today(), max(date))) %>%
-              mutate(risk_label = sprintf("%s: %s (%.0f%%)", name, risk, value * 100))
+              mutate(risk_label = paste(name, value_label, sep = ": "))
             risk_date <- first(last_value$date)
             risk_info <- paste(last_value$risk_label, collapse = ", ")
             date_range <- c(dates$start, max(dates$end, max(df$date)))

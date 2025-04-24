@@ -269,6 +269,7 @@ OPTS <- lst(
   ),
   map_layers = list(
     # counties = "States/Counties"
+    grid = "Weather grid"
   ),
   map_click_zoom = 10,
 
@@ -309,7 +310,8 @@ OPTS <- lst(
     "Dry bean" = "drybean",
     "Potato/tomato" = "potato",
     "Carrot" = "carrot",
-    "Beet" = "beet"
+    "Beet" = "beet",
+    "Onion" = "onion"
   ),
 
   crop_diseases = list(
@@ -320,7 +322,8 @@ OPTS <- lst(
     early_blight = "potato",
     late_blight = "potato",
     alternaria = "carrot",
-    cercospora = "beet"
+    cercospora = "beet",
+    botrytis = "onion"
   ),
 
   risk_info = list(
@@ -330,15 +333,9 @@ OPTS <- lst(
     drybean = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
     potato = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to white mold, early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
     carrot = "Carrots are susceptible to the foliar disease Alternaria leaf blight. Alternaria risk depends on the number of disease severity values generated in the last 7 days.",
-    beet = "Beets are susceptible to Cercospora leaf blight. Cercospora risk depends on the average disease severity values in the past 2 days and 7 days."
+    beet = "Beets are susceptible to Cercospora leaf blight. Cercospora risk depends on the average disease severity values in the past 2 days and 7 days.",
+    onion = "Onions are susceptible to Botrytis leaf blight. Risk depends on cumulative disease severity values since crop emergence."
   ),
-
-  # add site_ before some columns in the sites table
-  # site_attr_rename = {
-  #   cols <- c("id", "name", "lat", "lng")
-  #   names(cols) <- paste0("site_", cols)
-  #   cols
-  # },
 
   # plotting
   site_attr_cols = c("site_id", "site_name", "site_lat", "site_lng", "temp"),
@@ -619,7 +616,9 @@ get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_end
           endDateTime = chunk$end,
           units = "m"
         ) %>%
-        req_timeout(10)
+        req_timeout(4) %>%
+        req_retry(max_tries = 2, retry_on_failure = TRUE) %>%
+        req_throttle(capacity = 4, fill_time_s = 1)
     })
 
     # perform parallel requests for each time chunk
@@ -628,6 +627,10 @@ get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_end
     # gather response data
     lapply(resps, function(resp) {
       tryCatch({
+        if ("httr2_failure" %in% class(resp)) {
+          echo(resp)
+          stop("Request failed")
+        }
         if (resp_status(resp) != 200) stop(paste0("Received status ", resp_status(resp), " with message ", resp_status_desc(resp)))
         resp_body_json(resp, simplifyVector = T) %>% as_tibble()
       }, error = function(e) {
@@ -916,7 +919,7 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
       hours_actual = n(),
       hours_missing = hours_expected - hours_actual,
       hours_missing_pct = hours_missing / hours_expected,
-      hours_stale = as.integer(difftime(now(tzone = tz), time_max_actual, units = "hours")),
+      hours_stale = as.integer(difftime(time_max_expected, time_max_actual, units = "hours")),
       stale = hours_stale > OPTS$ibm_stale_hours,
       needs_download = stale | days_missing > 0,
       .by = grid_id
@@ -1169,30 +1172,30 @@ calc_alternaria_dsv <- function(temp, h) {
 #' Beet
 #' based on https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716
 #' more information: https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/
-#' @param temp Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
+#' @param t Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
 #' @param h Number of hours where RH > 90%
 #' @returns 0-7 div
-calc_cercospora_div <- function(temp, h) {
-  temp <- c_to_f(temp)
+calc_cercospora_div <- function(t, h) {
+  t <- c_to_f(t)
   case_when(
-    is.na(temp) | is.na(h) ~ 0,
-    temp <= 60 ~ 0,
-    temp <= 61 ~ (h > 21),
-    temp <= 62 ~ (h > 19) + (h > 22),
-    temp <= 63 ~ (h > 16) + (h > 19) + (h > 21),
-    temp <= 64 ~ (h > 13) + (h > 15) + (h > 18) + (h > 20) + (h > 23),
-    temp <= 65 ~ (h > 6) + (h > 8) + (h > 12) + (h > 18) + (h > 21),
-    temp <= 71 ~ (h > 3) + (h > 6) + (h > 10) + (h > 14) + (h > 18) + (h > 21),
-    temp <= 72 ~ (h > 2) + (h > 6) + (h > 9) + (h > 13) + (h > 17) + (h > 20),
-    temp <= 73 ~ (h > 1) + (h > 6) + (h > 9) + (h > 12) + (h > 16) + (h > 19),
-    temp <= 76 ~ 1 + (h > 5) + (h > 9) + (h > 11) + (h > 16) + (h > 18) + (h > 23),
-    temp <= 77 ~ 1 + (h > 5) + (h > 8) + (h > 12) + (h > 15) + (h > 18) + (h > 22),
-    temp <= 78 ~ 1 + (h > 5) + (h > 8) + (h > 11) + (h > 14) + (h > 17) + (h > 20),
-    temp <= 79 ~ 1 + (h > 4) + (h > 7) + (h > 9) + (h > 12) + (h > 14) + (h > 17),
-    temp <= 80 ~ 1 + (h > 3) + (h > 6) + (h > 8) + (h > 10) + (h > 12) + (h > 15),
-    temp <= 81 ~ 1 + (h > 2) + (h > 4) + (h > 6) + (h > 7) + (h > 9) + (h > 11),
-    temp <= 82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 10),
-    temp >  82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 9)
+    is.na(t) | is.na(h) ~ 0,
+    t <= 60 ~ 0,
+    t <= 61 ~ (h > 21),
+    t <= 62 ~ (h > 19) + (h > 22),
+    t <= 63 ~ (h > 16) + (h > 19) + (h > 21),
+    t <= 64 ~ (h > 13) + (h > 15) + (h > 18) + (h > 20) + (h > 23),
+    t <= 65 ~ (h > 6) + (h > 8) + (h > 12) + (h > 18) + (h > 21),
+    t <= 71 ~ (h > 3) + (h > 6) + (h > 10) + (h > 14) + (h > 18) + (h > 21),
+    t <= 72 ~ (h > 2) + (h > 6) + (h > 9) + (h > 13) + (h > 17) + (h > 20),
+    t <= 73 ~ (h > 1) + (h > 6) + (h > 9) + (h > 12) + (h > 16) + (h > 19),
+    t <= 76 ~ 1 + (h > 5) + (h > 9) + (h > 11) + (h > 16) + (h > 18) + (h > 23),
+    t <= 77 ~ 1 + (h > 5) + (h > 8) + (h > 12) + (h > 15) + (h > 18) + (h > 22),
+    t <= 78 ~ 1 + (h > 5) + (h > 8) + (h > 11) + (h > 14) + (h > 17) + (h > 20),
+    t <= 79 ~ 1 + (h > 4) + (h > 7) + (h > 9) + (h > 12) + (h > 14) + (h > 17),
+    t <= 80 ~ 1 + (h > 3) + (h > 6) + (h > 8) + (h > 10) + (h > 12) + (h > 15),
+    t <= 81 ~ 1 + (h > 2) + (h > 4) + (h > 6) + (h > 7) + (h > 9) + (h > 11),
+    t <= 82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 10),
+    t >  82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 9)
   )
 }
 
@@ -1202,6 +1205,72 @@ calc_cercospora_div <- function(temp, h) {
 #   geom_tile() +
 #   scale_fill_viridis_c() +
 #   coord_cartesian(expand = F)
+
+
+
+#' Onion botrytis leaf blight
+#' based on Sutton et al 1986 https://doi.org/10.1016/0167-8809(86)90136-2
+#' more information: https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/
+#' requires 5 days of hourly weather to compute
+
+
+
+#' Botcast daily innoculum value
+#' A) if temp > 30 for >= 4 hrs on any of past 5 days => 0
+#' B) if h < 5 => 0
+#' C) if h > 12 => 1
+#' D) if prev day dry (<70% rh for >= 6 hrs) and no rain => 0 else 1
+#' @param hot boolean: temp > 30 for >= 4 hrs on any of past 5 days
+#' @param h int: hours rh > 90 during past day
+#' @param dry boolean: previous day dry
+botcast_dinov <- function(hot, hours_rh90, dry) {
+  case_when(
+    hot ~ 0,
+    hours_rh90 < 5 ~ 0,
+    hours_rh90 > 12 ~ 1,
+    dry ~ 0,
+    TRUE ~ 1
+  )
+}
+
+# expand_grid(hot = c(F, T), lw = 0:24, dry = c(F, T)) %>%
+#   mutate(dinov = botcast_dinov(hot, lw, dry)) %>% summary()
+
+
+#' Botcast daily infection values
+#' @param t temperature of wet period
+#' @param h duraction of leaf wetness
+botcast_dinfv <- function(t, h) {
+  case_when(
+    h <= 6 ~ 0,
+    t < 6 | t > 28 ~ 0,
+    h <= 12 & t < 9 ~ 0,
+    t <= 8 ~ case_when(
+      h <= 12 ~ 0,
+      h <= 22 ~ 1,
+      TRUE ~ 2
+    ),
+    h <= 15 & t >= 27 ~ 0,
+    h <= 7 & t >= 24 ~ 0,
+    h >= 15 & between(t, 8, 25) ~ 2,
+    h >= 14 & between(t, 11, 16.5) ~ 2,
+    h >= 11 & between(t, 13.5, 16.5) ~ 2,
+    h - 12 <= 9 - t ~ 0,
+    TRUE ~ 1
+  )
+}
+
+# expand_grid(temp = (60:280) / 10, hours = 0:24) %>%
+#   mutate(dinfv = botcast_dinfv(temp, hours)) %>%
+#   ggplot(aes(x = temp, y = hours, fill = dinfv)) +
+#   geom_tile() +
+#   scale_fill_viridis_c() +
+#   coord_equal(expand = F)
+
+
+
+
+
 
 
 
@@ -1219,7 +1288,8 @@ assign_risk <- function(model, value) {
     "potato_pdays"             = risk_for_earlyblight(value),
     "late_blight_dsv"          = risk_for_lateblight(value),
     "alternaria_dsv"           = risk_for_alternaria(value),
-    "cercospora_div"           = risk_for_cercospora(value)
+    "cercospora_div"           = risk_for_cercospora(value),
+    "botrytis_dsi"             = risk_for_botrytis(value)
   )
 }
 
@@ -1236,7 +1306,7 @@ risk_from_prob <- function(prob, low, med, high) {
     risk = cut(
       prob * 100,
       breaks = c(0, low, med, high, 100),
-      labels = c("Very low risk", "Low risk", "Medium risk", "High risk"),
+      labels = c("Very low risk", "Low risk", "Moderate risk", "High risk"),
       include.lowest = TRUE,
       right = FALSE
     ),
@@ -1272,15 +1342,17 @@ attenuate_prob <- function(value, temp) {
 #' @param severity numeric vector of severities
 #' @returns tibble
 risk_from_severity <- function(severity) {
+  # pal <- c("#00cc00", "#7dff23", "#ffd700", "#ff8000", "#cc0000")
+  pal <- c("#0082b7", "#00cc00", "#ffd700", "#ff8000", "#cc0000")
   tibble(
     risk = cut(
       severity,
       breaks = 0:5,
-      labels = c("Very low", "Low", "Medium", "High", "Very high"),
+      labels = c("Very low", "Low", "Moderate", "High", "Very high"),
       include.lowest = TRUE,
       right = FALSE
     ),
-    risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk)
+    risk_color = colorFactor(pal, risk)(risk)
   )
 }
 
@@ -1410,7 +1482,30 @@ risk_for_cercospora <- function(value) {
 
 
 
-# Botcast - onion
+# Botrytis (botcast) - onion
+risk_for_botrytis <- function(value) {
+  tibble(
+    total = cumsum(value),
+    severity =
+      (total > 10) +
+      (total > 20) +
+      (total > 30) +
+      (total > 40),
+    risk_from_severity(severity),
+    value_label = sprintf("%.0f daily, %.0f total DSI (%s risk)", value, total, risk)
+  )
+}
+
+tibble(
+  value = round(runif(100, 0, 4), 0),
+  risk_for_botrytis(value)
+) %>%
+  mutate(day = row_number()) %>%
+  ggplot(aes(x = day, color = risk, group = 1)) +
+  geom_col(aes(y = value)) +
+  geom_line(aes(y = total)) +
+  scale_color_brewer(palette = "Spectral", direction = -1)
+
 
 
 
@@ -1540,6 +1635,40 @@ build_daily <- function(hourly) {
 # saved_weather %>% build_hourly() %>% build_daily()
 
 
+#' special calculations for the botcast model
+#' @param hourly hourly weather data with `temperature` and `relative_humidity`
+build_botcast_weather <- function(hourly) {
+  hourly <- hourly %>% mutate(rh90 = relative_humidity >= 90)
+
+  by_day <- hourly %>%
+    summarize(
+      mean_temp = mean(temperature, na.rm = T),
+      hours_temp_over_30 = sum(temperature >= 30, na.rm = T),
+      hours_rh_less_70 = sum(relative_humidity < 70, na.rm = T),
+      precip = sum(precip, na.rm = T),
+      .by = c(grid_id, date)
+    ) %>%
+    replace_na(list(precip = 0)) %>%
+    mutate(dry = hours_rh_less_70 >= 6 & precip < 1) %>%
+    mutate(hot_past_5_days = rollapplyr(hours_temp_over_30, width = 5, FUN = \(x) any(x >= 4), partial = TRUE))
+
+  by_night <- hourly %>%
+    summarize(
+      mean_temp_rh90 = sum(temperature * rh90) / sum(rh90),
+      hours_rh90 = sum(night & rh90),
+      .by = c(grid_id, date_since_night)
+    )
+
+  left_join(by_day, by_night, join_by(grid_id, date == date_since_night)) %>%
+    arrange(grid_id, date)
+}
+
+# saved_weather %>%
+#   filter(grid_id == sample(grid_id, 1)) %>%
+#   build_hourly() %>%
+#   build_botcast_weather()
+
+
 #' Generate several moving average periods from daily data
 #' @param daily accepts daily data from `build_daily()`
 #' @param align moving average alignment
@@ -1571,6 +1700,59 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 }
 
 # saved_weather %>% build_hourly() %>% build_daily() %>% build_ma_from_daily()
+
+
+#' Calculate botcast disease severity index from dinov and dinfv
+#' @param hourly hourly weather
+#' @returns tibble
+build_disease_from_hourly <- function(hourly) {
+  wx <- hourly %>% build_botcast_weather()
+  wx %>%
+    mutate(
+      dinov = botcast_dinov(hot_past_5_days, hours_rh90, lag(dry, default = FALSE)),
+      dinfv = botcast_dinfv(mean_temp_rh90, hours_rh90),
+      botrytis_dsi = dinov * dinfv
+    ) %>%
+    select(grid_id, date, botrytis_dsi) %>%
+    mutate(botrytis_dsi_cumulative = cumsum(botrytis_dsi), .by = grid_id)
+}
+
+# saved_weather %>% build_hourly() %>% build_disease_from_hourly()
+
+
+#' Plant diseases that use daily values as inputs
+#' units must be metric: temperature degC, wind speed km/hr
+#' @param daily accepts daily dataset from `build_daily()`
+#' @returns tibble
+build_disease_from_daily <- function(daily) {
+  # retain attribute cols
+  attr <- daily %>% select(grid_id, date)
+
+  # generate disease models and add cumulative sums where appropriate
+  disease <- daily %>%
+    mutate(
+      potato_pdays = calc_pdays(temperature_min, temperature_max),
+      late_blight_dsv = calc_late_blight_dsv(temperature_mean_rh_over_90, hours_rh_over_90),
+      alternaria_dsv = calc_alternaria_dsv(temperature_mean_rh_over_90, hours_rh_over_90),
+      cercospora_div = calc_cercospora_div(temperature_mean_rh_over_90, hours_rh_over_90),
+      .keep = "none", .by = grid_id
+    ) %>%
+    mutate(
+      across(
+        c(potato_pdays, late_blight_dsv, alternaria_dsv, cercospora_div),
+        c(cumulative = cumsum)
+      ),
+      .by = grid_id
+    ) %>%
+    select(sort(names(.))) %>%
+    select(-grid_id)
+
+  # bind attributes
+  bind_cols(attr, disease)
+}
+
+# saved_weather %>% build_hourly() %>% build_daily() %>% build_disease_from_daily()
+
 
 
 #' Plant diseases that use daily values as inputs
@@ -1622,48 +1804,6 @@ build_disease_from_ma <- function(daily) {
 }
 
 # saved_weather %>% build_hourly() %>% build_daily() %>% build_disease_from_ma()
-
-
-#' Plant diseases that use daily values as inputs
-#' units must be metric: temperature degC, wind speed km/hr
-#' @param daily accepts daily dataset from `build_daily()`
-#' @returns tibble
-build_disease_from_daily <- function(daily) {
-  roll_mean <- function(vec, width) rollapplyr(vec, width, \(x) mean(x, na.rm = T), fill = NA, partial = T)
-  # retain attribute cols
-  attr <- daily %>% select(grid_id, date)
-
-  # generate disease models and add cumulative sums where appropriate
-  disease <- daily %>%
-    mutate(
-      # potato/tomato
-      potato_pdays =
-        calc_pdays(temperature_min, temperature_max),
-      late_blight_dsv =
-        calc_late_blight_dsv(temperature_mean_rh_over_90, hours_rh_over_90),
-      # carrot
-      alternaria_dsv =
-        calc_alternaria_dsv(temperature_mean_rh_over_90, hours_rh_over_90),
-      # beet
-      cercospora_div =
-        calc_cercospora_div(temperature_mean_rh_over_90, hours_rh_over_90),
-      .keep = "none", .by = grid_id
-    ) %>%
-    mutate(
-      across(
-        c(potato_pdays, late_blight_dsv, alternaria_dsv, cercospora_div),
-        c(cumulative = cumsum)
-      ),
-      .by = grid_id
-    ) %>%
-    select(sort(names(.))) %>%
-    select(-grid_id)
-
-  # bind attributes
-  bind_cols(attr, disease)
-}
-
-# saved_weather %>% build_hourly() %>% build_daily() %>% build_disease_from_daily()
 
 
 #' Generate various growing degree day models with and without an 86F upper threshold

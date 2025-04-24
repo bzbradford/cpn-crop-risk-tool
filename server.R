@@ -329,7 +329,7 @@ server <- function(input, output, session) {
     wx$dates <- dates
 
     # allow up to 30 days before selected start date
-    hourly <- weather %>%
+    hourly_full <- weather %>%
       filter(grid_id %in% sites$grid_id) %>%
       filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
       bind_rows(forecast) %>%
@@ -337,17 +337,19 @@ server <- function(input, output, session) {
       build_hourly()
 
     # remove the earlier dates that were used for moving averages
-    wx$hourly <- hourly %>% filter(date >= dates$start)
+    wx$hourly <- hourly_full %>% filter(date >= dates$start)
 
-    if (nrow(hourly) == 0 || nrow(wx$hourly) == 0) return(wx)
+    if (nrow(hourly_full) == 0 || nrow(wx$hourly) == 0) return(wx)
 
-    wx$daily_full <- build_daily(hourly)
+    wx$daily_full <- build_daily(hourly_full)
     wx$daily <- wx$daily_full %>% filter(date >= dates$start)
 
-    disease1 <- build_disease_from_ma(wx$daily_full)
-    disease2 <- build_disease_from_daily(wx$daily)
-    wx$disease <- disease1 %>%
-      left_join(disease2, join_by(grid_id, date)) %>%
+    d1 <- build_disease_from_ma(wx$daily_full)
+    d2 <- build_disease_from_daily(wx$daily)
+    d3 <- build_disease_from_hourly(hourly_full)
+    wx$disease <-
+      left_join(d1, d2, join_by(grid_id, date)) %>%
+      left_join(d3, join_by(grid_id, date)) %>%
       filter(date >= dates$start)
 
     wx$gdd <- build_gdd_from_daily(wx$daily)
@@ -707,7 +709,7 @@ server <- function(input, output, session) {
       btn("No sites selected", disabled = TRUE)
     } else if (!opts$dates_valid) {
       btn("Invalid date selection", disabled = TRUE)
-    } else if (opts$need_weather && !already_fetched()) {
+    } else if (opts$need_weather) {
       btn("Fetch weather")
     } else {
       btn("Everything up to date", class = "btn-primary", disabled = TRUE)
@@ -832,7 +834,7 @@ server <- function(input, output, session) {
       addMapPane("sites", 430) %>%
       addLayersControl(
         baseGroups = names(OPTS$map_tiles),
-        # overlayGroups = unlist(OPTS$map_layers, use.names = F),
+        overlayGroups = unlist(OPTS$map_layers, use.names = F),
         options = layersControlOptions(collapsed = T)
       ) %>%
       addEasyButtonBar(btn1, btn2, btn3) %>%
@@ -982,19 +984,21 @@ server <- function(input, output, session) {
       )
   })
 
-  ## Show weather data grids ----
+  ## Show user weather data grids ----
   # will only show grids that the user has interacted with in the session
   observe({
     map <- leafletProxy("map")
-    clearGroup(map, "grid")
+    clearGroup(map, OPTS$map_layers$grid)
+
+    # user-selected grids this session
     grids <- grids_with_status() %>%
       filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
 
     if (nrow(grids) > 0) {
       grids <- grids %>%
         mutate(
-          title = if_else(days_missing > 0, "Incomplete weather grid", "Downloaded weather grid"),
-          color = if_else(days_missing > 0, "orange", "blue"),
+          title = if_else(needs_download, "Weather grid (download required)", "Weather grid"),
+          color = if_else(needs_download, "orange", "darkgreen"),
           label = paste0(
             "<b>", title, "</b><br>",
             "Earliest date: ", date_min, "<br>",
@@ -1011,13 +1015,32 @@ server <- function(input, output, session) {
           weight = 1,
           label = ~label,
           layerId = ~grid_id,
-          group = "grid",
-          fillColor = ~color,
+          group = OPTS$map_layers$grid,
+          color = ~color,
+          opacity = 1,
+          # fillColor = ~color,
+          fillOpacity = 0,
           options = pathOptions(pane = "grid")
         )
     }
 
   })
+
+  ## Show all weather data grids ----
+  # only in development
+  observe({
+    req(session$clientData$url_hostname == "127.0.0.1")
+    leafletProxy("map") %>%
+      addPolylines(
+        data = wx_grids(),
+        color = "black",
+        weight = 0.25,
+        opacity = 1,
+        group = "grid",
+        options = pathOptions(pane = "grid")
+      )
+  })
+
 
   ## Handle EasyButton clicks ----
   observe({
