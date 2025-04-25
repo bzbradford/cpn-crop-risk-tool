@@ -6,30 +6,7 @@ dataUI <- function() {
       style = "margin-top: 10px; margin-bottom: 10px; font-style: italic;",
       "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
     ),
-    div(
-      class = "flex-across", style = "gap: 30px;",
-      materialSwitch(
-        inputId = ns("metric"),
-        label = "Use metric",
-        value = TRUE,
-        status = "primary"
-      ),
-      materialSwitch(
-        inputId = ns("forecast"),
-        label = "Show forecast",
-        value = TRUE,
-        status = "primary"
-      ),
-    ),
-    radioGroupButtons(
-      inputId = ns("data_type"),
-      label = "Dataset",
-      choices = OPTS$data_type_choices,
-      individual = TRUE,
-      size = "sm"
-    ),
-    uiOutput(ns("data_options")),
-    uiOutput(ns("dataset_ui")),
+    uiOutput(ns("main_ui")),
   )
 }
 
@@ -101,7 +78,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
         if (isFALSE(input$forecast)) {
           df <- if (opts$data_type == "hourly") {
-            filter(df, datetime_utc < now())
+            filter(df, datetime_utc < now() - hours(1))
           } else {
             filter(df, date <= today())
           }
@@ -109,76 +86,74 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (input$metric) df else convert_measures(df)
       })
 
-      ## download_data // reactive ----
-      download_data <- reactive({
-        selected_data() %>%
-          rename_with_units() %>%
-          mutate(across(any_of(c("datetime_utc", "datetime_local")), as.character)) %>%
-          clean_names("big_camel")
-      })
-
-      ## download_filename // reactive ----
-      # for both the csv download and plot png export
-      download_filename <- reactive({
-        type <- req(input$data_type)
-        wx <- wx_data()
-        sites <- wx$sites
-        dates <- wx$dates
-        name_str <- invert(OPTS$data_type_choices)[[type]]
-        site_str <- ifelse(
-          nrow(sites) == 1,
-          sprintf("(%.3f, %.3f)", sites$lat, sites$lng),
-          "(multiple locations)"
-        )
-        date_str <- paste(dates$start, "to", dates$end)
-        list(
-          csv = paste(name_str, "data", site_str, "-", date_str),
-          plot = paste(name_str, "plot", site_str, "-", date_str)
-        )
-      })
 
 
       # Interface ----
 
-      ## dataset_ui // renderUI ----
-      output$dataset_ui <- renderUI({
+      ## main_ui // renderUI ----
+      output$main_ui <- renderUI({
         validate(need(sites_ready(), OPTS$validation_sites_ready))
         validate(need(rv$weather_ready, OPTS$validation_weather_ready))
 
         tagList(
-          uiOutput(ns("plot_ui")),
-          downloadButton(ns("download_data"), "Download dataset")
-        )
-      })
-
-      ## data_options // renderUI ----
-      output$data_options <- renderUI({
-        type <- req(input$data_type)
-        req(type == "ma")
-        div(
-          class = "flex-across",
-          div(tags$label("Moving average type:")),
-          radioButtons(
-            inputId = ns("ma_align"),
-            label = NULL,
-            choices = c("Centered" = "center", "Trailing" = "right"),
-            selected = isolate(input$ma_align),
-            inline = TRUE
-          )
-        )
-      })
-
-      ## plot_ui // renderUI ----
-      output$plot_ui <- renderUI({
-        div(
+          div(
+            class = "flex-across", style = "gap: 30px;",
+            materialSwitch(
+              inputId = ns("metric"),
+              label = "Use metric",
+              value = input$metric %||% TRUE,
+              status = "primary"
+            ),
+            uiOutput(ns("forecast_switch"))
+          ),
+          radioGroupButtons(
+            inputId = ns("data_type"),
+            label = "Dataset",
+            choices = OPTS$data_type_choices,
+            individual = TRUE,
+            size = "sm"
+          ),
+          uiOutput(ns("data_options_ui")),
           uiOutput(ns("plot_cols_ui")),
           uiOutput(ns("plot_sites_ui")),
           uiOutput(ns("weather_missing_ui")),
           div(
             class = "plotly-container",
             plotlyOutput(ns("data_plot"))
-          )
+          ),
+          downloadButton(ns("download_data"), "Download dataset")
         )
+      })
+
+      output$forecast_switch <- renderUI({
+        dates <- wx_data()$dates
+        req(dates$end == today())
+        materialSwitch(
+          inputId = ns("forecast"),
+          label = "Show forecast",
+          value = input$forecast %||% TRUE,
+          status = "primary"
+        )
+      })
+
+      ## data_options // renderUI ----
+      output$data_options_ui <- renderUI({
+        type <- req(input$data_type)
+
+        # moving average type
+        if (type == "ma") {
+          div(
+            class = "flex-across",
+            div(tags$label("Moving average type:")),
+            radioButtons(
+              inputId = ns("ma_align"),
+              label = NULL,
+              choices = c("Centered" = "center", "Trailing" = "right"),
+              selected = isolate(input$ma_align),
+              inline = TRUE
+            )
+          )
+        }
       })
 
       ## weather_missing_ui // renderUI ----
@@ -407,6 +382,37 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         } else {
           plt
         }
+      })
+
+
+      # Download button ----
+
+      ## download_data // reactive ----
+      download_data <- reactive({
+        selected_data() %>%
+          rename_with_units() %>%
+          mutate(across(any_of(c("datetime_utc", "datetime_local")), as.character)) %>%
+          clean_names("big_camel")
+      })
+
+      ## download_filename // reactive ----
+      # for both the csv download and plot png export
+      download_filename <- reactive({
+        type <- req(input$data_type)
+        wx <- wx_data()
+        sites <- wx$sites
+        dates <- wx$dates
+        name_str <- invert(OPTS$data_type_choices)[[type]]
+        site_str <- ifelse(
+          nrow(sites) == 1,
+          sprintf("(%.3f, %.3f)", sites$lat, sites$lng),
+          "(multiple locations)"
+        )
+        date_str <- paste(dates$start, "to", dates$end)
+        list(
+          csv = paste(name_str, "data", site_str, "-", date_str),
+          plot = paste(name_str, "plot", site_str, "-", date_str)
+        )
       })
 
       ## download_data // downloadHandler ----

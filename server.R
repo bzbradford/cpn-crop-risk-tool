@@ -397,8 +397,8 @@ server <- function(input, output, session) {
     rv$sites %>%
       mutate(
         id = as.character(id),
-        across(c(lat, lng), ~sprintf("%.2f", .x)),
-        # loc = sprintf("%.2f, %.2f", lat, lng),
+        # across(c(lat, lng), ~sprintf("%.2f", .x)),
+        loc = sprintf("%.2f, %.2f", lat, lng),
         btns = paste0(
           "<div style='display:inline-flex; gap:10px; padding: 5px;'>",
           if_else(temp, site_action_link("save", id), site_action_link("edit", id, name)),
@@ -407,7 +407,7 @@ server <- function(input, output, session) {
         ) %>% lapply(HTML),
         name = sanitize_loc_names(name)
       ) %>%
-      select(id, name, lat, lng, btns)
+      select(id, name, loc, btns)
   })
 
   ### sites_tbl // renderDT ----
@@ -418,7 +418,7 @@ server <- function(input, output, session) {
     selected <- isolate(rv$selected_site)
     datatable(
       sites,
-      colnames = c("ID", "Name", "Lat", "Lng", ""),
+      colnames = c("", "Name", "GPS", "Edit"),
       rownames = FALSE,
       selection = "none",
       class = "compact",
@@ -429,10 +429,12 @@ server <- function(input, output, session) {
         scrollX = TRUE,
         scrollCollapse = TRUE,
         columnDefs = list(
-          list(width = "5%", targets = c(0)),
+          list(width = "5%", targets = 0),
           list(width = "40%", targets = 1),
-          list(width = "15%", targets = c(2, 3)),
-          list(className = "dt-right", targets = 2)
+          list(width = "25%", targets = 2),
+          # list(width = "15%", targets = c(2, 3)),
+          list(width = "50px", targets = 3),
+          list(className = "dt-right", targets = 3)
         )
       )
     )
