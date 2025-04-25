@@ -209,7 +209,7 @@ server <- function(input, output, session) {
   # NOAA forecasts ----
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
-    message('invoked')
+    message("Getting forecasts...")
     future_promise({
       urls <- cur_urls %||% list()
       for (i in 1:nrow(grids)) {
