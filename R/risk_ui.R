@@ -120,7 +120,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             inputId = ns("irrigation"),
             label = "Irrigation:",
             choices = irrig_choices,
-            selected = input$irrigation %||% "irrig",
+            selected = input$irrigation %||% "dry",
             inline = TRUE
           ),
           conditionalPanel(

@@ -8,6 +8,8 @@ suppressPackageStartupMessages({
   library(httr2) # requests
   library(markdown)
   library(zoo) # rollmean
+  library(future) # async
+  library(promises) # async
 
   library(shiny)
   library(shinythemes)
@@ -35,6 +37,9 @@ suppressPackageStartupMessages({
 
 ## turn warnings into errors
 # options(warn = 2)
+
+# set up a second session for asynchronous tasks
+plan(multisession(workers = 2))
 
 
 
@@ -283,7 +288,7 @@ OPTS <- lst(
     lng = "long",
     lng = "longitude"
   ),
-  max_sites = 10,
+  max_sites = 25,
 
 
   #-- Data tab
@@ -329,7 +334,7 @@ OPTS <- lst(
   risk_info = list(
     general = "Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments.",
     corn = "Corn diseases include tarspot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
-    soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering), and vulnerable to frogeye leaf spot when in R1-R5.",
+    soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering) AND when the rows are nearly closed, and vulnerable to frogeye leaf spot when in the growth stages R1-R5.",
     drybean = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
     potato = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to white mold, early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
     carrot = "Carrots are susceptible to the foliar disease Alternaria leaf blight. Alternaria risk depends on the number of disease severity values generated in the last 7 days.",
@@ -349,18 +354,22 @@ OPTS <- lst(
 
 # NOAA forecast api ------------------------------------------------------------
 
+# urls for valid lat/lng points
 noaa_point_url <- function(lat, lng) {
   sprintf("https://api.weather.gov/points/%.6g,%.6g", lat, lng)
 }
 
 # noaa_point_url(45, -89)
+# noaa_point_url(c(45, 46), c(-89, -90))
+# noaa_point_url(c(1, 46), c(1, -90))
 
 
+# need to get the hourly forecast url from the first api
 noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
   tryCatch({
     stopifnot(validate_ll(lat, lng))
     req <- request(url) %>%
-      req_timeout(5) %>%
+      req_timeout(.25) %>%
       req_retry(max_tries = 2, retry_on_failure = TRUE)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
@@ -368,7 +377,6 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
     resp$properties$forecastHourly
   }, error = function(e) {
     message("Failed to retrieve ", url, ": ", e$message)
-    echo(e)
     if ("httr2_http_404" %in% class(e)) "404" else NULL
   })
 }
@@ -383,6 +391,8 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
 # # should fail due to 404
 # noaa_get_forecast_url(50, -90)
 
+
+# parse NOAA hourly forecast data
 # units: temperature = F, wind_speed = mph
 noaa_parse_forecast <- function(periods) {
   periods %>%
@@ -416,7 +426,8 @@ noaa_parse_forecast <- function(periods) {
     )
 }
 
-noaa_get_forecast <- function(lat = NULL, lng = NULL, url = noaa_get_forecast_url(lat, lng)) {
+# get NOAA hourly forecast data
+noaa_get_forecast <- function(url) {
   tryCatch({
     req <- request(url) %>%
       req_timeout(5) %>%
@@ -427,18 +438,17 @@ noaa_get_forecast <- function(lat = NULL, lng = NULL, url = noaa_get_forecast_ur
     noaa_parse_forecast(resp$properties$periods)
   }, error = function(e) {
     message("Failed to get forecast from ", url, ": ", e$message)
-    echo(e)
     tibble()
   })
 }
 
 # # should succeed
-# noaa_get_forecast(45, -89)
-# noaa_get_forecast(38, -121)
+# noaa_get_forecast_url(45, -89) %>% noaa_get_forecast()
+# noaa_get_forecast_url(38, -121) %>% noaa_get_forecast()
 #
 # # should fail
-# noaa_get_forecast(1, 1)
-# noaa_get_forecast()
+# noaa_get_forecast(NULL)
+# noaa_get_forecast("foo")
 
 
 

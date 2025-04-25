@@ -296,6 +296,10 @@ table {
   color: #222;
 }
 
+td.tbl-coords {
+  font-size: smaller;
+}
+
 
 /*--- LEAFLET ---*/
 

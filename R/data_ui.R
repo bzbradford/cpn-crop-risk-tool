@@ -101,7 +101,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             materialSwitch(
               inputId = ns("metric"),
               label = "Use metric",
-              value = input$metric %||% TRUE,
+              value = input$metric %||% FALSE,
               status = "primary"
             ),
             uiOutput(ns("forecast_switch"))

@@ -31,12 +31,16 @@ ui <- fluidPage(
       div(
         div(
           uiOutput("site_help_ui"),
-          DTOutput("sites_tbl"),
+          div(
+            style = "max-height: 400px; overflow: auto;",
+            DTOutput("sites_tbl"),
+          ),
           uiOutput("site_btns")
         ),
         div(
           style = "margin-top: 20px;",
-          uiOutput("date_ui"),
+          uiOutput("date_select_ui"),
+          uiOutput("date_btns_ui")
         ),
         div(
           style = "margin-top: 20px;",

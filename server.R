@@ -208,45 +208,40 @@ server <- function(input, output, session) {
 
   # NOAA forecasts ----
 
-  ### rv$noaa_urls handler ----
-  # query NOAA for forecast urls for each gridpoint
+  task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
+    message('invoked')
+    future_promise({
+      urls <- cur_urls %||% list()
+      for (i in 1:nrow(grids)) {
+        grid <- grids[i,]
+        if (isTruthy(urls[[grid$grid_id]])) next # already have it
+        urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
+      }
+
+      forecasts <- cur_forecasts %||% list()
+      for (url in unique(urls)) {
+        if (!isTruthy(url) || url == "404") next # bad url
+        if (isTruthy(forecasts[[url]])) next # already have it
+        forecasts[[url]] <- noaa_get_forecast(url = url)
+      }
+
+      list(urls = urls, forecasts = forecasts)
+    }, seed = NULL)
+  })
+
   observe({
     grids <- rv$grids
     req(nrow(grids) > 0)
-
-    isolate({
-      lapply(1:nrow(grids), function(i) {
-        grid <- slice(grids, i)
-        if (!isTruthy(rv$noaa_urls[[grid$grid_id]])) {
-          url <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-          rv$noaa_urls[[grid$grid_id]] <- url
-        }
-      })
-    })
+    urls <- isolate(rv$noaa_urls)
+    forecasts <- isolate(rv$noaa_forecasts)
+    task_get_forecasts$invoke(grids, urls, forecasts)
   })
 
-  # observe(echo(rv$noaa_urls))
-
-
-  ### rv$noaa_forecasts handler ----
-  #' get forecast data for each forecast url stored rv$noaa_urls
   observe({
-    urls <- rv$noaa_urls
-    req(length(urls) > 0)
-
-    # only pull forecasts when end date is today
-    req(selected_dates()$end == today())
-
-    isolate({
-      lapply(urls, function(url) {
-        if (is.character(url) && url != "404" && !isTruthy(rv$noaa_forecasts[[url]])) {
-          rv$noaa_forecasts[[url]] <- noaa_get_forecast(url = url)
-        }
-      })
-    })
+    res <- req(task_get_forecasts$result())
+    rv$noaa_urls <- res$urls
+    rv$noaa_forecasts <- res$forecasts
   })
-
-  # observe(echo(rv$noaa_forecasts))
 
 
   # Weather data ----
@@ -432,8 +427,8 @@ server <- function(input, output, session) {
           list(width = "5%", targets = 0),
           list(width = "40%", targets = 1),
           list(width = "25%", targets = 2),
-          # list(width = "15%", targets = c(2, 3)),
           list(width = "50px", targets = 3),
+          list(className = "dt-center tbl-coords", targets = 2),
           list(className = "dt-right", targets = 3)
         )
       )
@@ -591,14 +586,6 @@ server <- function(input, output, session) {
 
   ## Date selector ----
 
-  ### date_ui // renderUI ----
-  output$date_ui <- renderUI({
-    tagList(
-      uiOutput("date_select_ui"),
-      uiOutput("date_btns_ui")
-    )
-  })
-
   ### date_select_ui // renderUI ----
   output$date_select_ui <- renderUI({
     div(
@@ -694,30 +681,27 @@ server <- function(input, output, session) {
 
   ### action_ui // renderUI ----
   output$action_ui <- renderUI({
-    btn <- function(msg, ...) actionButton("fetch", msg, ...)
+    btn <- function(msg, ...) {
+      div(
+        class = "submit-btn",
+        actionButton("fetch", msg, ...)
+      )
+    }
+
+    # used to promt button to regenerate
     rv$action_nonce
 
-    args <- fetch_args()
-
     opts <- lst(
-      start_date = args$start_date,
-      end_date = args$end_date,
-      dates_valid = as_date(start_date) <= as_date(end_date),
-      need_weather = need_weather()
+      start_date = req(input$start_date),
+      end_date = req(input$end_date),
+      dates_valid = as_date(start_date) <= as_date(end_date)
     )
 
     # control button appearance
-    elem <- if (nrow(args$sites) == 0) {
-      btn("No sites selected", disabled = TRUE)
-    } else if (!opts$dates_valid) {
-      btn("Invalid date selection", disabled = TRUE)
-    } else if (opts$need_weather) {
-      btn("Fetch weather")
-    } else {
-      btn("Everything up to date", class = "btn-primary", disabled = TRUE)
-    }
-
-    div(class = "submit-btn", elem)
+    if (nrow(rv$sites) == 0) return(btn("No sites selected", disabled = TRUE))
+    if (!opts$dates_valid) return(btn("Invalid date selection", disabled = TRUE))
+    if (need_weather()) return(btn("Fetch weather"))
+    btn("Everything up to date", class = "btn-primary", disabled = TRUE)
   })
 
   ### status_ui // renderUI ----
@@ -952,12 +936,12 @@ server <- function(input, output, session) {
 
     sites <- sites %>%
       mutate(
-        icon = case_when(
-          temp ~ "thumbtack",
-          needs_download ~ "download",
-          !temp ~ as.character(id),
-          TRUE ~ "check"
-        ),
+        # icon = case_when(
+        #   temp ~ "thumbtack",
+        #   needs_download ~ "download",
+        #   !temp ~ as.character(id),
+        #   TRUE ~ "check"
+        # ),
         marker_color = if_else(id == rv$selected_site, "red", "blue"),
         label = paste0(
           "<b>Site ", id, ": ", name,
@@ -979,9 +963,11 @@ server <- function(input, output, session) {
         group = "sites",
         icon = ~makeAwesomeIcon(
           library = "fa",
-          icon = icon,
+          # icon = icon,
           markerColor = marker_color,
-          iconColor = "#fff"),
+          iconColor = "#fff",
+          text = id
+        ),
         options = markerOptions(pane = "sites")
       )
   })
