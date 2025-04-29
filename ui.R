@@ -21,8 +21,8 @@ ui <- fluidPage(
       h1(OPTS$app_title)
     ),
     div(
-      class = "help-btn",
-      actionLink("help", icon("circle-info"))
+      class = "info-btn",
+      actionLink("about", icon("circle-info"))
     )
   ),
   div(class = "main-container",
@@ -78,7 +78,9 @@ ui <- fluidPage(
   tags$footer(
     div(
       class = "badges",
-      OPTS$app_footer_badge
+      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")),
+      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank")),
+      div(a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank"))
     ),
     div(
       class = "credits",

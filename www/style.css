@@ -72,12 +72,22 @@ header {
   font-size: 3rem;
 }
 
-.help-btn {
+.info-btn {
   margin: 10px;
 }
 
-.help-btn a {
+.info-btn a {
   color: #fff;
+}
+
+.modal-body > h2 {
+  margin: 0 0 20px 0;
+}
+
+.modal-body > * > img {
+  float: right;
+  max-width: 50%;
+  margin-left: 10px;
 }
 
 

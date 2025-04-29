@@ -193,26 +193,134 @@ validate_ll <- function(lat, lng) {
 
 
 
+
+
+
 # Settings ----
+
+crop_opts <- c("corn", "soy", "bean", "potato", "carrot", "beet", "onion")
+disease_opts <- c("white_mold", "gray_leaf_spot", "tarspot", "frogeye", "early_blight", "late_blight", "alternaria", "cercospora", "botrytis")
+
+Disease <- function(slug, name, md, colname) {
+  slug <- match.arg(slug, disease_opts)
+  md <- match.arg(md, list.files(pattern = "*.md", recursive = TRUE))
+  list(slug = slug, name = name, md = md, colname = colname)
+}
+diseases <- list(
+  Disease(
+    "white_mold", "White mold",
+    md = "docs/white-mold.md",
+    colname = "white_mold"
+  ),
+  Disease(
+    "gray_leaf_spot", "Gray leaf spot",
+    md = "docs/gray-leaf-spot.md",
+    colname = "gray_leaf_spot_prob"
+  ),
+  Disease(
+    "tarspot", "Tarspot",
+    md = "docs/tarspot.md",
+    colname = "tarspot_prob"
+  ),
+  Disease(
+    "frogeye", "Frogeye leaf spot",
+    md = "docs/frogeye.md",
+    colname = "frogeye_leaf_spot_prob"
+  ),
+  Disease(
+    "early_blight", "Early blight",
+    md = "docs/early-blight.md",
+    colname = "potato_pdays"
+  ),
+  Disease(
+    "late_blight", "Late blight",
+    md = "docs/late-blight.md",
+    colname = "late_blight_dsv"
+  ),
+  Disease(
+    "alternaria", "Alternaria leaf blight",
+    md = "docs/alternaria.md",
+    colname = "alternaria_dsv"
+  ),
+  Disease(
+    "cercospora", "Cercospora leaf spot",
+    md = "docs/cercospora.md",
+    colname = "cercospora_div"
+  ),
+  Disease(
+    "botrytis", "Botrytis leaf blight",
+    md = "docs/botrytis.md",
+    colname = "botrytis_dsi"
+  )
+)
+diseases <- setNames(diseases, sapply(diseases, \(x) x$slug))
+stopifnot(setequal(disease_opts, names(diseases)))
+
+diseases[names(diseases) %in% c("botrytis", "late_blight")]
+
+Crop <- function(slug, name, info, diseases) {
+  slug <- match.arg(slug, crop_opts)
+  diseases <- match.arg(diseases, disease_opts, several.ok = TRUE)
+  list(slug = slug, name = name, info = info, diseases = diseases)
+}
+crops <- list(
+  Crop(
+    "corn", "Corn",
+    info = "Corn diseases include tarspot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
+    diseases = c("white_mold", "tarspot")
+  ),
+  Crop(
+    "soy", "Soybean",
+    info = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering) AND when the rows are nearly closed, and vulnerable to frogeye leaf spot when in the growth stages R1-R5.",
+    diseases = c("white_mold", "frogeye")
+  ),
+  Crop(
+    "bean", "Dry bean",
+    info = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
+    diseases = "white_mold"
+  ),
+  Crop(
+    "potato", "Potato/tomato",
+    info = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
+    diseases = c("early_blight", "late_blight")
+  ),
+  Crop(
+    "carrot", "Carrot",
+    info = "Carrots are susceptible to Alternaria and Cercospora leaf blights. Alternaria risk depends on the number of disease severity values generated in the last 7 days, and Cercospora risk depends on the 2-day and 7-day average daily disease severity values.",
+    diseases = c("alternaria", "cercospora")
+  ),
+  Crop(
+    "beet", "Beet",
+    info = "Beets are susceptible to Cercospora leaf blight. Cercospora risk depends on the average disease severity values in the past 2 days and 7 days.",
+    diseases = "cercospora"
+  ),
+  Crop(
+    "onion", "Onion",
+    info = "Onions are susceptible to Botrytis leaf blight. Risk depends on cumulative disease severity values since crop emergence.",
+    diseases = "botrytis"
+  )
+)
+crops <- setNames(crops, sapply(crops, \(x) x$slug))
+stopifnot(setequal(crop_opts, names(crops)))
+
 
 ## test the CPN skin
 # Sys.setenv("CPN_MODE" = TRUE)
 # Sys.unsetenv("CPN_MODE")
 
 OPTS <- lst(
-  cpn_mode = Sys.getenv("CPN_MODE") == "TRUE",
+
+  ## general ----
+  # cpn_mode = Sys.getenv("CPN_MODE") == "TRUE",
+  cpn_mode = TRUE,
   app_title = ifelse(cpn_mode, "Crop Risk Tool", "Researcher's Weather Data Tool"),
   app_header_color = ifelse(cpn_mode, "#00693c", "#c5050c"),
   app_header_badge = ifelse(cpn_mode, "cpn-badge.png", "uw-crest.svg"),
-  app_footer_badge = if (cpn_mode) {
-    tagList(
-      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")),
-      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank"))
-    )
-  } else {
-    a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank")
-  },
 
+  ## google ----
+  google_key = Sys.getenv("google_places_key"),
+
+  ## ibm ----
   ibm_keys = list(
     org_id = Sys.getenv("ibm_org_id"),
     tenant_id = Sys.getenv("ibm_tenant_id"),
@@ -222,9 +330,6 @@ OPTS <- lst(
   ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
   # max hours per api call
   ibm_chunk_size = 1000,
-
-  google_key = Sys.getenv("google_places_key"),
-
   ibm_ignore_cols = c(
     "requestedLatitude",
     "requestedLongitude",
@@ -235,7 +340,7 @@ OPTS <- lst(
   # how old should weather be before allowing a refresh?
   ibm_stale_hours = 3,
 
-  # dates
+  ## dates ----
   earliest_date = ymd("2015-1-1"),
   default_start_date = today() - 30,
   date_btn_choices = list(
@@ -247,7 +352,8 @@ OPTS <- lst(
     "Last season" = "lastseason"
   ),
 
-  # map
+
+  ## map ----
   # state_colors = {
   #   pals = RColorBrewer::brewer.pal.info
   #   pal = RColorBrewer::brewer.pal
@@ -278,6 +384,8 @@ OPTS <- lst(
   ),
   map_click_zoom = 10,
 
+
+  ## sites ----
   # allowable names for site loading
   site_cols = c(
     name = "name",
@@ -288,16 +396,12 @@ OPTS <- lst(
     lng = "long",
     lng = "longitude"
   ),
-  max_sites = 25,
-
-
-  #-- Data tab
-
-  # validation messages
+  max_sites = 10,
   validation_sites_ready = "No sites selected, click on the map or load sites in the sidebar.",
   validation_weather_ready = "No weather data downloaded yet for the selected dates. Click 'Fetch Weather' to download.",
 
-  # data types
+
+  ## data tab ----
   data_type_choices = as.list(c(
     "Hourly" = "hourly",
     "Daily" = "daily",
@@ -307,40 +411,8 @@ OPTS <- lst(
   )),
 
 
-  #-- Disease risk tab
-
-  risk_crop_choices = list(
-    "Corn" = "corn",
-    "Soybean" = "soybean",
-    "Dry bean" = "drybean",
-    "Potato/tomato" = "potato",
-    "Carrot" = "carrot",
-    "Beet" = "beet",
-    "Onion" = "onion"
-  ),
-
-  crop_diseases = list(
-    white_mold = c("soybean", "drybean"),
-    gray_leaf_spot = "corn",
-    tarspot = "corn",
-    frogeye = "soybean",
-    early_blight = "potato",
-    late_blight = "potato",
-    alternaria = "carrot",
-    cercospora = "beet",
-    botrytis = "onion"
-  ),
-
-  risk_info = list(
-    general = "Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments.",
-    corn = "Corn diseases include tarspot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
-    soybean = "Soybean diseases include white mold and frogeye leaf spot. Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering) AND when the rows are nearly closed, and vulnerable to frogeye leaf spot when in the growth stages R1-R5.",
-    drybean = "Dry bean diseases include white mold. The crop is vulnerable to white mold when in the growth stages R1-R3.",
-    potato = "Potato, tomato, eggplant, and other Solanaceous plants are susceptible to white mold, early blight and late blight. Early blight risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, while late blight risk depends on the number of disease severity values generated in the last 14 days and since crop emergence.",
-    carrot = "Carrots are susceptible to the foliar disease Alternaria leaf blight. Alternaria risk depends on the number of disease severity values generated in the last 7 days.",
-    beet = "Beets are susceptible to Cercospora leaf blight. Cercospora risk depends on the average disease severity values in the past 2 days and 7 days.",
-    onion = "Onions are susceptible to Botrytis leaf blight. Risk depends on cumulative disease severity values since crop emergence."
-  ),
+  ## disease risk tab ----
+  crop_choices = setNames(names(crops), sapply(crops, \(x) x$name)),
 
   # plotting
   site_attr_cols = c("site_id", "site_name", "site_lat", "site_lng", "temp"),
@@ -1094,6 +1166,7 @@ predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
 
 #' Potato physiological days
 #' Potato/tomato
+#' Pscheidt and Stevenson 1988 https://link.springer.com/article/10.1007/BF02854357
 #' More information: https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/
 #' @param tmin Minimum daily temperature, Celsius
 #' @param tmax Maximum daily temperature, Celsius
@@ -1129,20 +1202,20 @@ pday <- function(temp) {
 #' Late blight disease severity values
 #' Potato/tomato
 #' based on the Wallins BLITECAST model
-#' - https://www.google.com/books/edition/The_Plant_Disease_Reporter/ow9BD6P2KZ4C?hl=en&gbpv=1&dq=wallins%20blitecast&pg=PA95&printsec=frontcover
+#' - https://www.google.com/books/edition/The_Plant_Disease_Reporter/ow9BD6P2KZ4C?hl=en&gbpv=1&pg=PA95&printsec=frontcover
 #' - https://ipm.ucanr.edu/DISEASE/DATABASE/potatolateblight.html
 #' More information: https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/
-#' @param temp Mean temperature during hours where RH > 90%, Celsius
+#' @param t Mean temperature during hours where RH > 90%, Celsius
 #' @param h Number of hours where RH > 90%
 #' @returns numeric 0-4 disease severity values
-calc_late_blight_dsv <- function(temp, h) {
+calc_late_blight_dsv <- function(t, h) {
   case_when(
-    is.na(temp) | is.na(h) ~ 0,
-    temp <   7.2 ~ 0,
-    temp <= 11.6 ~ (h > 21) + (h > 18) + (h > 15),
-    temp <= 15.0 ~ (h > 21) + (h > 18) + (h > 15) + (h > 12),
-    temp <= 26.6 ~ (h > 18) + (h > 15) + (h > 12) + (h > 9),
-    temp >  26.6 ~ 0
+    is.na(t) | is.na(h) ~ 0,
+    t <   7.2 ~ 0,
+    t <= 11.6 ~ (h > 21) + (h > 18) + (h > 15),
+    t <= 15.0 ~ (h > 21) + (h > 18) + (h > 15) + (h > 12),
+    t <= 26.6 ~ (h > 18) + (h > 15) + (h > 12) + (h > 9),
+    TRUE ~ 0
   )
 }
 
@@ -1156,6 +1229,9 @@ calc_late_blight_dsv <- function(temp, h) {
 
 #' Alternaria leaf blight disease severity values
 #' Carrot
+#' based on the Pitblado 1992 TOMCAST model https://atrium.lib.uoguelph.ca/server/api/core/bitstreams/5c7ec712-43ef-4b73-b8b8-e85c29d3d58b/content
+#' which is based on the Madden et al 1978 FAST model https://www.apsnet.org/publications/phytopathology/backissues/Documents/1978Articles/Phyto68n09_1354.PDF
+#'
 #' @param temp Mean temperature during hours where RH > 90%, Celsius
 #' @param h Number of hours where RH > 90%
 #' @returns numeric 0-4 dsv
@@ -1223,9 +1299,8 @@ calc_cercospora_div <- function(t, h) {
 #' more information: https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/
 #' requires 5 days of hourly weather to compute
 
-
-
 #' Botcast daily innoculum value
+#' this determines if innoculum is predicted to be present
 #' A) if temp > 30 for >= 4 hrs on any of past 5 days => 0
 #' B) if h < 5 => 0
 #' C) if h > 12 => 1
@@ -1279,11 +1354,6 @@ botcast_dinfv <- function(t, h) {
 
 
 
-
-
-
-
-
 # Disease severity --------------------------------------------------------
 # Functions for converting model outputs into risk scores (eg low/med/high)
 
@@ -1329,7 +1399,6 @@ risk_from_prob <- function(prob, low, med, high) {
 #   value = runif(10),
 #   risk_from_prob(value, 5, 25, 60)
 # )
-
 
 
 # reduces spore probability as temperature falls below 10C
@@ -1506,16 +1575,15 @@ risk_for_botrytis <- function(value) {
   )
 }
 
-tibble(
-  value = round(runif(100, 0, 4), 0),
-  risk_for_botrytis(value)
-) %>%
-  mutate(day = row_number()) %>%
-  ggplot(aes(x = day, color = risk, group = 1)) +
-  geom_col(aes(y = value)) +
-  geom_line(aes(y = total)) +
-  scale_color_brewer(palette = "Spectral", direction = -1)
-
+# tibble(
+#   value = round(runif(100, 0, 4), 0),
+#   risk_for_botrytis(value)
+# ) %>%
+#   mutate(day = row_number()) %>%
+#   ggplot(aes(x = day, color = risk, group = 1)) +
+#   geom_col(aes(y = value)) +
+#   geom_line(aes(y = total)) +
+#   scale_color_brewer(palette = "Spectral", direction = -1)
 
 
 
@@ -1988,6 +2056,29 @@ site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_
 # site_action_link("edit", 1, "foo")
 # site_action_link("save", 1, "foo")
 # site_action_link("trash", 1, "foo")
+
+
+disease_modal_link <- function(disease) {
+  md <- disease$md
+  name <- disease$name
+  title <- paste(name, "information")
+  onclick <- sprintf("sendShiny('show_modal', {md: '%s', title: '%s'})", md, title)
+  sprintf("<a style='cursor:pointer' title='%s' onclick=\"%s\">%s</a>", title, onclick, name)
+}
+
+disease_modal_link(diseases$white_mold)
+
+
+show_modal <- function(md, title = NULL) {
+  if (!file.exists(md)) warning(md, " does not exist")
+  modalDialog(
+    includeMarkdown(md),
+    title = title,
+    footer = modalButton("Close"),
+    easyClose = TRUE
+  ) %>% showModal()
+}
+
 
 
 

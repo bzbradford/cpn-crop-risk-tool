@@ -355,17 +355,13 @@ server <- function(input, output, session) {
   # observe(echo(wx_data()))
 
 
-  # Help UI --------------------------------------------------------------------
+  # Help modal --------------------------------------------------------------------
 
+  observeEvent(input$about, show_modal(md = "README.md"))
   observe({
-    mod <- modalDialog(
-      title = OPTS$app_title,
-      includeMarkdown("about.md"),
-      footer = modalButton("Close"),
-      easyClose = TRUE
-    )
-    showModal(mod)
-  }) %>% bindEvent(input$help)
+    mod <- req(input$show_modal)
+    show_modal(md = mod$md, title = mod$title)
+  })
 
 
   # Sidebar UI -----------------------------------------------------------------
