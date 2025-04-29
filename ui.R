@@ -60,19 +60,24 @@ ui <- fluidPage(
     ),
     div(
       class = "column data-container",
-      if (OPTS$cpn_mode) {
-        tabsetPanel(
-          tabPanel("Crop risk models", riskUI()),
-          tabPanel("Weather charts", dataUI()),
-          type = "pills"
-        )
-      } else {
-        tabsetPanel(
-          tabPanel("View data", dataUI()),
-          tabPanel("Crop risk models", riskUI()),
-          type = "pills"
-        )
-      }
+      tabsetPanel(
+        tabPanel("Crop risk models", riskUI()),
+        tabPanel("Charts and data", dataUI()),
+        type = "pills"
+      )
+      # if (OPTS$cpn_mode) {
+      #   tabsetPanel(
+      #     tabPanel("Crop risk models", riskUI()),
+      #     tabPanel("Charts and data", dataUI()),
+      #     type = "pills"
+      #   )
+      # } else {
+      #   tabsetPanel(
+      #     tabPanel("View data", dataUI()),
+      #     tabPanel("Crop risk models", riskUI()),
+      #     type = "pills"
+      #   )
+      # }
     )
   ),
   tags$footer(

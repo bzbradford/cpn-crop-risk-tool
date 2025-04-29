@@ -304,18 +304,12 @@ crops <- setNames(crops, sapply(crops, \(x) x$slug))
 stopifnot(setequal(crop_opts, names(crops)))
 
 
-## test the CPN skin
-# Sys.setenv("CPN_MODE" = TRUE)
-# Sys.unsetenv("CPN_MODE")
-
 OPTS <- lst(
 
   ## general ----
-  # cpn_mode = Sys.getenv("CPN_MODE") == "TRUE",
-  cpn_mode = TRUE,
-  app_title = ifelse(cpn_mode, "Crop Risk Tool", "Researcher's Weather Data Tool"),
-  app_header_color = ifelse(cpn_mode, "#00693c", "#c5050c"),
-  app_header_badge = ifelse(cpn_mode, "cpn-badge.png", "uw-crest.svg"),
+  app_title = "Crop Risk Tool",
+  app_header_color = "#00693c",
+  app_header_badge = "cpn-badge.png",
 
   ## google ----
   google_key = Sys.getenv("google_places_key"),
@@ -402,13 +396,13 @@ OPTS <- lst(
 
 
   ## data tab ----
-  data_type_choices = as.list(c(
+  data_type_choices = list(
     "Hourly" = "hourly",
     "Daily" = "daily",
     "Moving averages" = "ma",
     "Growing degree days" = "gdd",
-    "Disease models" = { if (!cpn_mode) "disease" }
-  )),
+    "Disease models" = "disease"
+  ),
 
 
   ## disease risk tab ----
@@ -441,8 +435,8 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
   tryCatch({
     stopifnot(validate_ll(lat, lng))
     req <- request(url) %>%
-      req_timeout(.25) %>%
-      req_retry(max_tries = 2, retry_on_failure = TRUE)
+      req_timeout(.5) %>%
+      req_retry(max_tries = 3, retry_on_failure = TRUE)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
     message("GET => '", url, "' completed in ", as.numeric(now() - t))
@@ -503,7 +497,7 @@ noaa_get_forecast <- function(url) {
   tryCatch({
     req <- request(url) %>%
       req_timeout(5) %>%
-      req_retry(max_tries = 2, retry_on_failure = TRUE)
+      req_retry(max_tries = 3, retry_on_failure = TRUE)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
     message("GET => '", url, "' completed in ", as.numeric(now() - t))

@@ -36,7 +36,7 @@ For each hourly weather parameter, the minimum, mean, and maximum value are gene
 
 ### Moving averages
 
-7, 14, 21, and 30-day moving averages are calculated for each daily value using the `roll_apply` function from the `zoo` package. Either centered or right-aligned (trailing) moving average types are available. These moving averages will use *up to* the window size, so if for example the centered 30-day moving average is desired for a particular date, weather should be downloaded for at least 15 days on either side of the desired date or date range.
+7, 14, 21, and 30-day moving averages are calculated for each daily value using the `roll_apply` function from the `zoo` package. Either centered or right-aligned (trailing) moving average types are available.
 
 ### Growing degree days
 
@@ -60,21 +60,22 @@ Most values can be shown in either imperial or metric units.
 Selected field crops and vegetable disease model outputs are provided. These models are subject to change. The calculations used to generate each model prediction can be viewed in the source code.
 
 -   Field crops diseases
-    -   White mold: <https://cropprotectionnetwork.org/news/smartphone-application-to-forecast-white-mold-in-soybean-now-available-to-growers>
-    -   Frogeye leaf spot: <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
-    -   Gray leaf spot: <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
-    -   Tarspot: <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
+    -   White mold (soybean): <https://cropprotectionnetwork.org/encyclopedia/white-mold-of-soybean>
+    -   Frogeye leaf spot (soybean): <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
+    -   Gray leaf spot (corn): <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
+    -   Tarspot (corn): <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
 -   Vegetable crop diseases
-    -   Early blight: <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
-    -   Late blight: <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
-    -   Alternaria leaf blight: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
-    -   Cercospora leaf spot daily infection values - risk of disease increases with accumulated values. Based on the model outlined in [A Cerospora Leaf Spot Model for Sugar Beet: In Practice by an Industry](https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716). More information about Cercospora leaf spot: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
+    -   Early blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
+    -   Late blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
+    -   Alternaria and Cercospora leaf blights (carrot): <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
+    -   Cercospora leaf spot (beet): <https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/>
     -   Botrytis leaf blight (onion): <https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/>
 
 ### Credits and Contacts
 
--   Ben Bradford (Developer): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
--   Damon Smith (Extension Plant Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
+-   Ben Bradford (Developer, Data Scientist, Entomologist): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
+-   Damon Smith (Extension Field Crops Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
+-   Amanda Gevens (Extension Vegetable Crops Pathologist): [gevens\@wisc.edu](mailto:gevens@wisc.edu)
 -   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
 
 ### Funding Sources
