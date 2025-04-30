@@ -6,8 +6,9 @@ No soybean variety is completely resistant to white mold, but varieties do range
 
 ### Model details
 
-The white mold model is based on logistic equations developed by Smith and Webster which calculate the probability of spore presence. Risk scores are assigned based on these probabilities.
+The white mold model is based on logistic equations described in Willbur et al 2018 which calculate the probability of spore presence. Risk scores are assigned based on these probabilities.
 
 ### More information
 
+-   Willbur et al 2018: Weather-based models for assessing the risk of Sclerotinia sclerotiorum apothecial presence in soybean (Glycine max) fields <https://doi.org/10.1094/PDIS-04-17-0504-RE>
 -   Crop protection network: <https://cropprotectionnetwork.org/encyclopedia/white-mold-of-soybean>

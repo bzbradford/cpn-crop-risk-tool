@@ -198,12 +198,12 @@ validate_ll <- function(lat, lng) {
 
 # Settings ----
 
-crop_opts <- c("corn", "soy", "bean", "potato", "carrot", "beet", "onion")
-disease_opts <- c("white_mold", "gray_leaf_spot", "tarspot", "frogeye", "early_blight", "late_blight", "alternaria", "cercospora", "botrytis")
+crop_slugs <- c("corn", "soy", "bean", "potato", "carrot", "beet", "onion")
+disease_slugs <- c("white_mold", "gray_leaf_spot", "tar_spot", "frogeye", "early_blight", "late_blight", "alternaria", "cercospora", "botrytis")
 
 Disease <- function(slug, name, md, colname) {
-  slug <- match.arg(slug, disease_opts)
-  md <- match.arg(md, list.files(pattern = "*.md", recursive = TRUE))
+  stopifnot(slug %in% disease_slugs)
+  stopifnot(md %in% list.files(pattern = "*.md", recursive = TRUE))
   list(slug = slug, name = name, md = md, colname = colname)
 }
 diseases <- list(
@@ -213,19 +213,19 @@ diseases <- list(
     colname = "white_mold"
   ),
   Disease(
-    "gray_leaf_spot", "Gray leaf spot",
-    md = "docs/gray-leaf-spot.md",
-    colname = "gray_leaf_spot_prob"
-  ),
-  Disease(
-    "tarspot", "Tarspot",
-    md = "docs/tarspot.md",
-    colname = "tarspot_prob"
-  ),
-  Disease(
     "frogeye", "Frogeye leaf spot",
     md = "docs/frogeye.md",
     colname = "frogeye_leaf_spot_prob"
+  ),
+  Disease(
+    "tar_spot", "Tar spot",
+    md = "docs/tar-spot.md",
+    colname = "tar_spot_prob"
+  ),
+  Disease(
+    "gray_leaf_spot", "Gray leaf spot",
+    md = "docs/gray-leaf-spot.md",
+    colname = "gray_leaf_spot_prob"
   ),
   Disease(
     "early_blight", "Early blight",
@@ -254,20 +254,20 @@ diseases <- list(
   )
 )
 diseases <- setNames(diseases, sapply(diseases, \(x) x$slug))
-stopifnot(setequal(disease_opts, names(diseases)))
+stopifnot(setequal(disease_slugs, names(diseases)))
 
 diseases[names(diseases) %in% c("botrytis", "late_blight")]
 
 Crop <- function(slug, name, info, diseases) {
-  slug <- match.arg(slug, crop_opts)
-  diseases <- match.arg(diseases, disease_opts, several.ok = TRUE)
+  stopifnot(slug %in% crop_slugs)
+  stopifnot(all(diseases %in% disease_slugs))
   list(slug = slug, name = name, info = info, diseases = diseases)
 }
 crops <- list(
   Crop(
     "corn", "Corn",
-    info = "Corn diseases include tarspot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
-    diseases = c("white_mold", "tarspot")
+    info = "Corn diseases include tar spot and gray leaf spot. Corn is vulnerable to these diseases when in the growth stages V10-R3.",
+    diseases = c("tar_spot", "gray_leaf_spot")
   ),
   Crop(
     "soy", "Soybean",
@@ -301,7 +301,7 @@ crops <- list(
   )
 )
 crops <- setNames(crops, sapply(crops, \(x) x$slug))
-stopifnot(setequal(crop_opts, names(crops)))
+stopifnot(setequal(crop_slugs, names(crops)))
 
 
 OPTS <- lst(
@@ -1037,11 +1037,8 @@ daily_status <- function(wx, tz = "UTC") {
 # Logistic function to convert logit to probability
 logistic <- function(logit) exp(logit) / (1 + exp(logit))
 
-
-## Corn/Bean ----
-
-#' White mold, dryland model - Corn & Bean
-#' Growth stage: Soy R1-R3
+#' White mold, dryland model
+#' Soybean growth stage R1-R3
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' No risk: Fungicide app in last 14 days, min temp <32F
 #' @param MaxAT_30ma 30-day moving average of daily maximum temperature, Celsius
@@ -1064,7 +1061,8 @@ predict_whitemold_dry <- function(MaxAT_30ma, MaxWS_30ma, MaxRH_30ma) {
 #   facet_wrap(~rh, labeller = "label_both")
 
 
-#' White mold, irrigated model - Corn & Bean
+#' White mold, irrigated model
+#' Soybean growth stage R1-R3
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' No risk: Fungicide app in last 14 days, min temp <32F
 #' @param MaxAT_30MA Maximum daily temperature, 30-day moving average, Celsius
@@ -1087,31 +1085,28 @@ predict_whitemold_irrig <- function(MaxAT_30MA, MaxRH_30ma, spacing = c("15", "3
 #   coord_cartesian(expand = F)
 
 
-## Corn ----
-
-#' Gray leaf spot model - Corn
-#' Use when growth stage V10-R3
-#' Risk criteria: High >=60%, Medium >=40%, Low >0%
-#' No risk: Fungicide app in last 14 days, min temp <32F
+#' Frogeye leaf spot model
+#' Soybean growth stage R1-R5
+#' Risk criteria: High >=50%, Medium >=40%, Low >0%
+#' No risk: Fungicide in last 14 days, temperature <32F
+#' @param MaxAT_30ma Maximum daily temperature, 30-day moving average, Celsius
+#' @param HrsRH80_30ma Daily hours RH > 80%, 30-day moving average, 0-24 hours
 #' @returns probability of spore presence
-#' @param MinAT_21ma Minimum daily temperature, 21-day moving average, Celsius
-#' @param MinDP_30ma Minimum dew point temperature, 30-day moving average, Celsius
-#' @returns probability of spore presence
-predict_gls <- function(MinAT_21ma, MinDP_30ma) {
-  mu <- -2.9467 - 0.03729 * MinAT_21ma + 0.6534 * MinDP_30ma
+predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
+  mu <- -5.92485 + 0.12208 * MaxAT_30ma + 0.17326 * HrsRH80_30ma
   logistic(mu)
 }
 
-# expand_grid(temp = 0:40, dp = 0:15) %>%
-#   mutate(prob = predict_gls(temp, dp)) %>%
-#   ggplot(aes(x = temp, y = dp, fill = prob)) +
+# expand_grid(temp = 0:40, hours = 0:24) %>%
+#   mutate(prob = predict_fls(temp, hours)) %>%
+#   ggplot(aes(x = temp, y = hours, fill = prob)) +
 #   geom_tile() +
 #   scale_fill_distiller(palette = "Spectral") +
 #   coord_cartesian(expand = F)
 
 
-#' Tarspot 'tarspotter' - Corn
-#' Use when growth stage V10-R3
+#' Tar spot model
+#' Corn growth stage V10-R3
 #' Risk criteria: High >=35%, Medium >=20%, Low >0%
 #' No risk: Fungicide in last 14 days, temperature <32F
 #' @param MeanAT_30ma Mean daily temperature, 30-day moving average, Celsius
@@ -1133,27 +1128,25 @@ predict_tarspot <- function(MeanAT_30ma, MaxRH_30ma, HrsRH90Night_14ma) {
 #   coord_cartesian(expand = F)
 
 
-## Soy ----
-
-#' Frogeye leaf spot model - Soy
-#' Use when growth stage R1-R5
-#' Risk criteria: High >=50%, Medium >=40%, Low >0%
-#' No risk: Fungicide in last 14 days, temperature <32F
-#' @param MaxAT_30ma Maximum daily temperature, 30-day moving average, Celsius
-#' @param HrsRH80_30ma Daily hours RH > 80%, 30-day moving average, 0-24 hours
+#' Gray leaf spot model
+#' Corn growth stage V10-R3
+#' Risk criteria: High >=60%, Medium >=40%, Low >0%
+#' No risk: Fungicide app in last 14 days, min temp <32F
 #' @returns probability of spore presence
-predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
-  mu <- -5.92485 + 0.12208 * MaxAT_30ma + 0.17326 * HrsRH80_30ma
+#' @param MinAT_21ma Minimum daily temperature, 21-day moving average, Celsius
+#' @param MinDP_30ma Minimum dew point temperature, 30-day moving average, Celsius
+#' @returns probability of spore presence
+predict_gls <- function(MinAT_21ma, MinDP_30ma) {
+  mu <- -2.9467 - 0.03729 * MinAT_21ma + 0.6534 * MinDP_30ma
   logistic(mu)
 }
 
-# expand_grid(temp = 0:40, hours = 0:24) %>%
-#   mutate(prob = predict_fls(temp, hours)) %>%
-#   ggplot(aes(x = temp, y = hours, fill = prob)) +
+# expand_grid(temp = 0:40, dp = 0:15) %>%
+#   mutate(prob = predict_gls(temp, dp)) %>%
+#   ggplot(aes(x = temp, y = dp, fill = prob)) +
 #   geom_tile() +
 #   scale_fill_distiller(palette = "Spectral") +
 #   coord_cartesian(expand = F)
-
 
 
 # Vegetable Disease Models -----------------------------------------------------
@@ -1172,6 +1165,7 @@ calc_pdays <- function(tmin, tmax) {
   d = 3 * pday(tmin)
   (a + b + c + d) / 24.0
 }
+
 
 #' P-day function for an individual temperature
 #' @param temp temperature in Celsius
@@ -1287,7 +1281,6 @@ calc_cercospora_div <- function(t, h) {
 #   coord_cartesian(expand = F)
 
 
-
 #' Onion botrytis leaf blight
 #' based on Sutton et al 1986 https://doi.org/10.1016/0167-8809(86)90136-2
 #' more information: https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/
@@ -1357,7 +1350,7 @@ assign_risk <- function(model, value) {
     "white_mold_irrig_30_prob" = risk_from_prob(value, .01, 5, 10),
     "white_mold_irrig_15_prob" = risk_from_prob(value, .01, 5, 10),
     "gray_leaf_spot_prob"      = risk_from_prob(value, 1, 40, 60),
-    "tarspot_prob"             = risk_from_prob(value, 1, 20, 35),
+    "tar_spot_prob"             = risk_from_prob(value, 1, 20, 35),
     "frogeye_leaf_spot_prob"   = risk_from_prob(value, 1, 40, 50),
     "potato_pdays"             = risk_for_earlyblight(value),
     "late_blight_dsv"          = risk_for_lateblight(value),
@@ -1860,7 +1853,7 @@ build_disease_from_ma <- function(daily) {
       # corn
       gray_leaf_spot_prob =
         predict_gls(temperature_min_21day, dew_point_min_30day),
-      tarspot_prob =
+      tar_spot_prob =
         predict_tarspot(temperature_mean_30day, relative_humidity_max_30day, hours_rh_over_90_night_14day) %>%
         attenuate_prob(temperature_min_21day),
       # soybean
