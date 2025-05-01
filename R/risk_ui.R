@@ -3,7 +3,7 @@ riskUI <- function() {
   ns <- NS("risk")
   div(
     style = "margin-top: 10px;",
-    p(OPTS$risk_info$general),
+    p("Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
     uiOutput(ns("crop_ui")),
     uiOutput(ns("crop_info_ui")),
     uiOutput(ns("main_ui"))
@@ -30,28 +30,29 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
 
       ## selected_models() ----
       # based on crop, select and name disease models
+      white_mold_model <- reactive({
+        switch(req(input$irrigation),
+          "dry" = "white_mold_dry_prob",
+          "irrig" = switch(req(input$spacing),
+            "30" = "white_mold_irrig_30_prob",
+            "15" = "white_mold_irrig_15_prob"
+          )
+        )
+      })
+
       selected_models <- reactive({
         crop <- req(input$crop)
-        crops <- OPTS$crop_diseases
-        c(
-          # White mold
-          if (crop %in% crops$white_mold) c(
-            "White mold" = switch(req(input$irrigation),
-              "dry" = "white_mold_dry_prob",
-              "irrig" = switch(req(input$spacing),
-                "30" = "white_mold_irrig_30_prob",
-                "15" = "white_mold_irrig_15_prob"
-              )
-            )
-          ),
-          if (crop %in% crops$gray_leaf_spot) c("Gray leaf spot" = "gray_leaf_spot_prob"),
-          if (crop %in% crops$tarspot) c("Tarspot" = "tarspot_prob"),
-          if (crop %in% crops$frogeye) c("Frogeye leaf spot" = "frogeye_leaf_spot_prob"),
-          if (crop %in% crops$early_blight) c("Early blight" = "potato_pdays"),
-          if (crop %in% crops$late_blight) c("Late blight" = "late_blight_dsv"),
-          if (crop %in% crops$alternaria) c("Alternaria leaf blight" = "alternaria_dsv"),
-          if (crop %in% crops$cercospora) c("Cercospora leaf blight" = "cercospora_div")
-        )
+        disease_slugs <- crops[[crop]][["diseases"]]
+        selected <- diseases[names(diseases) %in% disease_slugs]
+        colnames <- map_chr(selected, "colname")
+
+        # handle white mold selection
+        colnames <- sapply(colnames, function(nm) {
+          if (nm == "white_mold") white_mold_model() else nm
+        })
+        names(colnames) <- map_chr(selected, "name")
+
+        colnames
       })
 
 
@@ -60,7 +61,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       ## crop_ui ----
       # crop picker
       output$crop_ui <- renderUI({
-        crop_choices <- OPTS$risk_crop_choices
+        crop_choices <- OPTS$crop_choices
 
         tagList(
           radioGroupButtons(
@@ -77,10 +78,17 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       ## crop_info_ui ----
       # displays some text about diseases afflicting a crop
       output$crop_info_ui <- renderUI({
-        crop <- req(input$crop)
+        crop_slug <- req(input$crop)
+        crop <- crops[[crop_slug]]
+        crop_info <- crop$info
+        crop_diseases <- diseases[names(diseases) %in% crop$diseases]
+        info_links <- map(crop_diseases, ~disease_modal_link(.x)) %>%
+          paste(collapse = ", ")
+
         div(
           style = "margin: 10px 0; font-style: italic;",
-          OPTS$risk_info[[crop]]
+          crop_info,
+          HTML(paste0("More information: ", info_links, "."))
         )
       })
 
@@ -106,8 +114,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       # irrigation and crop spacing picker for white mold model
       output$white_mold_ui <- renderUI({
         crop <- req(input$crop)
-        crops <- OPTS$crop_diseases
-        req(crop %in% crops$white_mold)
+        req("white_mold" %in% crops[[crop]][["diseases"]])
 
         irrig_choices <- list("Dry" = "dry", "Irrigated" = "irrig")
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
@@ -119,7 +126,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             inputId = ns("irrigation"),
             label = "Irrigation:",
             choices = irrig_choices,
-            selected = input$irrigation %||% "irrig",
+            selected = isolate(input$irrigation) %||% "dry",
             inline = TRUE
           ),
           conditionalPanel(
@@ -128,7 +135,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
               inputId = ns("spacing"),
               label = "Row spacing:",
               choices = spacing_choices,
-              selected = input$spacing %||% "30",
+              selected = isolate(input$spacing) %||% "30",
               inline = TRUE
             )
           )
@@ -204,10 +211,11 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
               mutate(assign_risk(first(model), value), .by = model)
             last_value <- df %>%
               filter(date == min(today(), max(date))) %>%
-              mutate(risk_label = sprintf("%s: %s (%.0f%%)", name, risk, value * 100))
+              mutate(risk_label = paste(name, value_label, sep = ": "))
             risk_date <- first(last_value$date)
             risk_info <- paste(last_value$risk_label, collapse = ", ")
-            plts <- disease_plot(df, xrange = c(min(df$date), max(df$date)))
+            date_range <- c(dates$start, max(dates$end, max(df$date)))
+            plts <- disease_plot(df, xrange = date_range)
 
             div(
               class = "flex-down",

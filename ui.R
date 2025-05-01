@@ -21,8 +21,8 @@ ui <- fluidPage(
       h1(OPTS$app_title)
     ),
     div(
-      class = "help-btn",
-      actionLink("help", icon("circle-info"))
+      class = "info-btn",
+      actionLink("about", icon("circle-info"))
     )
   ),
   div(class = "main-container",
@@ -31,12 +31,16 @@ ui <- fluidPage(
       div(
         div(
           uiOutput("site_help_ui"),
-          DTOutput("sites_tbl"),
+          div(
+            style = "max-height: 400px; overflow: auto;",
+            DTOutput("sites_tbl"),
+          ),
           uiOutput("site_btns")
         ),
         div(
           style = "margin-top: 20px;",
-          uiOutput("date_ui"),
+          uiOutput("date_select_ui"),
+          uiOutput("date_btns_ui")
         ),
         div(
           style = "margin-top: 20px;",
@@ -56,26 +60,39 @@ ui <- fluidPage(
     ),
     div(
       class = "column data-container",
-      if (OPTS$cpn_mode) {
-        tabsetPanel(
-          tabPanel("Crop risk models", riskUI()),
-          tabPanel("Weather charts", dataUI()),
-          type = "pills"
-        )
-      } else {
-        tabsetPanel(
-          tabPanel("View data", dataUI()),
-          tabPanel("Crop risk models", riskUI()),
-          type = "pills"
-        )
-      }
+      tabsetPanel(
+        tabPanel("Crop risk models", riskUI()),
+        tabPanel("Charts and data", dataUI()),
+        type = "pills"
+      )
+      # if (OPTS$cpn_mode) {
+      #   tabsetPanel(
+      #     tabPanel("Crop risk models", riskUI()),
+      #     tabPanel("Charts and data", dataUI()),
+      #     type = "pills"
+      #   )
+      # } else {
+      #   tabsetPanel(
+      #     tabPanel("View data", dataUI()),
+      #     tabPanel("Crop risk models", riskUI()),
+      #     type = "pills"
+      #   )
+      # }
     )
   ),
   tags$footer(
-    div(OPTS$app_footer_badge),
+    div(
+      class = "badges",
+      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")),
+      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank")),
+      div(a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank"))
+    ),
     div(
       class = "credits",
-      HTML("Developed by <a href='https://entomology.wisc.edu/directory/ben-bradford/' target='_blank'>Ben Bradford</a>, UW-Madison Entomology<br>"),
+      HTML("Developed by <a href='https://entomology.wisc.edu/directory/ben-bradford/' target='_blank'>Ben Bradford</a>, UW-Madison Entomology"),
+      br(),
+      HTML("Feedback welcome! <a href='https://forms.gle/LZDg9E39UdinLVq17' target='_blank'>Click here to take our survey</a>"),
+      br(),
       HTML("<a href='https://github.com/bzbradford/weather-tool' target='_blank'>View source code</a>"),
     )
 

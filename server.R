@@ -58,7 +58,7 @@ server <- function(input, output, session) {
       rv$selected_site <- first(sites$id)
       fit_sites()
       # causes the fetch weather button to fire
-      rv$fetch_on_load <- TRUE
+      # rv$fetch_on_load <- TRUE
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
@@ -208,45 +208,40 @@ server <- function(input, output, session) {
 
   # NOAA forecasts ----
 
-  ### rv$noaa_urls handler ----
-  # query NOAA for forecast urls for each gridpoint
+  task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
+    message("Getting forecasts...")
+    future_promise({
+      urls <- cur_urls %||% list()
+      for (i in 1:nrow(grids)) {
+        grid <- grids[i,]
+        if (isTruthy(urls[[grid$grid_id]])) next # already have it
+        urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
+      }
+
+      forecasts <- cur_forecasts %||% list()
+      for (url in unique(urls)) {
+        if (!isTruthy(url) || url == "404") next # bad url
+        if (isTruthy(forecasts[[url]])) next # already have it
+        forecasts[[url]] <- noaa_get_forecast(url = url)
+      }
+
+      list(urls = urls, forecasts = forecasts)
+    }, seed = NULL)
+  })
+
   observe({
     grids <- rv$grids
     req(nrow(grids) > 0)
-
-    isolate({
-      lapply(1:nrow(grids), function(i) {
-        grid <- slice(grids, i)
-        if (!isTruthy(rv$noaa_urls[[grid$grid_id]])) {
-          url <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-          rv$noaa_urls[[grid$grid_id]] <- url
-        }
-      })
-    })
+    urls <- isolate(rv$noaa_urls)
+    forecasts <- isolate(rv$noaa_forecasts)
+    task_get_forecasts$invoke(grids, urls, forecasts)
   })
 
-  # observe(echo(rv$noaa_urls))
-
-
-  ### rv$noaa_forecasts handler ----
-  #' get forecast data for each forecast url stored rv$noaa_urls
   observe({
-    urls <- rv$noaa_urls
-    req(length(urls) > 0)
-
-    # only pull forecasts when end date is today
-    req(selected_dates()$end == today())
-
-    isolate({
-      lapply(urls, function(url) {
-        if (is.character(url) && url != "404" && !isTruthy(rv$noaa_forecasts[[url]])) {
-          rv$noaa_forecasts[[url]] <- noaa_get_forecast(url = url)
-        }
-      })
-    })
+    res <- req(task_get_forecasts$result())
+    rv$noaa_urls <- res$urls
+    rv$noaa_forecasts <- res$forecasts
   })
-
-  # observe(echo(rv$noaa_forecasts))
 
 
   # Weather data ----
@@ -329,7 +324,7 @@ server <- function(input, output, session) {
     wx$dates <- dates
 
     # allow up to 30 days before selected start date
-    hourly <- weather %>%
+    hourly_full <- weather %>%
       filter(grid_id %in% sites$grid_id) %>%
       filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
       bind_rows(forecast) %>%
@@ -337,17 +332,19 @@ server <- function(input, output, session) {
       build_hourly()
 
     # remove the earlier dates that were used for moving averages
-    wx$hourly <- hourly %>% filter(date >= dates$start)
+    wx$hourly <- hourly_full %>% filter(date >= dates$start)
 
-    if (nrow(hourly) == 0 || nrow(wx$hourly) == 0) return(wx)
+    if (nrow(hourly_full) == 0 || nrow(wx$hourly) == 0) return(wx)
 
-    wx$daily_full <- build_daily(hourly)
+    wx$daily_full <- build_daily(hourly_full)
     wx$daily <- wx$daily_full %>% filter(date >= dates$start)
 
-    disease1 <- build_disease_from_ma(wx$daily_full)
-    disease2 <- build_disease_from_daily(wx$daily)
-    wx$disease <- disease1 %>%
-      left_join(disease2, join_by(grid_id, date)) %>%
+    d1 <- build_disease_from_ma(wx$daily_full)
+    d2 <- build_disease_from_daily(wx$daily)
+    d3 <- build_disease_from_hourly(hourly_full)
+    wx$disease <-
+      left_join(d1, d2, join_by(grid_id, date)) %>%
+      left_join(d3, join_by(grid_id, date)) %>%
       filter(date >= dates$start)
 
     wx$gdd <- build_gdd_from_daily(wx$daily)
@@ -358,17 +355,13 @@ server <- function(input, output, session) {
   # observe(echo(wx_data()))
 
 
-  # Help UI --------------------------------------------------------------------
+  # Help modal --------------------------------------------------------------------
 
+  observeEvent(input$about, show_modal(md = "README.md"))
   observe({
-    mod <- modalDialog(
-      title = OPTS$app_title,
-      includeMarkdown("about.md"),
-      footer = modalButton("Close"),
-      easyClose = TRUE
-    )
-    showModal(mod)
-  }) %>% bindEvent(input$help)
+    mod <- req(input$show_modal)
+    show_modal(md = mod$md, title = mod$title)
+  })
 
 
   # Sidebar UI -----------------------------------------------------------------
@@ -395,8 +388,8 @@ server <- function(input, output, session) {
     rv$sites %>%
       mutate(
         id = as.character(id),
-        across(c(lat, lng), ~sprintf("%.2f", .x)),
-        # loc = sprintf("%.2f, %.2f", lat, lng),
+        # across(c(lat, lng), ~sprintf("%.2f", .x)),
+        loc = sprintf("%.2f, %.2f", lat, lng),
         btns = paste0(
           "<div style='display:inline-flex; gap:10px; padding: 5px;'>",
           if_else(temp, site_action_link("save", id), site_action_link("edit", id, name)),
@@ -405,7 +398,7 @@ server <- function(input, output, session) {
         ) %>% lapply(HTML),
         name = sanitize_loc_names(name)
       ) %>%
-      select(id, name, lat, lng, btns)
+      select(id, name, loc, btns)
   })
 
   ### sites_tbl // renderDT ----
@@ -416,7 +409,7 @@ server <- function(input, output, session) {
     selected <- isolate(rv$selected_site)
     datatable(
       sites,
-      colnames = c("ID", "Name", "Lat", "Lng", ""),
+      colnames = c("", "Name", "GPS", "Edit"),
       rownames = FALSE,
       selection = "none",
       class = "compact",
@@ -427,10 +420,12 @@ server <- function(input, output, session) {
         scrollX = TRUE,
         scrollCollapse = TRUE,
         columnDefs = list(
-          list(width = "5%", targets = c(0)),
+          list(width = "5%", targets = 0),
           list(width = "40%", targets = 1),
-          list(width = "15%", targets = c(2, 3)),
-          list(className = "dt-right", targets = 2)
+          list(width = "25%", targets = 2),
+          list(width = "50px", targets = 3),
+          list(className = "dt-center tbl-coords", targets = 2),
+          list(className = "dt-right", targets = 3)
         )
       )
     )
@@ -587,14 +582,6 @@ server <- function(input, output, session) {
 
   ## Date selector ----
 
-  ### date_ui // renderUI ----
-  output$date_ui <- renderUI({
-    tagList(
-      uiOutput("date_select_ui"),
-      uiOutput("date_btns_ui")
-    )
-  })
-
   ### date_select_ui // renderUI ----
   output$date_select_ui <- renderUI({
     div(
@@ -624,40 +611,53 @@ server <- function(input, output, session) {
     )
   })
 
+
+  ### date_presets // reactive ----
+  date_presets <- reactive({
+    d <- today()
+    y <- year(d)
+    list(
+      "week" = c(d - 7, d),
+      "month" = c(d - 30, d),
+      "thisyear" = c(make_date(y, 1, 1), d),
+      "fullyear" = c(d - 365, d),
+      "lastyear" = c(make_date(y - 1, 1, 1), make_date(y - 1, 12, 31)),
+      "lastseason" = c(make_date(y - 1, 5, 1), make_date(y - 1, 10, 31))
+    )
+  })
+
   ### date_btns_ui // renderUI ----
+  date_btn <- function(value, label, btn_class = c("default", "primary")) {
+    btn_class <- match.arg(btn_class)
+    HTML(str_glue("<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"))
+  }
+
   output$date_btns_ui <- renderUI({
-    btn <- function(id, label) actionButton(id, label, class = "btn btn-sm")
+    btn_opts <- OPTS$date_btn_choices
+    cur_dates <- c(req(input$start_date), req(input$end_date))
+    presets <- date_presets()
+
     div(
-      class = "flex-across",
-      btn("date_last_year", "Last year"),
-      # btn("date_last_season", "Last season"),
-      btn("date_this_year", "This year"),
-      btn("date_past_month", "Past month")
+      class = "date-btns",
+      lapply(names(btn_opts), function(label) {
+        value <- btn_opts[[label]]
+        selected <- setequal(cur_dates, presets[[value]])
+        date_btn(value, label, btn_class = ifelse(selected, "primary", "default"))
+      })
     )
   })
 
   ### Handle date buttons ----
-  observeEvent(input$date_last_year, {
-    yr <- year(today()) - 1
-    updateDateInput(inputId = "start_date", value = make_date(yr, 1, 1))
-    updateDateInput(inputId = "end_date", value = make_date(yr, 12, 31))
-  })
-
-  # observeEvent(input$date_last_season, {
-  #   yr <- year(today()) - 1
-  #   updateDateInput(inputId = "start_date", value = make_date(yr, 5, 1))
-  #   updateDateInput(inputId = "end_date", value = make_date(yr, 10, 31))
-  # })
-
-  observeEvent(input$date_this_year, {
-    yr <- year(today())
-    updateDateInput(inputId = "start_date", value = make_date(yr, 1, 1))
-    updateDateInput(inputId = "end_date", value = min(make_date(yr, 12, 31), today()) )
-  })
-
-  observeEvent(input$date_past_month, {
-    updateDateInput(inputId = "start_date", value = today() - 30)
-    updateDateInput(inputId = "end_date", value = today())
+  observeEvent(input$date_preset, {
+    val <- input$date_preset
+    presets <- date_presets()
+    if (val %in% names(presets)) {
+      dates <- presets[[val]]
+      updateDateInput(inputId = "start_date", value = dates[1])
+      updateDateInput(inputId = "end_date", value = dates[2])
+    } else {
+      warning("Unknown date preset '", val, "'")
+    }
   })
 
 
@@ -677,30 +677,27 @@ server <- function(input, output, session) {
 
   ### action_ui // renderUI ----
   output$action_ui <- renderUI({
-    btn <- function(msg, ...) actionButton("fetch", msg, ...)
+    btn <- function(msg, ...) {
+      div(
+        class = "submit-btn",
+        actionButton("fetch", msg, ...)
+      )
+    }
+
+    # used to promt button to regenerate
     rv$action_nonce
 
-    args <- fetch_args()
-
     opts <- lst(
-      start_date = args$start_date,
-      end_date = args$end_date,
-      dates_valid = as_date(start_date) <= as_date(end_date),
-      need_weather = need_weather()
+      start_date = req(input$start_date),
+      end_date = req(input$end_date),
+      dates_valid = as_date(start_date) <= as_date(end_date)
     )
 
     # control button appearance
-    elem <- if (nrow(args$sites) == 0) {
-      btn("No sites selected", disabled = TRUE)
-    } else if (!opts$dates_valid) {
-      btn("Invalid date selection", disabled = TRUE)
-    } else if (opts$need_weather && !already_fetched()) {
-      btn("Fetch weather")
-    } else {
-      btn("Everything up to date", class = "btn-primary", disabled = TRUE)
-    }
-
-    div(class = "submit-btn", elem)
+    if (nrow(rv$sites) == 0) return(btn("No sites selected", disabled = TRUE))
+    if (!opts$dates_valid) return(btn("Invalid date selection", disabled = TRUE))
+    if (need_weather()) return(btn("Fetch weather"))
+    btn("Everything up to date", class = "btn-primary", disabled = TRUE)
   })
 
   ### status_ui // renderUI ----
@@ -731,14 +728,14 @@ server <- function(input, output, session) {
     )
   })
 
-  ### alaready_fetched // reactive ----
+  ### already_fetched // reactive ----
   already_fetched <- reactive({
     args <- fetch_args()
     rlang::hash(args) %in% rv$fetch_hashes
   })
 
   ### Fetch button observer ----
-  observe({
+  observeEvent(input$fetch, {
     req(!already_fetched())
 
     args <- fetch_args()
@@ -757,8 +754,8 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  }) %>%
-    bindEvent(rv$fetch_on_load, input$fetch)
+  })
+    # bindEvent(rv$fetch_on_load, input$fetch)
 
 
 
@@ -819,7 +816,7 @@ server <- function(input, output, session) {
       addMapPane("sites", 430) %>%
       addLayersControl(
         baseGroups = names(OPTS$map_tiles),
-        # overlayGroups = unlist(OPTS$map_layers, use.names = F),
+        overlayGroups = unlist(OPTS$map_layers, use.names = F),
         options = layersControlOptions(collapsed = T)
       ) %>%
       addEasyButtonBar(btn1, btn2, btn3) %>%
@@ -935,12 +932,12 @@ server <- function(input, output, session) {
 
     sites <- sites %>%
       mutate(
-        icon = case_when(
-          temp ~ "thumbtack",
-          needs_download ~ "download",
-          !temp ~ as.character(id),
-          TRUE ~ "check"
-        ),
+        # icon = case_when(
+        #   temp ~ "thumbtack",
+        #   needs_download ~ "download",
+        #   !temp ~ as.character(id),
+        #   TRUE ~ "check"
+        # ),
         marker_color = if_else(id == rv$selected_site, "red", "blue"),
         label = paste0(
           "<b>Site ", id, ": ", name,
@@ -962,26 +959,30 @@ server <- function(input, output, session) {
         group = "sites",
         icon = ~makeAwesomeIcon(
           library = "fa",
-          icon = icon,
+          # icon = icon,
           markerColor = marker_color,
-          iconColor = "#fff"),
+          iconColor = "#fff",
+          text = id
+        ),
         options = markerOptions(pane = "sites")
       )
   })
 
-  ## Show weather data grids ----
+  ## Show user weather data grids ----
   # will only show grids that the user has interacted with in the session
   observe({
     map <- leafletProxy("map")
-    clearGroup(map, "grid")
+    clearGroup(map, OPTS$map_layers$grid)
+
+    # user-selected grids this session
     grids <- grids_with_status() %>%
       filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
 
     if (nrow(grids) > 0) {
       grids <- grids %>%
         mutate(
-          title = if_else(days_missing > 0, "Incomplete weather grid", "Downloaded weather grid"),
-          color = if_else(days_missing > 0, "orange", "blue"),
+          title = if_else(needs_download, "Weather grid (download required)", "Weather grid"),
+          color = if_else(needs_download, "orange", "darkgreen"),
           label = paste0(
             "<b>", title, "</b><br>",
             "Earliest date: ", date_min, "<br>",
@@ -998,13 +999,32 @@ server <- function(input, output, session) {
           weight = 1,
           label = ~label,
           layerId = ~grid_id,
-          group = "grid",
-          fillColor = ~color,
+          group = OPTS$map_layers$grid,
+          color = ~color,
+          opacity = 1,
+          # fillColor = ~color,
+          fillOpacity = 0,
           options = pathOptions(pane = "grid")
         )
     }
 
   })
+
+  ## Show all weather data grids ----
+  # only in development
+  observe({
+    req(session$clientData$url_hostname == "127.0.0.1")
+    leafletProxy("map") %>%
+      addPolylines(
+        data = wx_grids(),
+        color = "black",
+        weight = 0.25,
+        opacity = 1,
+        group = "grid",
+        options = pathOptions(pane = "grid")
+      )
+  })
+
 
   ## Handle EasyButton clicks ----
   observe({

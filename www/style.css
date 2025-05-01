@@ -2,9 +2,15 @@
 :root {
   --headingFont: Redhat Display;
   --textFont: Redhat Text;
-  --headingHeight: 50px;
+  --headerHeight: 50px;
+  --footerHeight: 70px;
   --minHeight: calc(max(100vw, 100vh) * .4);
-  --maxHeight: max(calc(100vh - var(--headingHeight) - 2rem), var(--minHeight));
+  --maxHeight: max(
+    calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
+    var(--minHeight)
+  );
+  --wide: 1200px;
+  --narrow: 700px;
 }
 
 /*--- UW STYLE ---*/
@@ -28,6 +34,7 @@ dl, dt, dd, ol, ul, li,
 fieldset, form, label, legend, button,
 table, caption, tbody, tfoot, thead, tr, th, td {
   font-family: inherit;
+  overflow-wrap: break-word;
 }
 
 html, body, header {
@@ -43,7 +50,7 @@ h1, h2, h3, h4, h5, h6 {
 
 header {
   width: 100%;
-  height: var(--headingHeight);
+  height: var(--headerHeight);
   padding: 5px;
   color: white;
   font-weight: bold;
@@ -70,12 +77,22 @@ header {
   font-size: 3rem;
 }
 
-.help-btn {
+.info-btn {
   margin: 10px;
 }
 
-.help-btn a {
+.info-btn a {
   color: #fff;
+}
+
+.modal-body > h2 {
+  margin: 0 0 20px 0;
+}
+
+.modal-body > * > img {
+  float: right;
+  max-width: 50%;
+  margin-left: 10px;
 }
 
 
@@ -85,17 +102,40 @@ footer {
   width: 100%;
   padding: 10px;
   padding-top: 0px;
-  display: inline-flex;
+  display: flex;
+  flex-direction: row;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
 }
 
+.badges {
+  flex: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+
 .credits {
+  flex: 1;
   text-align: right;
   color: #888;
   font-style: italic;
   font-size: 1rem;
+}
+
+@media (max-width: 500px) {
+  footer {
+    flex-direction: column;
+  }
+
+  .badges {
+    justify-content: space-evenly;
+  }
+
+  .credits {
+    text-align: center;
+  }
 }
 
 
@@ -103,6 +143,7 @@ footer {
 
 .container-fluid {
   padding: 0;
+  min-width: 400px;
 }
 
 .main-container {
@@ -133,7 +174,6 @@ footer {
 
 .sidebar-container {
   flex: 0 0 calc(20% - 0.67rem);
-  max-height: var(--maxHeight);
 }
 
 .column.map-container {
@@ -202,6 +242,12 @@ footer {
   gap: 2px;
 }
 
+.date-btns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(calc(33% - 20px), 1fr));
+  gap: 10px;
+}
+
 
 /*--- STYLES ---*/
 
@@ -264,6 +310,10 @@ table {
   color: #222;
 }
 
+td.tbl-coords {
+  font-size: smaller;
+}
+
 
 /*--- LEAFLET ---*/
 
@@ -293,10 +343,10 @@ table {
   font-weight: bold;
 }
 
-/*.leaflet-control-layers-overlays::before {
+.leaflet-control-layers-overlays::before {
   content: 'Layers:';
   font-weight: bold;
-}*/
+}
 
 
 /*--- PLOTLY ---*/
