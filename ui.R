@@ -65,35 +65,21 @@ ui <- fluidPage(
         tabPanel("Charts and data", dataUI()),
         type = "pills"
       )
-      # if (OPTS$cpn_mode) {
-      #   tabsetPanel(
-      #     tabPanel("Crop risk models", riskUI()),
-      #     tabPanel("Charts and data", dataUI()),
-      #     type = "pills"
-      #   )
-      # } else {
-      #   tabsetPanel(
-      #     tabPanel("View data", dataUI()),
-      #     tabPanel("Crop risk models", riskUI()),
-      #     type = "pills"
-      #   )
-      # }
     )
   ),
   tags$footer(
     div(
       class = "badges",
-      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org/", target = "_blank")),
-      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-logo.png", height = "35px"), href = "https://agpmt.org//", target = "_blank")),
-      div(a(img(title = "University of Wisconsin-Madison", src = "uw-logo.svg", height = "40px"), href = "https://cals.wisc.edu/", target = "_blank"))
+      div(a(img(title = "Crop Protection Network", src = "cpn-logo.png", height = "50px"), href = "https://cropprotectionnetwork.org", target = "_blank")),
+      div(a(img(title = "National Predictive Modeling Tool Initiative", src = "npmti-usda-logo.png", height = "40px"), href = "https://agpmt.org", target = "_blank"))
     ),
     div(
       class = "credits",
       HTML("Developed by <a href='https://entomology.wisc.edu/directory/ben-bradford/' target='_blank'>Ben Bradford</a>, UW-Madison Entomology"),
       br(),
-      HTML("Feedback welcome! <a href='https://forms.gle/LZDg9E39UdinLVq17' target='_blank'>Click here to take our survey</a>"),
+      HTML("<a href='https://forms.gle/LZDg9E39UdinLVq17' target='_blank'>Feedback welcome! Click here to take our survey</a>"),
       br(),
-      HTML("<a href='https://github.com/bzbradford/weather-tool' target='_blank'>View source code</a>"),
+      HTML("<a href='https://github.com/bzbradford/ibm-weather-tool' target='_blank'>View source code</a>"),
     )
 
   )
