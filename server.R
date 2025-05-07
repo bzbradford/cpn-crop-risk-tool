@@ -57,8 +57,6 @@ server <- function(input, output, session) {
       rv$sites <- sites
       rv$selected_site <- first(sites$id)
       fit_sites()
-      # causes the fetch weather button to fire
-      # rv$fetch_on_load <- TRUE
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
@@ -735,7 +733,7 @@ server <- function(input, output, session) {
   })
 
   ### Fetch button observer ----
-  observeEvent(input$fetch, {
+  observe({
     req(!already_fetched())
 
     args <- fetch_args()
@@ -754,8 +752,8 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  })
-    # bindEvent(rv$fetch_on_load, input$fetch)
+  }) %>%
+    bindEvent(TRUE, input$fetch) # runs on launch & button press
 
 
 

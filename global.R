@@ -572,7 +572,7 @@ get_ibm_token <- function() {
   ibm_auth$token
 }
 
-# get_ibm_token()
+get_ibm_token()
 
 
 #' Convert vector of dates to vector of hourly datetimes
@@ -2131,12 +2131,13 @@ disease_plot <- function(data, xrange = NULL) {
     fixedrange = TRUE,
     tickfont = axis_font
   )
-  x$showticklabels <- TRUE
-  x$range <- xrange
-  x$hoverformat <- "<b>%b %d, %Y</b>"
-  y1$range <- yrange(0, 1)
-  y2$range <- yrange(0, 4)
-  y2$overlaying <- "y"
+  x$showticklabels = TRUE
+  x$range = xrange
+  x$hoverformat = "<b>%b %d, %Y</b>"
+  x$fixedrange = FALSE
+  y1$range = yrange(0, 1)
+  y2$range = yrange(0, 4)
+  y2$overlaying = "y"
 
   if (!("severity" %in% names(data))) data$severity <- NA
   data <- data %>%
@@ -2156,9 +2157,19 @@ disease_plot <- function(data, xrange = NULL) {
         type = "scatter",
         mode = "lines+markers",
         marker = list(color = ~risk_color),
-        line = list(width = 2),
+        line = list(color = "black", width = 1),
         hovertemplate = "%{text}",
         hoverinfo = "text",
+        yaxis = yaxis
+      ) %>%
+      add_trace(
+        name = ~name,
+        type = "bar",
+        marker = list(
+          color = ~alpha(risk_color, .2),
+          line = list(width = 0)
+        ),
+        hoverinfo = "none",
         yaxis = yaxis
       ) %>%
       layout(
@@ -2173,6 +2184,7 @@ disease_plot <- function(data, xrange = NULL) {
         xaxis = x,
         yaxis = y1,
         yaxis2 = y2,
+        bargap = 0,
         hovermode = "x unified",
         showlegend = FALSE
       ) %>%
@@ -2181,6 +2193,18 @@ disease_plot <- function(data, xrange = NULL) {
   })
 }
 
+# test_df <- saved_weather %>%
+#   filter(grid_id == sample(grid_id, 1)) %>%
+#   build_hourly() %>%
+#   build_daily() %>%
+#   build_disease_from_ma() %>%
+#   pivot_longer(cols = -c(grid_id, date), names_to = "model") %>%
+#   filter(model == sample(model, 1)) %>%
+#   mutate(assign_risk(first(model), value)) %>%
+#   mutate(name = "Disease name")
+#
+#
+# test_df %>% disease_plot()
 
 
 

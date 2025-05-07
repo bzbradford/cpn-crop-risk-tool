@@ -324,7 +324,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
               title = list(
                 text = str_wrap(y1_title, 40),
                 font = OPTS$plot_axis_font
-              )
+              ),
+              fixedrange = TRUE
             ),
             yaxis2 = list(
               overlaying = "y",
@@ -332,7 +333,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
               title = list(
                 text = str_wrap(y2_title, 40),
                 font = OPTS$plot_axis_font
-              )
+              ),
+              fixedrange = TRUE
             )
           ) %>%
           config(
