@@ -46,9 +46,11 @@ plan(multisession(workers = 2))
 # Startup ----------------------------------------------------------------------
 
 ## Load files ----
-
-saved_weather <- if (file.exists("data/saved_weather.fst")) {
-  as_tibble(read_fst("data/saved_weather.fst"))
+saved_weather_file <- "data/saved_weather.fst"
+saved_weather <- if (file.exists(saved_weather_file)) {
+  read_fst(saved_weather_file) %>%
+    as_tibble() %>%
+    arrange(grid_lat, grid_lng, datetime_utc)
 } else {
   tibble()
 }
@@ -58,15 +60,6 @@ service_bounds <- read_rds("data/us_ca_clip.rds")
 
 # transform to EPSG 3857 web mercator for intersecting points
 service_bounds_3857 <- st_transform(service_bounds, 3857)
-
-## Sites template ----
-sites_template <- tibble(
-  id = integer(),
-  name = character(),
-  lat = numeric(),
-  lng = numeric(),
-  temp = logical()
-)
 
 
 
@@ -98,7 +91,6 @@ first_truthy <- function(...) {
   NULL
 }
 
-
 # NA-safe summary functions
 calc_sum <- function(x) {
   if (all(is.na(x))) return(NA)
@@ -118,6 +110,16 @@ calc_mean <- function(x) {
 calc_max <- function(x) {
   if (all(is.na(x))) return(NA)
   max(x, na.rm = TRUE)
+}
+
+# counts number consecutive runs of values above a threshold
+count_runs <- function(vec, threshold, min_run) {
+  runs <- run <- 0
+  for (val in vec) {
+    run <- if (val >= threshold) run + 1 else 0
+    if (run == min_run) runs <- runs + 1
+  }
+  runs
 }
 
 
@@ -189,10 +191,6 @@ validate_ll <- function(lat, lng) {
     length(st_intersection(pt, service_bounds_3857)) == 1
   }, lat, lng)
 }
-
-
-
-
 
 
 
@@ -794,12 +792,11 @@ fetch_weather <- function(sites, start_date, end_date) {
       }
       new_wx <- clean_ibm(resp)
       wx <- bind_rows(new_wx, wx) %>%
-        distinct(grid_id, datetime_utc, .keep_all = T) %>%
-        arrange(grid_lat, grid_lng, datetime_utc)
+        distinct(grid_id, datetime_utc, .keep_all = T)
     }
   }
 
-  saved_weather <<- wx
+  saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
   write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
   return(status_msg)
 }
@@ -1149,6 +1146,7 @@ predict_gls <- function(MinAT_21ma, MinDP_30ma) {
 #   coord_cartesian(expand = F)
 
 
+
 # Vegetable Disease Models -----------------------------------------------------
 
 #' Potato physiological days
@@ -1281,6 +1279,9 @@ calc_cercospora_div <- function(t, h) {
 #   coord_cartesian(expand = F)
 
 
+
+## Botcast model ----
+
 #' Onion botrytis leaf blight
 #' based on Sutton et al 1986 https://doi.org/10.1016/0167-8809(86)90136-2
 #' more information: https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/
@@ -1340,6 +1341,49 @@ botcast_dinfv <- function(t, h) {
 #   coord_equal(expand = F)
 
 
+#' special calculations for the botcast model
+#' @param hourly hourly weather data with `temperature` and `relative_humidity`
+build_botcast_from_hourly <- function(hourly) {
+  hourly <- hourly %>% mutate(rh90 = relative_humidity >= 90)
+
+  wx_by_day <- hourly %>%
+    summarize(
+      mean_temp = mean(temperature, na.rm = T),
+      hours_temp_over_30 = sum(temperature >= 30, na.rm = T),
+      hours_rh_less_70 = sum(relative_humidity < 70, na.rm = T),
+      precip = sum(precip, na.rm = T),
+      .by = c(grid_id, date)
+    ) %>%
+    replace_na(list(precip = 0)) %>%
+    mutate(dry = hours_rh_less_70 >= 6 & precip < 1) %>%
+    mutate(hot_past_5_days = rollapplyr(hours_temp_over_30, width = 5, FUN = \(x) any(x >= 4), partial = TRUE))
+
+  wx_by_night <- hourly %>%
+    summarize(
+      mean_temp_rh90 = sum(temperature * rh90) / sum(rh90),
+      hours_rh90 = sum(night & rh90),
+      .by = c(grid_id, date_since_night)
+    )
+
+  wx <- wx_by_day %>%
+    left_join(wx_by_night, join_by(grid_id, date == date_since_night)) %>%
+    arrange(grid_id, date)
+
+  wx %>%
+    mutate(
+      dinov = botcast_dinov(hot_past_5_days, hours_rh90, lag(dry, default = FALSE)),
+      dinfv = botcast_dinfv(mean_temp_rh90, hours_rh90),
+      botrytis_dsi = dinov * dinfv
+    ) %>%
+    mutate(botrytis_dsi_cumulative = cumsum(botrytis_dsi), .by = grid_id)
+}
+
+# saved_weather %>%
+#   filter(grid_id == sample(grid_id, 1)) %>%
+#   build_hourly() %>%
+#   build_botcast_from_hourly()
+
+
 
 # Disease severity --------------------------------------------------------
 # Functions for converting model outputs into risk scores (eg low/med/high)
@@ -1350,7 +1394,7 @@ assign_risk <- function(model, value) {
     "white_mold_irrig_30_prob" = risk_from_prob(value, .01, 5, 10),
     "white_mold_irrig_15_prob" = risk_from_prob(value, .01, 5, 10),
     "gray_leaf_spot_prob"      = risk_from_prob(value, 1, 40, 60),
-    "tar_spot_prob"             = risk_from_prob(value, 1, 20, 35),
+    "tar_spot_prob"            = risk_from_prob(value, 1, 20, 35),
     "frogeye_leaf_spot_prob"   = risk_from_prob(value, 1, 40, 50),
     "potato_pdays"             = risk_for_earlyblight(value),
     "late_blight_dsv"          = risk_for_lateblight(value),
@@ -1435,15 +1479,16 @@ risk_for_earlyblight <- function(value) {
     total = cumsum(value),
     avg7 = rollapplyr(value, 7, mean, partial = TRUE),
     severity = case_when(
-      total >= 300 ~
+      total >= 400 ~
         (avg7 >= 1) +
         (avg7 >= 3) +
         (avg7 >= 5) +
-        (avg7 >= 8),
+        (avg7 >= 9),
       TRUE ~
-        (total >= 150) +
         (total >= 200) +
-        (total >= 250)
+        (total >= 250) +
+        (total >= 300) +
+        (total >= 350)
     ),
     risk_from_severity(severity),
     value_label = sprintf("%.1f P-days, 7-day avg: %.1f, Total: %.0f (%s risk)", value, avg7, total, risk)
@@ -1700,38 +1745,7 @@ build_daily <- function(hourly) {
 # saved_weather %>% build_hourly() %>% build_daily()
 
 
-#' special calculations for the botcast model
-#' @param hourly hourly weather data with `temperature` and `relative_humidity`
-build_botcast_weather <- function(hourly) {
-  hourly <- hourly %>% mutate(rh90 = relative_humidity >= 90)
 
-  by_day <- hourly %>%
-    summarize(
-      mean_temp = mean(temperature, na.rm = T),
-      hours_temp_over_30 = sum(temperature >= 30, na.rm = T),
-      hours_rh_less_70 = sum(relative_humidity < 70, na.rm = T),
-      precip = sum(precip, na.rm = T),
-      .by = c(grid_id, date)
-    ) %>%
-    replace_na(list(precip = 0)) %>%
-    mutate(dry = hours_rh_less_70 >= 6 & precip < 1) %>%
-    mutate(hot_past_5_days = rollapplyr(hours_temp_over_30, width = 5, FUN = \(x) any(x >= 4), partial = TRUE))
-
-  by_night <- hourly %>%
-    summarize(
-      mean_temp_rh90 = sum(temperature * rh90) / sum(rh90),
-      hours_rh90 = sum(night & rh90),
-      .by = c(grid_id, date_since_night)
-    )
-
-  left_join(by_day, by_night, join_by(grid_id, date == date_since_night)) %>%
-    arrange(grid_id, date)
-}
-
-# saved_weather %>%
-#   filter(grid_id == sample(grid_id, 1)) %>%
-#   build_hourly() %>%
-#   build_botcast_weather()
 
 
 #' Generate several moving average periods from daily data
@@ -1767,22 +1781,18 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 # saved_weather %>% build_hourly() %>% build_daily() %>% build_ma_from_daily()
 
 
+
 #' Calculate botcast disease severity index from dinov and dinfv
 #' @param hourly hourly weather
 #' @returns tibble
 build_disease_from_hourly <- function(hourly) {
-  wx <- hourly %>% build_botcast_weather()
-  wx %>%
-    mutate(
-      dinov = botcast_dinov(hot_past_5_days, hours_rh90, lag(dry, default = FALSE)),
-      dinfv = botcast_dinfv(mean_temp_rh90, hours_rh90),
-      botrytis_dsi = dinov * dinfv
-    ) %>%
-    select(grid_id, date, botrytis_dsi) %>%
-    mutate(botrytis_dsi_cumulative = cumsum(botrytis_dsi), .by = grid_id)
+  botcast <- build_botcast_from_hourly(hourly) %>%
+    select(grid_id, date, botrytis_dsi, botrytis_dsi_cumulative)
+  botcast
 }
 
 # saved_weather %>% build_hourly() %>% build_disease_from_hourly()
+
 
 
 #' Plant diseases that use daily values as inputs
@@ -1910,6 +1920,14 @@ build_gdd_from_daily <- function(daily) {
 
 
 # Site management ---------------------------------------------------------
+
+sites_template <- tibble(
+  id = integer(),
+  name = character(),
+  lat = numeric(),
+  lng = numeric(),
+  temp = logical()
+)
 
 #' Return the next available id number for creating a new site
 #' @param ids vector of numeric ids that are already in use
@@ -2053,7 +2071,7 @@ disease_modal_link <- function(disease) {
   sprintf("<a style='cursor:pointer' title='%s' onclick=\"%s\">%s</a>", title, onclick, name)
 }
 
-disease_modal_link(diseases$white_mold)
+# disease_modal_link(diseases$white_mold)
 
 
 show_modal <- function(md, title = NULL) {
@@ -2065,7 +2083,6 @@ show_modal <- function(md, title = NULL) {
     easyClose = TRUE
   ) %>% showModal()
 }
-
 
 
 

@@ -1,12 +1,13 @@
 
 dataUI <- function() {
   ns <- NS("data")
-  tagList(
+  div(
+    # class = "tab-content",
+
     div(
-      style = "margin-top: 10px; margin-bottom: 10px; font-style: italic;",
-      "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
+      em("Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information.")
     ),
-    uiOutput(ns("main_ui")),
+    uiOutput(ns("main_ui"), fill = "container"),
   )
 }
 

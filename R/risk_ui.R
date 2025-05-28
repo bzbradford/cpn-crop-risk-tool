@@ -3,7 +3,7 @@ riskUI <- function() {
   ns <- NS("risk")
   div(
     style = "margin-top: 10px;",
-    p("Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
+    p("Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide within the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
     uiOutput(ns("crop_ui")),
     uiOutput(ns("crop_info_ui")),
     uiOutput(ns("main_ui"))
@@ -226,14 +226,21 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             strong("No data downloaded yet for this site.")
           }
 
-          div(style = "border: 1px solid hsl(210, 40%, 80%); border-radius: 5px;",
-            div(label, style = "background: hsl(210, 40%, 95%); padding: 5px 10px; font-size: large; font-weight: bold; border-radius: 5px;"),
-            div(content, style = "background: white; padding: 5px 10px; border-radius: 5px;")
+          div(
+            class = "site-data",
+            div(
+              class = "site-data-header",
+              label
+            ),
+            div(
+              class = "site-data-content",
+              content
+            )
           )
         })
 
         div(
-          style = "display: flex; flex-direction: column; gap: 10px;",
+          class = "flex-down",
           elems
         )
       })
