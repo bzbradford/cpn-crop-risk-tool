@@ -102,11 +102,8 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         validate(need(rv$weather_ready, OPTS$validation_weather_ready))
 
         tagList(
-          div(
-            style = "display: flex; flex-direction: row;",
-            uiOutput(ns("show_all_sites_ui")),
-            uiOutput(ns("white_mold_ui"))
-          ),
+          uiOutput(ns("white_mold_ui")),
+          uiOutput(ns("show_all_sites_ui")),
           uiOutput(ns("selected_site_ui")),
           uiOutput(ns("weather_missing_ui")),
           uiOutput(ns("plots_ui"))
@@ -123,9 +120,10 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
         div(
-          style = "display: inline-flex; flex-wrap: wrap; row-gap: 1rem; column-gap: 2rem;",
+          class = "flex-across",
+          style = "row-gap: 0px; column-gap: 30px;",
           div(
-            style = "display: inline-flex; gap: 1rem;",
+            class = "flex-across",
             tags$label("Irrigation:"),
             radioButtons(
               inputId = ns("irrigation"),
@@ -138,7 +136,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
           conditionalPanel(
             "input['risk-irrigation'] == 'irrig'",
             div(
-              style = "display: inline-flex; gap: 1rem;",
+              class = "flex-across",
               tags$label("Row spacing:"),
               radioButtons(
                 inputId = ns("spacing"),
@@ -157,16 +155,23 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       output$show_all_sites_ui <- renderUI({
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
-        radioButtons(
-          inputId = ns("show_all_sites"),
-          label = "Show results for:",
-          choices = list(
-            "All sites" = TRUE,
-            "Selected site" = FALSE
-          ),
-          selected = input$show_all_sites %||% TRUE,
-          inline = TRUE
+
+        div(
+          class = "flex-across",
+          tags$label("Show results for:"),
+          radioButtons(
+            inputId = ns("show_all_sites"),
+            # label = "Show results for:",
+            label = NULL,
+            choices = list(
+              "All sites" = TRUE,
+              "Selected site" = FALSE
+            ),
+            selected = input$show_all_sites %||% TRUE,
+            inline = TRUE
+          )
         )
+
       })
 
       ## weather_missing_ui ----
