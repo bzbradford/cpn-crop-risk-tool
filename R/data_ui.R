@@ -20,21 +20,30 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # Reactive Values ----
 
       rv <- reactiveValues(
-        weather_ready = FALSE
+        data = NULL,
+        ready = FALSE
       )
 
+      # toggle readiness
       observe({
-        wr <- nrow(wx_data()$hourly) > 0
-        if (rv$weather_ready != wr) rv$weather_ready <- wr
+        if (is.null(rv$data)) {
+          rv$ready <- FALSE
+        } else if (!rv$ready) {
+          rv$ready <- TRUE
+        }
       })
 
-      wx_ma <- reactive({
+      # load and complete dataset
+      observe({
         wx <- wx_data()
-        req(nrow(wx$daily) > 0)
-        list(
-          ma_center = build_ma_from_daily(wx$daily_full, "center"),
-          ma_right = build_ma_from_daily(wx$daily_full, "right")
-        )
+        if (nrow(wx$hourly) > 0) {
+          wx$ma_center <- build_ma_from_daily(wx$daily_full, "center")
+          wx$ma_right <- build_ma_from_daily(wx$daily_full, "right")
+          wx$gdd <- build_gdd_from_daily(wx$daily)
+          rv$data <- wx
+        } else {
+          rv$data <- NULL
+        }
       })
 
       ## selected_data // reactive ----
@@ -44,7 +53,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (opts$data_type == "ma") {
           opts$ma_align <- req(input$ma_align)
         }
-        wx <- wx_data()
+        wx <- req(rv$data)
 
         sites <- wx$sites %>%
           st_drop_geometry() %>%
@@ -62,8 +71,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           "daily" = wx$daily,
           "ma" = switch(
             opts$ma_align,
-            "center" = wx_ma()$ma_center,
-            "right" = wx_ma()$ma_right
+            "center" = wx$ma_center,
+            "right" = wx$ma_right
           ),
           "disease" = wx$disease,
           "gdd" = wx$gdd
@@ -94,11 +103,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## main_ui // renderUI ----
       output$main_ui <- renderUI({
         validate(need(sites_ready(), OPTS$validation_sites_ready))
-        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
+        validate(need(rv$ready, OPTS$validation_weather_ready))
 
         tagList(
           div(
-            class = "flex-across", style = "gap: 30px;",
+            class = "flex-across", style = "margin-top: 1rem; gap: 30px;",
             materialSwitch(
               inputId = ns("metric"),
               label = "Use metric",
@@ -160,7 +169,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## weather_missing_ui // renderUI ----
       output$weather_missing_ui <- renderUI({
         sites <- wx_data()$sites
-        req(rv$weather_ready && nrow(sites) > 0 && any(sites$days_missing > 0))
+        req(rv$ready, nrow(sites) > 0, any(sites$days_missing > 0))
 
         div(
           style = "margin-bottom: 15px;",

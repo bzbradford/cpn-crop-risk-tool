@@ -242,7 +242,6 @@ footer {
 
 .inline-flex {
   display: inline-flex;
-  gap: 20px;
   flex-wrap: wrap;
 }
 

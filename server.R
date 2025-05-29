@@ -339,13 +339,10 @@ server <- function(input, output, session) {
 
     d1 <- build_disease_from_ma(wx$daily_full)
     d2 <- build_disease_from_daily(wx$daily)
-    d3 <- build_disease_from_hourly(hourly_full)
     wx$disease <-
       left_join(d1, d2, join_by(grid_id, date)) %>%
-      left_join(d3, join_by(grid_id, date)) %>%
       filter(date >= dates$start)
 
-    wx$gdd <- build_gdd_from_daily(wx$daily)
     wx
   }) %>%
     bindCache(rlang::hash(wx_args()))
