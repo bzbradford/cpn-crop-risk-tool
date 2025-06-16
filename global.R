@@ -41,6 +41,9 @@ suppressPackageStartupMessages({
 # set up a second session for asynchronous tasks
 plan(multisession(workers = 2))
 
+# renv::install("httr2@1.1.0")
+# renv::install("terra@1.8-42")
+
 
 # Startup ----------------------------------------------------------------------
 
@@ -72,9 +75,12 @@ echo <- function(x) {
   print(x)
 }
 
-runtime <- function(label = "", ref = now()) {
-  message(">> ", label, " [", now(), "]")
-  message(difftime(now(), ref), " since last timestamp")
+runtime <- function(label = "timestamp", ref = NULL) {
+  t <- now()
+  message(">> ", label, " [", t, "]")
+  if (!is.null(ref))
+    message(difftime(t, ref), " elapsed")
+  return(t)
 }
 
 # swaps names and values in a list or vector
@@ -350,7 +356,8 @@ OPTS <- lst(
   app_header_badge = "cpn-badge.png",
 
   ## google ----
-  google_key = Sys.getenv("google_places_key"),
+  google_geocoding_key = Sys.getenv("google_geocoding_key"),
+  google_maps_key = Sys.getenv("google_maps_key"),
 
   ## ibm ----
   ibm_keys = list(
@@ -478,7 +485,7 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
     stopifnot(validate_ll(lat, lng))
     req <- request(url) %>%
       req_timeout(.5) %>%
-      req_retry(max_tries = 3, retry_on_failure = TRUE)
+      req_retry(max_tries = 3, retry_on_failure = TRUE, after = \(resp) 0)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
     message("GET => '", url, "' completed in ", as.numeric(now() - t))
@@ -573,15 +580,23 @@ refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
         "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
         "x-api-key" = keys$api_key
       ) %>%
-      req_timeout(5)
+      req_timeout(5) %>%
+      req_error(is_error = \(resp) FALSE)
     resp <- req_perform(req)
+    status <- resp_status(resp)
+
+    if (status >= 400) {
+      echo(resp)
+      stop("HTTP error ", status)
+    }
+
     message("Authorization token refreshed at ", now("UTC"))
     list(
       timestamp = now("UTC"),
-      status = resp_status(resp),
+      status = status,
       token = resp_body_string(resp)
     )
-  }, catch = function(e) {
+  }, error = function(e) {
     message("Failed to get authorization token: ", e$message)
     list(
       timestamp = 1,
@@ -614,7 +629,7 @@ get_ibm_token <- function() {
   ibm_auth$token
 }
 
-get_ibm_token()
+# get_ibm_token()
 
 
 #' Convert vector of dates to vector of hourly datetimes
@@ -670,8 +685,8 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
   dttm_chunks <- lapply(date_chunks, function(chunk) dates_to_dttm(chunk, tz))
   lapply(dttm_chunks, function(chunk) {
     list(
-      start = format(first(chunk), "%Y-%m-%dT%H:%M:%S%z"),
-      end = format(last(chunk), "%Y-%m-%dT%H:%M:%S%z"),
+      start = first(chunk),
+      end = last(chunk),
       length = length(chunk)
     )
   })
@@ -695,6 +710,28 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
 # )
 
 
+create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_weather_endpoint, token = get_ibm_token()) {
+  request(url) %>%
+    req_headers_redacted(
+      "x-ibm-client-id" = sprintf("geospatial-%s", OPTS$ibm_keys$tenant_id),
+      "Authorization" = sprintf("Bearer %s", token)
+    ) %>%
+    req_url_query(
+      format = "json",
+      geocode = str_glue("{lat},{lng}"),
+      startDateTime = format(start_time, "%Y-%m-%dT%H:%M:%S%z"),
+      endDateTime = format(end_time, "%Y-%m-%dT%H:%M:%S%z"),
+      units = "m"
+    ) %>%
+    req_timeout(5) %>%
+    req_retry(max_tries = 2, failure_timeout = 5) %>%
+    req_throttle(rate = 20)
+}
+
+# # test
+# create_ibm_request(45, -89, now() - days(10), now() - days(5)) %>%
+#   req_perform()
+
 
 #' Fetch hourly weather data from IBM
 #' API documentation: https://docs.google.com/document/d/13HTLgJDpsb39deFzk_YCQ5GoGoZCO_cRYzIxbwvgJLI/edit?tab=t.0
@@ -704,7 +741,7 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
 #' @param dates_have vector of dates already downloaded
 #' @param url endpoint, changed only for testing failures
 #' @returns tibble, either with hourly data if successful or empty if failed
-get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_endpoint) {
+get_ibm <- function(lat, lng, dates_need, dates_have = Date()) {
   stime <- Sys.time()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
   chunks <- ibm_chunks(dates_need, dates_have, tz)
@@ -721,23 +758,9 @@ get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_end
     token <- get_ibm_token()
     if (!is.character(token)) stop("Failed to get IBM token.")
 
-    reqs <- lapply(chunks, function(chunk) {
-      request(url) %>%
-        req_headers_redacted(
-          "x-ibm-client-id" = sprintf("geospatial-%s", OPTS$ibm_keys$tenant_id),
-          "Authorization" = sprintf("Bearer %s", token)
-        ) %>%
-        req_url_query(
-          format = "json",
-          geocode = str_glue("{lat},{lng}"),
-          startDateTime = chunk$start,
-          endDateTime = chunk$end,
-          units = "m"
-        ) %>%
-        req_timeout(4) %>%
-        req_retry(max_tries = 2, retry_on_failure = TRUE) %>%
-        req_throttle(capacity = 4, fill_time_s = 1)
-    })
+    reqs <- lapply(chunks, \(chunk) create_ibm_request(lat, lng, chunk$start, chunk$end))
+
+    message(sprintf("Getting weather for %.3f, %.3f from %s to %s using %s requests...", lat, lng, start_date, end_date, length(reqs)))
 
     # perform parallel requests for each time chunk
     resps <- req_perform_parallel(reqs, on_error = "continue", progress = F)
@@ -771,15 +794,16 @@ get_ibm <- function(lat, lng, dates_need, dates_have, url = OPTS$ibm_weather_end
   wx
 }
 
-# should succeed
-# get_ibm(43.0731, -89.4012, "2024-1-1", "2024-1-2")
+
+# # should succeed
+# get_ibm(43.0731, -89.4012, dates_need = seq.Date(ymd("2025-1-1"), ymd("2025-1-10"), by = 1))
 # df <- get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31") %>% clean_ibm()
 # ggplot(df, aes(x = datetime_local, y = temperature)) + geom_line()
-
-# should fail
+#
+# # should fail
 # get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31", url = 'foo')
-
-# should partially fail because start date is before earliest data 2015-6-29
+#
+# # should partially fail because start date is before earliest data 2015-6-29
 # get_ibm(43.0731, -89.4012, "2015-1-1", "2015-8-1")
 
 
@@ -2093,5 +2117,6 @@ show_modal <- function(md, title = NULL) {
     easyClose = TRUE
   ) %>% showModal()
 }
+
 
 

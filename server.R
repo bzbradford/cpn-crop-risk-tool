@@ -208,23 +208,26 @@ server <- function(input, output, session) {
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
     message("Getting forecasts...")
-    future_promise({
-      urls <- cur_urls %||% list()
-      for (i in 1:nrow(grids)) {
-        grid <- grids[i,]
-        if (isTruthy(urls[[grid$grid_id]])) next # already have it
-        urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-      }
+    suppressWarnings({
+      future_promise({
+        urls <- cur_urls %||% list()
+        for (i in 1:nrow(grids)) {
+          grid <- grids[i,]
+          if (isTruthy(urls[[grid$grid_id]])) next # already have it
+          urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
+        }
 
-      forecasts <- cur_forecasts %||% list()
-      for (url in unique(urls)) {
-        if (!isTruthy(url) || url == "404") next # bad url
-        if (isTruthy(forecasts[[url]])) next # already have it
-        forecasts[[url]] <- noaa_get_forecast(url = url)
-      }
+        forecasts <- cur_forecasts %||% list()
+        for (url in unique(urls)) {
+          if (!isTruthy(url) || url == "404") next # bad url
+          if (isTruthy(forecasts[[url]])) next # already have it
+          forecasts[[url]] <- noaa_get_forecast(url = url)
+        }
 
-      list(urls = urls, forecasts = forecasts)
-    }, seed = NULL)
+        list(urls = urls, forecasts = forecasts)
+      }, seed = NULL)
+    })
+
   })
 
   observe({
@@ -321,6 +324,8 @@ server <- function(input, output, session) {
     wx$sites <- sites
     wx$dates <- dates
 
+    # t <- runtime("wx_data")
+
     # allow up to 30 days before selected start date
     hourly_full <- weather %>%
       filter(grid_id %in% sites$grid_id) %>%
@@ -328,6 +333,8 @@ server <- function(input, output, session) {
       bind_rows(forecast) %>%
       arrange(grid_id, datetime_local) %>%
       build_hourly()
+
+    # runtime("hourly", t)
 
     # remove the earlier dates that were used for moving averages
     wx$hourly <- hourly_full %>% filter(date >= dates$start)
@@ -337,11 +344,15 @@ server <- function(input, output, session) {
     wx$daily_full <- build_daily(hourly_full)
     wx$daily <- wx$daily_full %>% filter(date >= dates$start)
 
+    # runtime("daily", t)
+
     d1 <- build_disease_from_ma(wx$daily_full)
     d2 <- build_disease_from_daily(wx$daily)
     wx$disease <-
       left_join(d1, d2, join_by(grid_id, date)) %>%
       filter(date >= dates$start)
+
+    # runtime("disease", t)
 
     wx
   }) %>%
@@ -380,7 +391,7 @@ server <- function(input, output, session) {
   ## sites_tbl_data ----
   # sites formatted for DT
   sites_dt_data <- reactive({
-    rv$sites %>%
+    req(rv$sites) %>%
       mutate(
         id = as.character(id),
         # across(c(lat, lng), ~sprintf("%.2f", .x)),
@@ -407,7 +418,7 @@ server <- function(input, output, session) {
       btns = character()
     )
     # selected <- isolate(rv$selected_site)
-    datatable(
+    dt <- datatable(
       template,
       colnames = c("", "Name", "GPS", "Edit"),
       rownames = FALSE,
@@ -429,14 +440,21 @@ server <- function(input, output, session) {
         )
       )
     )
+
+    dt_observer$resume()
+
+    dt
   })
 
   ## Handle DT update ----
-  observe({
+  dt_observer <- observe({
+    # df <- req(sites_dt_data())
+    # req(is_tibble(df))
     df <- sites_dt_data()
+
     dataTableProxy("sites_dt") %>%
       replaceData(df, rownames = FALSE, clearSelection = "none")
-  })
+  }, suspended = TRUE)
 
   # highlight selected site
   # observe({
@@ -862,7 +880,7 @@ server <- function(input, output, session) {
   ## searchbox_ui // renderUI ----
   output$searchbox_ui <- renderUI({
     div(
-      HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+      HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_maps_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
       # textInput("searchbox", "Find a location by name")
       textInput("searchbox", NULL)
     )
@@ -1077,13 +1095,13 @@ server <- function(input, output, session) {
   ## Handle geolocation ----
   observe({
     loc <- req(input$user_loc)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_key}')"))
+    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
   }) %>% bindEvent(input$user_loc)
 
   ## Handle location from click ----
   observe({
     loc <- req(input$map_click)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_key}')"))
+    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
   }) %>% bindEvent(input$map_click$.nonce)
 
   ## Save site after getting locality name from geocoding api
