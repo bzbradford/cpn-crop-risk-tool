@@ -3,7 +3,7 @@ riskUI <- function() {
   ns <- NS("risk")
   div(
     style = "margin-top: 10px;",
-    p("Field crops disease risk assessments are based on probability of spore presence, while algorithms for vegetable diseases vary. Risk model is only valid when the crop is present and in a vulnerable growth stage (if applicable). Risk may be mitigated in commercial production by application of a protective fungicide with the last 14 days. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
+    p("Risk models are only valid when the crop is present and in a vulnerable growth stage. Risk may be mitigated in commercial production by application of a protective fungicide. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
     uiOutput(ns("crop_ui")),
     uiOutput(ns("crop_info_ui")),
     uiOutput(ns("main_ui"))
@@ -16,43 +16,46 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
     function(input, output, session) {
       ns <- session$ns
 
-      # Reactives ----
+
+      # Reactive ----
 
       ## rv ----
       rv <- reactiveValues(
         weather_ready = FALSE
       )
 
+      # fill local data when available
       observe({
         wr <- nrow(wx_data()$hourly) > 0
         if (rv$weather_ready != wr) rv$weather_ready <- wr
       })
 
-      ## selected_models() ----
+      ## white_mold_model // reactive ----
       # based on crop, select and name disease models
       white_mold_model <- reactive({
         switch(req(input$irrigation),
-          "dry" = "white_mold_dry_prob",
+          "dry" = c("White mold (non-irrigated)" = "white_mold_dry_prob"),
           "irrig" = switch(req(input$spacing),
-            "30" = "white_mold_irrig_30_prob",
-            "15" = "white_mold_irrig_15_prob"
+            "30" = c("White mold (irrigated, 30-in rows)" = "white_mold_irrig_30_prob"),
+            "15" = c("White mold (irrigated, 15-in rows)" = "white_mold_irrig_15_prob")
           )
         )
       })
 
+      ## selected_models // reactive ----
       selected_models <- reactive({
         crop <- req(input$crop)
         disease_slugs <- crops[[crop]][["diseases"]]
-        selected <- diseases[names(diseases) %in% disease_slugs]
-        colnames <- map_chr(selected, "colname")
 
-        # handle white mold selection
-        colnames <- sapply(colnames, function(nm) {
-          if (nm == "white_mold") white_mold_model() else nm
-        })
-        names(colnames) <- map_chr(selected, "name")
-
-        colnames
+        # prepare list with display names and column names
+        # white mold has 3 possible data columns and names depending on inputs
+        sapply(disease_slugs, function(slug) {
+          d <- diseases[[slug]]
+          switch(slug,
+            "white_mold" = white_mold_model(),
+            set_names(d$colname, d$name)
+          )
+        }, USE.NAMES = FALSE)
       })
 
 
@@ -99,11 +102,8 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         validate(need(rv$weather_ready, OPTS$validation_weather_ready))
 
         tagList(
-          div(
-            style = "display: flex; flex-direction: row;",
-            uiOutput(ns("show_all_sites_ui")),
-            uiOutput(ns("white_mold_ui"))
-          ),
+          uiOutput(ns("white_mold_ui")),
+          uiOutput(ns("show_all_sites_ui")),
           uiOutput(ns("selected_site_ui")),
           uiOutput(ns("weather_missing_ui")),
           uiOutput(ns("plots_ui"))
@@ -120,23 +120,31 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
         div(
-          class = "inline-flex",
-          style = "margin: 0 10px;",
-          radioButtons(
-            inputId = ns("irrigation"),
-            label = "Irrigation:",
-            choices = irrig_choices,
-            selected = isolate(input$irrigation) %||% "dry",
-            inline = TRUE
+          class = "flex-across",
+          style = "row-gap: 0px; column-gap: 30px;",
+          div(
+            class = "flex-across",
+            tags$label("Irrigation:"),
+            radioButtons(
+              inputId = ns("irrigation"),
+              label = NULL,
+              choices = irrig_choices,
+              selected = isolate(input$irrigation) %||% "dry",
+              inline = TRUE
+            ),
           ),
           conditionalPanel(
             "input['risk-irrigation'] == 'irrig'",
-            radioButtons(
-              inputId = ns("spacing"),
-              label = "Row spacing:",
-              choices = spacing_choices,
-              selected = isolate(input$spacing) %||% "30",
-              inline = TRUE
+            div(
+              class = "flex-across",
+              tags$label("Row spacing:"),
+              radioButtons(
+                inputId = ns("spacing"),
+                label = NULL,
+                choices = spacing_choices,
+                selected = isolate(input$spacing) %||% "30",
+                inline = TRUE
+              )
             )
           )
         )
@@ -147,16 +155,23 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       output$show_all_sites_ui <- renderUI({
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
-        radioButtons(
-          inputId = ns("show_all_sites"),
-          label = "Show results for:",
-          choices = list(
-            "All sites" = TRUE,
-            "Selected site" = FALSE
-          ),
-          selected = input$show_all_sites %||% TRUE,
-          inline = TRUE
+
+        div(
+          class = "flex-across",
+          tags$label("Show results for:"),
+          radioButtons(
+            inputId = ns("show_all_sites"),
+            # label = "Show results for:",
+            label = NULL,
+            choices = list(
+              "All sites" = TRUE,
+              "Selected site" = FALSE
+            ),
+            selected = input$show_all_sites %||% TRUE,
+            inline = TRUE
+          )
         )
+
       })
 
       ## weather_missing_ui ----
@@ -206,36 +221,49 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
             filter(site_label == !!label) %>%
             drop_na(grid_id, date, value)
 
+          # to show in site feed
           content <- if (nrow(df) > 0) {
-            df <- df %>%
-              mutate(assign_risk(first(model), value), .by = model)
-            last_value <- df %>%
-              filter(date == min(today(), max(date))) %>%
-              mutate(risk_label = paste(name, value_label, sep = ": "))
-            risk_date <- first(last_value$date)
-            risk_info <- paste(last_value$risk_label, collapse = ", ")
             date_range <- c(dates$start, max(dates$end, max(df$date)))
-            plts <- disease_plot(df, xrange = date_range)
 
-            div(
-              class = "flex-down",
-              plts,
-              em(strong(paste0("For ", format(risk_date, "%b %d, %Y"), ":")), risk_info)
-            )
+            # generate individual disease plots
+            plts <- imap(models, function(model_col, model_name) {
+              df <- df %>%
+                filter(model == !!model_col) %>%
+                mutate(assign_risk(model_col, value))
+              last_value <- df %>% filter(date == min(today(), max(date)))
+              risk_info <- sprintf(
+                "For %s: %s",
+                format(last_value$date, "%b %d, %Y"),
+                last_value$value_label
+              )
+              plt <- plot_risk(df, name = model_name, xrange = date_range)
+
+              div(
+                strong(model_name),
+                span(style = "font-size: small", em(risk_info)),
+                plt
+              )
+            })
+
+            div(class = "flex-down", plts)
           } else {
             strong("No data downloaded yet for this site.")
           }
 
-          div(style = "border: 1px solid hsl(210, 40%, 80%); border-radius: 5px;",
-            div(label, style = "background: hsl(210, 40%, 95%); padding: 5px 10px; font-size: large; font-weight: bold; border-radius: 5px;"),
-            div(content, style = "background: white; padding: 5px 10px; border-radius: 5px;")
+          div(
+            class = "site-data",
+            div(
+              class = "site-data-header",
+              label
+            ),
+            div(
+              class = "site-data-content",
+              content
+            )
           )
         })
 
-        div(
-          style = "display: flex; flex-direction: column; gap: 10px;",
-          elems
-        )
+        div(class = "flex-down", elems)
       })
 
     } # end module

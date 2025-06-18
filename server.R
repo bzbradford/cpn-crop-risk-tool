@@ -57,8 +57,6 @@ server <- function(input, output, session) {
       rv$sites <- sites
       rv$selected_site <- first(sites$id)
       fit_sites()
-      # causes the fetch weather button to fire
-      # rv$fetch_on_load <- TRUE
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
@@ -210,23 +208,26 @@ server <- function(input, output, session) {
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
     message("Getting forecasts...")
-    future_promise({
-      urls <- cur_urls %||% list()
-      for (i in 1:nrow(grids)) {
-        grid <- grids[i,]
-        if (isTruthy(urls[[grid$grid_id]])) next # already have it
-        urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-      }
+    suppressWarnings({
+      future_promise({
+        urls <- cur_urls %||% list()
+        for (i in 1:nrow(grids)) {
+          grid <- grids[i,]
+          if (isTruthy(urls[[grid$grid_id]])) next # already have it
+          urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
+        }
 
-      forecasts <- cur_forecasts %||% list()
-      for (url in unique(urls)) {
-        if (!isTruthy(url) || url == "404") next # bad url
-        if (isTruthy(forecasts[[url]])) next # already have it
-        forecasts[[url]] <- noaa_get_forecast(url = url)
-      }
+        forecasts <- cur_forecasts %||% list()
+        for (url in unique(urls)) {
+          if (!isTruthy(url) || url == "404") next # bad url
+          if (isTruthy(forecasts[[url]])) next # already have it
+          forecasts[[url]] <- noaa_get_forecast(url = url)
+        }
 
-      list(urls = urls, forecasts = forecasts)
-    }, seed = NULL)
+        list(urls = urls, forecasts = forecasts)
+      }, seed = NULL)
+    })
+
   })
 
   observe({
@@ -323,6 +324,8 @@ server <- function(input, output, session) {
     wx$sites <- sites
     wx$dates <- dates
 
+    # t <- runtime("wx_data")
+
     # allow up to 30 days before selected start date
     hourly_full <- weather %>%
       filter(grid_id %in% sites$grid_id) %>%
@@ -330,6 +333,8 @@ server <- function(input, output, session) {
       bind_rows(forecast) %>%
       arrange(grid_id, datetime_local) %>%
       build_hourly()
+
+    # runtime("hourly", t)
 
     # remove the earlier dates that were used for moving averages
     wx$hourly <- hourly_full %>% filter(date >= dates$start)
@@ -339,15 +344,16 @@ server <- function(input, output, session) {
     wx$daily_full <- build_daily(hourly_full)
     wx$daily <- wx$daily_full %>% filter(date >= dates$start)
 
+    # runtime("daily", t)
+
     d1 <- build_disease_from_ma(wx$daily_full)
     d2 <- build_disease_from_daily(wx$daily)
-    d3 <- build_disease_from_hourly(hourly_full)
     wx$disease <-
       left_join(d1, d2, join_by(grid_id, date)) %>%
-      left_join(d3, join_by(grid_id, date)) %>%
       filter(date >= dates$start)
 
-    wx$gdd <- build_gdd_from_daily(wx$daily)
+    # runtime("disease", t)
+
     wx
   }) %>%
     bindCache(rlang::hash(wx_args()))
@@ -364,10 +370,10 @@ server <- function(input, output, session) {
   })
 
 
-  # Sidebar UI -----------------------------------------------------------------
 
-  ## Sites table ----
+# Site selection ----------------------------------------------------------
 
+  ## site_help_ui ----
   output$site_help_ui <- renderUI({
     sites <- rv$sites
     text <- if (nrow(sites) == 0) {
@@ -375,17 +381,17 @@ server <- function(input, output, session) {
     } else if (nrow(sites) == 1) {
       "Use the pin icon to hold a site and add additional sites. Then click on the map or use the search boxes at the bottom of the map to set a location."
     } else if (any(sites$temp)) {
-      "Use the pin icon to hold a site and add additional sites. Change the name of a pinned site using the pen icon. Clicking on the map or using the search boxes will replace the last site on the list unless you pin it."
+      "Use the pin icon to hold a site and add additional sites. Change the name of a pinned site using the pencil icon. Clicking on the map or using the search boxes will replace the last site on the list unless you pin it."
     } else {
-      "Change the name of your pinned sites using the pen icon. Click on the map or use the search boxes to add another location."
+      "Edit or delete a site using the icons to the right. Click on the map or use the search boxes to add another location."
     }
-    p(text)
+    p(style = "font-size: small", text)
   })
 
-  ### sites_tbl_data // reactive----
+  ## sites_tbl_data ----
   # sites formatted for DT
-  sites_tbl_data <- reactive({
-    rv$sites %>%
+  sites_dt_data <- reactive({
+    req(rv$sites) %>%
       mutate(
         id = as.character(id),
         # across(c(lat, lng), ~sprintf("%.2f", .x)),
@@ -401,14 +407,19 @@ server <- function(input, output, session) {
       select(id, name, loc, btns)
   })
 
-  ### sites_tbl // renderDT ----
-
+  ## sites_dt ----
   # render initial DT
-  output$sites_tbl <- renderDT({
-    sites <- isolate(sites_tbl_data())
-    selected <- isolate(rv$selected_site)
-    datatable(
-      sites,
+  output$sites_dt <- renderDT({
+    # sites <- isolate(sites_dt_data())
+    template <- tibble(
+      id = numeric(),
+      name = character(),
+      loc = character(),
+      btns = character()
+    )
+    # selected <- isolate(rv$selected_site)
+    dt <- datatable(
+      template,
       colnames = c("", "Name", "GPS", "Edit"),
       rownames = FALSE,
       selection = "none",
@@ -429,34 +440,42 @@ server <- function(input, output, session) {
         )
       )
     )
+
+    dt_observer$resume()
+
+    dt
   })
 
-  ### refresh sites_tbl // observer ----
-  observe({
-    df <- sites_tbl_data()
-    dataTableProxy("sites_tbl") %>%
+  ## Handle DT update ----
+  dt_observer <- observe({
+    # df <- req(sites_dt_data())
+    # req(is_tibble(df))
+    df <- sites_dt_data()
+
+    dataTableProxy("sites_dt") %>%
       replaceData(df, rownames = FALSE, clearSelection = "none")
-  })
+  }, suspended = TRUE)
 
+  # highlight selected site
   # observe({
   #   selected <- req(rv$selected_site)
-  #   runjs("$('#sites_tbl table.dataTable tr').removeClass('selected')")
-  #   runjs(sprintf("$('#sites_tbl table.dataTable tr:nth-child(%s)').addClass('selected')", selected))
+  #   runjs("$('#sites_dt table.dataTable tr').removeClass('selected')")
+  #   runjs(sprintf("$('#sites_dt table.dataTable tr:nth-child(%s)').addClass('selected')", selected))
   # })
 
-  ### Handle save_site button ----
+  ## Handle save_site button ----
   # only ever 1 temporary site so just make all sites saved
   observeEvent(input$save_site, {
     rv$sites <- rv$sites %>% mutate(temp = FALSE)
   })
 
-  ### Handle trash_site button ----
+  ## Handle trash_site button ----
   observeEvent(input$trash_site, {
     to_delete_id <- req(input$trash_site)
     rv$sites <- rv$sites %>% filter(id != to_delete_id)
   })
 
-  ### Handle edit_site button ----
+  ## Handle edit_site button ----
   observeEvent(input$edit_site, {
     edits <- req(input$edit_site)
     sites <- rv$sites
@@ -580,12 +599,14 @@ server <- function(input, output, session) {
   )
 
 
-  ## Date selector ----
 
-  ### date_select_ui // renderUI ----
+# Date selection ----------------------------------------------------------
+
+  ### date_select_ui ----
   output$date_select_ui <- renderUI({
     div(
       class = "flex-across",
+      style = "row-gap: 0px;",
       div(
         style = "flex: 1 0; min-width: 120px",
         dateInput(
@@ -612,7 +633,7 @@ server <- function(input, output, session) {
   })
 
 
-  ### date_presets // reactive ----
+  ## date_presets // reactive ----
   date_presets <- reactive({
     d <- today()
     y <- year(d)
@@ -626,7 +647,7 @@ server <- function(input, output, session) {
     )
   })
 
-  ### date_btns_ui // renderUI ----
+  ## date_btns_ui ----
   date_btn <- function(value, label, btn_class = c("default", "primary")) {
     btn_class <- match.arg(btn_class)
     HTML(str_glue("<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"))
@@ -647,7 +668,7 @@ server <- function(input, output, session) {
     )
   })
 
-  ### Handle date buttons ----
+  ## Handle date buttons ----
   observeEvent(input$date_preset, {
     val <- input$date_preset
     presets <- date_presets()
@@ -661,9 +682,10 @@ server <- function(input, output, session) {
   })
 
 
-  ## Fetch weather button ----
 
-  ### need_weather // reactive ----
+# Fetch weather button ----------------------------------------------------
+
+  ## need_weather // reactive ----
   need_weather <- reactive({
     wx <- rv$weather
     if (is.null(wx)) return(TRUE)
@@ -675,7 +697,7 @@ server <- function(input, output, session) {
     FALSE
   })
 
-  ### action_ui // renderUI ----
+  ## action_ui ----
   output$action_ui <- renderUI({
     btn <- function(msg, ...) {
       div(
@@ -700,7 +722,7 @@ server <- function(input, output, session) {
     btn("Everything up to date", class = "btn-primary", disabled = TRUE)
   })
 
-  ### status_ui // renderUI ----
+  ## status_ui ----
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
     msg <- req(rv$status_msg)
@@ -728,14 +750,14 @@ server <- function(input, output, session) {
     )
   })
 
-  ### already_fetched // reactive ----
+  ## already_fetched // reactive ----
   already_fetched <- reactive({
     args <- fetch_args()
     rlang::hash(args) %in% rv$fetch_hashes
   })
 
-  ### Fetch button observer ----
-  observeEvent(input$fetch, {
+  ## Handle fetching on click ----
+  observe({
     req(!already_fetched())
 
     args <- fetch_args()
@@ -754,8 +776,8 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  })
-    # bindEvent(rv$fetch_on_load, input$fetch)
+  }) %>%
+    bindEvent(TRUE, input$fetch) # runs on launch & button press
 
 
 
@@ -858,7 +880,7 @@ server <- function(input, output, session) {
   ## searchbox_ui // renderUI ----
   output$searchbox_ui <- renderUI({
     div(
-      HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+      HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_maps_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
       # textInput("searchbox", "Find a location by name")
       textInput("searchbox", NULL)
     )
@@ -1073,13 +1095,13 @@ server <- function(input, output, session) {
   ## Handle geolocation ----
   observe({
     loc <- req(input$user_loc)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_key}')"))
+    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
   }) %>% bindEvent(input$user_loc)
 
   ## Handle location from click ----
   observe({
     loc <- req(input$map_click)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_key}')"))
+    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
   }) %>% bindEvent(input$map_click$.nonce)
 
   ## Save site after getting locality name from geocoding api
