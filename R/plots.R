@@ -1,4 +1,4 @@
-#- plots.R -#
+#--- plots.R ---#
 
 # expand axis range by percentage
 expand_range <- function(lo, hi, amt = .05) {

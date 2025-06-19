@@ -38,6 +38,8 @@ suppressPackageStartupMessages({
 ## turn warnings into errors
 # options(warn = 2)
 
+# options(forecast = FALSE)
+
 # set up a second session for asynchronous tasks
 plan(multisession(workers = 2))
 
@@ -1033,6 +1035,30 @@ build_grids <- function(wx) {
 # saved_weather %>% build_grids()
 
 
+#' Add some more information for displaying on the map
+annotate_grids <- function(grids_with_status) {
+  grids_with_status %>%
+    mutate(
+      title = if_else(needs_download, "Weather grid (download required)", "Weather grid"),
+      color = if_else(needs_download, "orange", "darkgreen"),
+      label = paste0(
+        "<b>", title, "</b><br>",
+        "Earliest date: ", date_min, "<br>",
+        "Latest date: ", date_max, "<br>",
+        if_else(date_max == today(), paste0("Most recent data: ", hours_stale, " hours ago<br>"), ""),
+        "Total days: ", days_expected, "<br>",
+        "Missing days: ", days_missing, sprintf(" (%.1f%%)", 100 * days_missing_pct), "<br>",
+        "Missing hours: ", hours_missing, sprintf(" (%.1f%%)", 100 * hours_missing_pct), "<br>"
+      ) %>% lapply(HTML)
+    )
+}
+
+# test_grids <- saved_weather %>% build_grids()
+# test_status <- saved_weather %>% weather_status(today() - days(30), today())
+# left_join(test_grids, test_status) %>%
+#   annotate_grids()
+
+
 #' Summarize downloaded weather data by grid cell and creates sf object
 #' used to intersect site points with existing weather data
 #' @param wx hourly weather data from `clean_ibm` function
@@ -1748,6 +1774,7 @@ build_daily <- function(hourly) {
   summary_fns <- c("min" = calc_min, "mean" = calc_mean, "max" = calc_max)
   by_date <- hourly %>%
     summarize(
+      hours = n(),
       across(c(temperature, dew_point, dew_point_depression, relative_humidity), summary_fns),
       across(c(precip, snow), c("daily" = calc_sum, "max_hourly" = calc_max)),
       across(c(pressure_mean_sea_level, wind_speed), summary_fns),
@@ -1787,6 +1814,7 @@ build_daily <- function(hourly) {
 
   # assemble the data
   by_date %>%
+    filter(hours >= 12) %>%
     left_join(by_night, join_by(grid_id, date == date_since_night)) %>%
     left_join(lat_lng, join_by(grid_id)) %>%
     relocate(grid_lat, grid_lng, .after = grid_id) %>%
@@ -1963,45 +1991,11 @@ sites_template <- tibble(
   temp = logical()
 )
 
-#' Return the next available id number for creating a new site
-#' @param ids vector of numeric ids that are already in use
-create_id <- function(ids) {
-  ids <- as.integer(ids)
-  possible_ids <- 1:(length(ids) + 1)
-  setdiff(possible_ids, ids)
+Site <- function(name, lat, lng, temp = TRUE, id = 999) {
+  site <- as.list(environment())
 }
 
-# # should return 4
-# create_id(c(1, 2, 3, 5))
-
-
-#' Validate and fill in defaults for new sites
-#' @param loc named list with location attributes
-create_site <- function(loc, sites) {
-  loc$id <- create_id(sites$id)
-  loc$temp <- !isTruthy(loc$temp)
-
-  # make sure it has all the attributes
-  missing_attr <- setdiff(names(sites_template), names(loc))
-  if (isTruthy(missing_attr)) stop("Loc is missing ", missing_attr)
-
-  # validate lat/lng
-  req(validate_ll(loc$lat, loc$lng))
-
-  # keep only approved names
-  loc <- loc[names(loc) %in% names(sites_template)]
-
-  loc
-}
-
-# # should succeed and assign id 1
-# create_site(list(lat = 45, lng = -89, name = "foo"), sites_template)
-#
-# # should fail, invalid lat/lng
-# create_site(list(lat = -45, lng = -89, name = "foo"), sites_template)
-#
-# # should fail, loc is missing keys
-# create_site(list(), sites_template)
+# Site("foo", 1, 2)
 
 
 #' Try read sites list from csv

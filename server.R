@@ -1,23 +1,183 @@
 
 server <- function(input, output, session) {
 
-  # Functions ------------------------------------------------------------------
+  # Reactive values ----
+
+  ## rv ----
+  rv <- reactiveValues(
+    # IBM hourly weather, lightly modified
+    weather = saved_weather,
+    weather_ready = nrow(saved_weather) > 0,
+
+    # table storing site locations
+    sites = sites_template,
+    sites_ready = FALSE,
+
+    # id of last-clicked site
+    selected_site = 1,
+
+    # last good date values
+    start_date = OPTS$default_start_date,
+    end_date = today(),
+    dates_valid = TRUE,
+
+    # sidebar site upload UI
+    show_upload = FALSE, # toggle upload ui
+
+    # which grids have been retrieved this session, for displaying on map
+    grids = tibble(),
+
+    # forecasts for sites
+    # keyed by grid_id
+    noaa_urls = list(),
+
+    # keyed by forecast url
+    noaa_forecasts = list(),
+
+    # tell the map module to zoom to sites
+    map_fit_sites_cmd = NULL,
+  )
+
+  ## rv$sites_ready ----
+  # update sites_ready but only if different than existing value
+  observe({
+    ready <- nrow(rv$sites) > 0
+    if (rv$sites_ready != ready) rv$sites_ready <- ready
+  })
+
+  ## rv$weather_ready ----
+  # update weather_ready but only if different
+  observe({
+    ready <- nrow(rv$weather) > 0
+    if (rv$weather_ready != ready) rv$weather_ready <- ready
+  })
 
 
+  ## rv$start_date ----
+  observe({
+    req(rv$dates_valid)
+    rv$start_date <- req(input$start_date)
+    rv$end_date <- req(input$end_date)
+  })
 
-  save_site <- function(site) {
-    if (nrow(rv$sites) == OPTS$max_sites) return()
-    sites <- rv$sites %>%
-      filter(!temp) %>%
-      bind_rows(as_tibble(site)) %>%
-      distinct(lat, lng, .keep_all = T) %>%
-      mutate(id = row_number())
-    rv$sites <- sites
-    rv$selected_site <- last(sites$id)
+
+  ## rv$dates_valid ----
+  validate_dates <- function(start, end) {
+    if (length(c(start, end)) < 2) return("Must provide start and end dates.")
+    if (start > end) return("Start date must be before end date.")
+    if ((end - start) > years(1)) return("Date range must be less than 1 year")
+    NULL
   }
 
+  observe({
+    start <- input$start_date
+    end <- input$end_date
+    req(!is.null(start) & !is.null(end))
 
-  # Cookie handling ------------------------------------------------------------
+    msg <- validate_dates(start, end)
+    rv$status_msg <- msg
+    rv$dates_valid <- !isTruthy(msg)
+  })
+
+
+
+  # Reactives ----
+
+  ## selected_dates ----
+  # will block fetch button if invalid dates selected
+  selected_dates <- reactive({
+    dates <- list(
+      start = req(rv$start_date),
+      end = req(rv$end_date)
+    )
+  })
+
+  ## expanded_dates ----
+  expanded_dates <- reactive({
+    dates <- selected_dates()
+    dates$start <- dates$start - days(30)
+    dates
+  })
+
+
+
+  ## wx_grids ----
+  # create grids based on downloaded weather data
+  wx_grids <- reactive({
+    wx <- rv$weather
+    req(nrow(wx) > 0)
+
+    build_grids(wx)
+  })
+
+
+  ## sites_sf ----
+  sites_sf <- reactive({
+    sites <- rv$sites
+    req(nrow(sites) > 0)
+
+    sf <- sites %>%
+      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+
+    if (rv$weather_ready) {
+      sf %>% st_join(wx_grids())
+    } else {
+      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+    }
+  })
+
+
+  ## wx_status ----
+  # will be blocked when no weather or weather in date range
+  wx_status <- reactive({
+    wx <- rv$weather
+    req(nrow(wx) > 0)
+    dates <- selected_dates()
+
+    weather_status(wx, dates$start, dates$end)
+  })
+
+
+  ## grids_with_status ----
+  # will be blocked when no weather in date range
+  grids_with_status <- reactive({
+    status <- wx_status()
+    wx_grids() %>%
+      filter(grid_id %in% status$grid_id) %>%
+      left_join(status, join_by(grid_id))
+  })
+
+
+  ## sites_with_status ----
+  # will be blocked when no weather in date range
+  sites_with_status <- reactive({
+    req(sites_sf()) %>%
+      left_join(wx_status(), join_by(grid_id)) %>%
+      replace_na(list(needs_download = TRUE))
+  })
+
+
+  ## rv$grids handler ----
+  # keep record of which grid_ids are associated with sites this session
+  # used by forecasts and map
+  observe({
+    sites <- sites_sf()
+    req(nrow(sites) > 0)
+
+    sites <- sites %>%
+      st_drop_geometry() %>%
+      drop_na(grid_id) %>%
+      distinct(grid_id, grid_lat, grid_lng)
+
+    req(nrow(sites) > 0)
+
+    rv$grids <- rv$grids %>%
+      bind_rows(sites) %>%
+      distinct(grid_id, grid_lat, grid_lng)
+  })
+
+
+  # Cookie handling ----
 
   set_cookie <- function(sites) {
     sites_json <- jsonlite::toJSON(sites)
@@ -56,151 +216,12 @@ server <- function(input, output, session) {
       req(nrow(sites) > 0)
       rv$sites <- sites
       rv$selected_site <- first(sites$id)
-      fit_sites()
+      rv$map_cmd <- "fit_sites"
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
       delete_cookie()
     })
-  })
-
-
-  # Reactive values ------------------------------------------------------------
-
-  ## rv ----
-  rv <- reactiveValues(
-    # IBM hourly weather, lightly modified
-    weather = saved_weather,
-
-    # table storing site locations
-    sites = sites_template,
-
-    # id of last-clicked site
-    selected_site = 1,
-
-    # sidebar site upload UI
-    show_upload = FALSE, # toggle upload ui
-    upload_msg = NULL, # error message
-
-    start_date = NULL,
-    end_date = NULL,
-
-    # for controlling messages on modules
-    sites_ready = FALSE,
-    weather_ready = FALSE,
-
-    # which grids have been retrieved this session, for displaying on map
-    grids = tibble(),
-
-    # forecasts for sites
-    # keyed by grid_id
-    noaa_urls = list(),
-
-    # keyed by forecast url
-    noaa_forecasts = list(),
-  )
-
-  ## rv$sites_ready handler ----
-  #' control if the data view is ready
-  observe({
-    sr <- nrow(rv$sites) > 0
-    if (rv$sites_ready != sr) rv$sites_ready <- sr
-  })
-
-  ## selected_dates ----
-  observe({
-    start <- req(input$start_date)
-    end <- req(input$end_date)
-    req(start <= end)
-    rv$status_msg <- NULL
-    rv$start_date <- start
-    rv$end_date <- end
-  })
-
-  selected_dates <- reactive({
-    # get an extra 30 days before initial date
-    dates <- list(
-      start = req(rv$start_date) - days(30),
-      end = req(rv$end_date)
-    )
-    if ((dates$end - (dates$start + days(30)) > years(1))) {
-      rv$status_msg <- "Date range must be less than 1 year"
-      req(FALSE)
-    }
-    dates
-  })
-
-  # selected_weather <- reactive({
-  #   wx <- rv$weather
-  #   req(nrow(wx) > 0)
-  #   dates <- selected_dates()
-  #   wx %>% filter(between(date, dates$start, dates$end))
-  # })
-
-  ## wx_grids ----
-  wx_grids <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    build_grids(wx)
-  })
-
-  ## sites_sf ----
-  sites_sf <- reactive({
-    sites <- rv$sites
-    if (nrow(sites) == 0) return(NULL)
-    wx <- rv$weather
-    sf <- sites %>%
-      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
-
-    if (nrow(wx) > 0) {
-      sf %>% st_join(wx_grids())
-    } else {
-      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
-    }
-  })
-
-  ## rv$grids handler ----
-  # keep record of which grid_ids have are associated with sites this session
-  # used by forecasts and map
-  observe({
-    sites <- sites_sf()
-    req(nrow(sites) > 0)
-
-    sites <- sites %>%
-      st_drop_geometry() %>%
-      drop_na(grid_id) %>%
-      distinct(grid_id, grid_lat, grid_lng)
-    req(nrow(sites) > 0)
-
-    rv$grids <- rv$grids %>%
-      bind_rows(sites) %>%
-      distinct(grid_id, grid_lat, grid_lng)
-  })
-
-  ## wx_status ----
-  # will be blocked when no weather or weather in date range
-  wx_status <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    dates <- selected_dates()
-    weather_status(wx, dates$start, dates$end)
-  })
-
-  ## grids_with_status ----
-  # will be blocked when no weather in date range
-  grids_with_status <- reactive({
-    status <- wx_status()
-    wx_grids() %>%
-      filter(grid_id %in% status$grid_id) %>%
-      left_join(status, join_by(grid_id))
-  })
-
-  ## sites_with_status ----
-  # will be blocked when no weather in date range
-  sites_with_status <- reactive({
-    req(sites_sf()) %>%
-      left_join(wx_status(), join_by(grid_id)) %>%
-      replace_na(list(needs_download = TRUE))
   })
 
 
@@ -231,6 +252,8 @@ server <- function(input, output, session) {
   })
 
   observe({
+    req(getOption("forecast", TRUE))
+
     grids <- rv$grids
     req(nrow(grids) > 0)
     urls <- isolate(rv$noaa_urls)
@@ -298,10 +321,11 @@ server <- function(input, output, session) {
   wx_args <- reactive(lst(
     weather = rv$weather,
     sites = sites_with_status(),
-    fetched_dates = selected_dates(),
+    selected_dates = selected_dates(),
+    fetched_dates = expanded_dates(),
     dates = list(
-      start = fetched_dates$start + days(30),
-      end = fetched_dates$end,
+      start = selected_dates$start,
+      end = selected_dates$end,
       today = today()
     ),
     forecast = if (dates$end == today()) wx_forecasts() else tibble()
@@ -552,7 +576,7 @@ server <- function(input, output, session) {
       new_sites <- load_sites(upload$datapath)
       rv$sites <- new_sites
       rv$selected_site <- first(new_sites$id)
-      fit_sites()
+      rv$map_cmd <- "fit_sites"
       rv$show_upload <- FALSE
       rv$upload_msg <- NULL
     }, error = function(e) {
@@ -655,7 +679,7 @@ server <- function(input, output, session) {
 
   output$date_btns_ui <- renderUI({
     btn_opts <- OPTS$date_btn_choices
-    cur_dates <- c(req(input$start_date), req(input$end_date))
+    cur_dates <- as.Date(c(rv$start_date, rv$end_date))
     presets <- date_presets()
 
     div(
@@ -700,24 +724,15 @@ server <- function(input, output, session) {
   ## action_ui ----
   output$action_ui <- renderUI({
     btn <- function(msg, ...) {
-      div(
-        class = "submit-btn",
-        actionButton("fetch", msg, ...)
-      )
+      div(class = "submit-btn", actionButton("fetch", msg, ...))
     }
 
     # used to promt button to regenerate
     rv$action_nonce
 
-    opts <- lst(
-      start_date = req(input$start_date),
-      end_date = req(input$end_date),
-      dates_valid = as_date(start_date) <= as_date(end_date)
-    )
-
     # control button appearance
     if (nrow(rv$sites) == 0) return(btn("No sites selected", disabled = TRUE))
-    if (!opts$dates_valid) return(btn("Invalid date selection", disabled = TRUE))
+    if (!rv$dates_valid) return(btn("Invalid date selection", disabled = TRUE))
     if (need_weather()) return(btn("Fetch weather"))
     btn("Everything up to date", class = "btn-primary", disabled = TRUE)
   })
@@ -726,10 +741,15 @@ server <- function(input, output, session) {
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
     msg <- req(rv$status_msg)
-    div(class = "shiny-output-error", style = "margin-top: 5px; padding: 10px;", msg)
+    echo(msg)
+    div(
+      class = "shiny-output-error",
+      style = "margin-top: 5px; padding: 10px;",
+      msg
+    )
   })
 
-  ### fetch_args // reactive ----
+  ## fetch_args // reactive ----
   # record coordinates and dates queried from IBM to avoid duplicate attempts
   # uses the grid lat/lng instead of site lat/lng if available
   fetch_args <- reactive({
@@ -741,7 +761,7 @@ server <- function(input, output, session) {
       ) %>%
       distinct(lat, lng)
 
-    date_range <- selected_dates()
+    date_range <- expanded_dates()
 
     list(
       sites = sites,
@@ -777,359 +797,21 @@ server <- function(input, output, session) {
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
   }) %>%
-    bindEvent(TRUE, input$fetch) # runs on launch & button press
-
-
-
-  # Map UI ---------------------------------------------------------------------
-
-  #* @param map leaflet proxy object
-  #* @param bounds named list { lat1, lat2, lng1, lng2 }
-  #* @param options leaflet zoom/pan options
-  fit_bounds <- function(map = leafletProxy("map"), bounds, options = NULL) {
-    args <- as.list(bounds)
-    args$map <- map
-    args$options = options
-    do.call(fitBounds, args)
-  }
-
-  ## map // renderLeaflet ----
-  output$map <- renderLeaflet({
-    #' @param map leaflet map to add basemaps
-    add_basemaps <- function(map) {
-      basemaps <- OPTS$map_tiles
-      for (name in names(basemaps)) {
-        map <- addProviderTiles(map, basemaps[[name]], group = name)
-      }
-      map
-    }
-
-    btn_js <- function(id) {
-      JS(paste0("(btn, map) => { Shiny.setInputValue('map_btn', '", id, "', {priority: 'event'}); }"))
-    }
-
-    btn1 <- easyButton(
-      title = "Get my location",
-      icon = "fa-location",
-      position = "topleft",
-      onClick = btn_js("user_loc")
-    )
-
-    btn2 <- easyButton(
-      title = "Fit all sites on the map",
-      icon = "fa-expand",
-      position = "topleft",
-      onClick = btn_js("zoom_sites")
-    )
-
-    btn3 <- easyButton(
-      title = "Show full map",
-      icon = "fa-globe",
-      position = "topleft",
-      onClick = btn_js("zoom_extent")
-    )
-
-    leaflet(options = leafletOptions(preferCanvas = T)) %>%
-      add_basemaps() %>%
-      fit_bounds(OPTS$map_bounds_wi) %>%
-      addMapPane("extent", 400) %>%
-      # addMapPane("counties", 410) %>%
-      addMapPane("grid", 420) %>%
-      addMapPane("sites", 430) %>%
-      addLayersControl(
-        baseGroups = names(OPTS$map_tiles),
-        overlayGroups = unlist(OPTS$map_layers, use.names = F),
-        options = layersControlOptions(collapsed = T)
-      ) %>%
-      addEasyButtonBar(btn1, btn2, btn3) %>%
-      # assign leaflet map object to global var 'map'
-      htmlwidgets::onRender("() => { map = this; }") %>%
-      suspendScroll(
-        sleepTime = 0,
-        wakeTime = 1000,
-        hoverToWake = F,
-        sleepNote = F,
-        sleepOpacity = 1
-      ) %>%
-      addPolygons(
-        data = service_bounds,
-        color = "black",
-        weight = 2,
-        fill = FALSE,
-        options = pathOptions(pane = "extent", interactive = FALSE)
-      )
-  })
-
-  ## Add counties to map ----
-  # observe({
-  #   delay(100, {
-  #     leafletProxy("map") %>%
-  #       addPolygons(
-  #         data = counties_sf,
-  #         group = OPTS$map_layers$counties,
-  #         label = ~paste0("<b>", state_name, "</b></br>", county_name, " County") %>%
-  #           lapply(HTML),
-  #         color = "black", weight = .2, opacity = .2,
-  #         fillColor = ~colorFactor(OPTS$state_colors, state_name)(state_name),
-  #         fillOpacity = .1,
-  #         options = pathOptions(pane = "counties")
-  #       )
-  #   })
-  # })
-
-  ## searchbox_ui // renderUI ----
-  output$searchbox_ui <- renderUI({
-    div(
-      HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_maps_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
-      # textInput("searchbox", "Find a location by name")
-      textInput("searchbox", NULL)
-    )
-  })
-
-  ## coord_search_ui // renderUI ----
-  # Coordinate searchbox under map
-  output$coord_search_ui <- renderUI({
-    runjs("
-      $(document).keyup((event) => {
-        if ($('#coord_search').is(':focus') && (event.key == 'Enter')) {
-          $('#coord_search_go').click();
-        }
-      });
-    ")
-    div(
-      style = "display: flex; flex-direction: column;",
-      # div(tags$label("Find a location by coordinates")),
-      div(
-        style = "display: inline-flex; gap: 5px;",
-        div(
-          style = "flex: 1;",
-          textInput(
-            inputId = "coord_search",
-            label = NULL,
-            placeholder = "Enter coordinates"
-          )
-        ),
-        div(
-          style = "margin-bottom: 10px;",
-          actionButton("coord_search_go", "Go")
-        )
-      )
-    )
-  })
-
-
-  # Map handlers ---------------------------------------------------------------
-
-  fly_to <- function(loc) {
-    leafletProxy("map") %>%
-      flyTo(loc$lng, loc$lat, max(10, isolate(input$map_zoom)))
-  }
-
-  fit_sites <- function() {
-    sites <- rv$sites
-    req(nrow(sites) > 0)
-    bounds <- list(
-      lat1 = min(sites$lat),
-      lat2 = max(sites$lat),
-      lng1 = min(sites$lng),
-      lng2 = max(sites$lng)
-    )
-    fit_bounds(bounds = bounds, options = list(padding = c(100, 100), maxZoom = 10))
-  }
-
-  ## Show site markers ----
-  observe({
-    map <- leafletProxy("map")
-    wx <- rv$weather
-    sites <- rv$sites
-    map %>% clearGroup("sites")
-    req(nrow(sites) > 0)
-
-    # determine site icons
-    sites <- if (nrow(wx) == 0) {
-      rv$sites %>% mutate(needs_download = TRUE)
-    } else {
-      sites_with_status()
-    }
-
-    sites <- sites %>%
-      mutate(
-        # icon = case_when(
-        #   temp ~ "thumbtack",
-        #   needs_download ~ "download",
-        #   !temp ~ as.character(id),
-        #   TRUE ~ "check"
-        # ),
-        marker_color = if_else(id == rv$selected_site, "red", "blue"),
-        label = paste0(
-          "<b>Site ", id, ": ", name,
-          if_else((nrow(sites) > 1) & id == rv$selected_site, " [Selected]", ""),
-          "</b><br>",
-          sprintf("%.3f°N, %.3f°W", lat, lng),
-          "<br>", if_else(needs_download, "Download required", "Data ready"),
-          "<br>", if_else(temp, "Click to pin site", "Pinned site")
-        ) %>% lapply(HTML)
-      )
-
-    leafletProxy("map") %>%
-      addAwesomeMarkers(
-        data = sites,
-        lat = ~lat,
-        lng = ~lng,
-        label = ~label,
-        layerId = ~id,
-        group = "sites",
-        icon = ~makeAwesomeIcon(
-          library = "fa",
-          # icon = icon,
-          markerColor = marker_color,
-          iconColor = "#fff",
-          text = id
-        ),
-        options = markerOptions(pane = "sites")
-      )
-  })
-
-  ## Show user weather data grids ----
-  # will only show grids that the user has interacted with in the session
-  observe({
-    map <- leafletProxy("map")
-    clearGroup(map, OPTS$map_layers$grid)
-
-    # user-selected grids this session
-    grids <- grids_with_status() %>%
-      filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
-
-    if (nrow(grids) > 0) {
-      grids <- grids %>%
-        mutate(
-          title = if_else(needs_download, "Weather grid (download required)", "Weather grid"),
-          color = if_else(needs_download, "orange", "darkgreen"),
-          label = paste0(
-            "<b>", title, "</b><br>",
-            "Earliest date: ", date_min, "<br>",
-            "Latest date: ", date_max, "<br>",
-            if_else(date_max == today(), paste0("Most recent data: ", hours_stale, " hours ago<br>"), ""),
-            "Total days: ", days_expected, "<br>",
-            "Missing days: ", days_missing, sprintf(" (%.1f%%)", 100 * days_missing_pct), "<br>",
-            "Missing hours: ", hours_missing, sprintf(" (%.1f%%)", 100 * hours_missing_pct), "<br>"
-          ) %>% lapply(HTML)
-        )
-      map %>%
-        addPolygons(
-          data = grids,
-          weight = 1,
-          label = ~label,
-          layerId = ~grid_id,
-          group = OPTS$map_layers$grid,
-          color = ~color,
-          opacity = 1,
-          # fillColor = ~color,
-          fillOpacity = 0,
-          options = pathOptions(pane = "grid")
-        )
-    }
-
-  })
-
-  ## Show all weather data grids ----
-  # only in development
-  observe({
-    req(session$clientData$url_hostname == "127.0.0.1")
-    leafletProxy("map") %>%
-      addPolylines(
-        data = wx_grids(),
-        color = "black",
-        weight = 0.25,
-        opacity = 1,
-        group = "grid",
-        options = pathOptions(pane = "grid")
-      )
-  })
-
-
-  ## Handle EasyButton clicks ----
-  observe({
-    btn <- req(input$map_btn)
-    map <- leafletProxy("map")
-
-    if (btn == "user_loc") {
-      runjs("
-        map.getMap().locate({ setView: false }).on('locationfound', (event) => {
-          Shiny.setInputValue('user_loc', event.latlng, {priority: 'event'})
-        })")
-    } else if (btn == "zoom_sites") {
-      fit_sites()
-    } else if (btn == "zoom_extent") {
-      fit_bounds(bounds = OPTS$map_bounds_us)
-    }
-  })
-
-  ## Handle coord search button ----
-  # try to parse coords and save if it works
-  observe({
-    str <- req(input$coord_search)
-    try({
-      coords <- parse_coords(str)
-      coord_hash <- paste0("{name: 'Searched', lat:", coords$lat, ", lng:", coords$lng, "}")
-      cmd <- paste0("Shiny.setInputValue('searched_loc', ", coord_hash, ", {priority: 'event'})")
-      runjs(cmd)
-    })
-  }) %>%
-    bindEvent(input$coord_search_go)
-
-  ## Handle searched location from google or coordinates ----
-  # name is already set by script
-  observe({
-    loc <- req(input$searched_loc)
-    site <- create_site(loc, rv$sites)
-    save_site(site)
-    fly_to(loc)
-    runjs("
-      document.getElementById('searchbox').value = '';
-      document.getElementById('coord_search').value = '';
-    ")
-  }) %>%
-    bindEvent(input$searched_loc)
-
-  ## Handle geolocation ----
-  observe({
-    loc <- req(input$user_loc)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
-  }) %>% bindEvent(input$user_loc)
-
-  ## Handle location from click ----
-  observe({
-    loc <- req(input$map_click)
-    runjs(str_glue("getLocalityName({loc$lat}, {loc$lng}, '{OPTS$google_geocoding_key}')"))
-  }) %>% bindEvent(input$map_click$.nonce)
-
-  ## Save site after getting locality name from geocoding api
-  observe({
-    loc <- req(input$locality_name)
-    site <- create_site(loc, rv$sites)
-    save_site(site)
-    fly_to(site)
-    runjs("sendShiny('locality_name', null)")
-  })
-
-  ## Handle marker click ----
-  observe({
-    marker <- req(input$map_marker_click)
-    id <- marker$id
-    sites <- rv$sites
-    site <- sites[id,]
-    if (rv$selected_site != id) rv$selected_site <- id
-    if (site$temp == TRUE) sites$temp[id] <- FALSE
-    rv$sites <- sites
-    # fly_to(marker)
-  }) %>%
-    bindEvent(input$map_marker_click$.nonce)
-
+    bindEvent(input$fetch) # runs on launch & button press
 
 
 
 # Module servers ----------------------------------------------------------
+
+  mapServer(
+    rv = rv,
+    map_data = reactive(list(
+      grids = wx_grids(),
+      grids_with_status = grids_with_status(),
+      sites_with_status = sites_with_status()
+    ))
+  )
+
 
   ## Data tab ----
 
