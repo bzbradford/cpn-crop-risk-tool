@@ -178,7 +178,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       # display warning when days_missing > 0 for any site
       output$weather_missing_ui <- renderUI({
         sites <- wx_data()$sites
-        req(rv$weather_ready && nrow(sites) > 0 && any(sites$days_missing > 0))
+        req(rv$weather_ready && nrow(sites) > 0 && any(sites$needs_download))
         div(
           style = "margin-bottom: 15px;",
           missing_weather_ui(n = nrow(sites))

@@ -1059,7 +1059,7 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
       hours_missing_pct = hours_missing / hours_expected,
       hours_stale = as.integer(difftime(time_max_expected, time_max_actual, units = "hours")),
       stale = hours_stale > OPTS$ibm_stale_hours,
-      needs_download = stale | days_missing > 0,
+      needs_download = stale | ((days_missing > 0) & (hours_missing > 12)),
       .by = grid_id
     ) %>%
     select(-tz)
