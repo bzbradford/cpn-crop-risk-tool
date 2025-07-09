@@ -42,6 +42,7 @@ suppressPackageStartupMessages({
 ## turn warnings into errors
 # options(warn = 2)
 
+# disable NOAA forecasts for testing
 # options(forecast = FALSE)
 
 # set up a second session for asynchronous tasks
@@ -123,7 +124,7 @@ calc_max <- function(x) {
 }
 
 roll_mean <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) mean(x, na.rm = T), fill = NA, partial = T)
+  zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = T)
 }
 
 # counts number consecutive runs of values above a threshold
@@ -431,7 +432,7 @@ OPTS <- lst(
     lng = "long",
     lng = "longitude"
   ),
-  max_sites = 10,
+  max_sites = 25,
   validation_sites_ready = "No sites selected, click on the map or load sites in the sidebar.",
   validation_weather_ready = "No weather data downloaded yet for the selected dates. Click 'Fetch Weather' to download.",
 
@@ -450,11 +451,10 @@ OPTS <- lst(
   crop_choices = setNames(names(crops), sapply(crops, \(x) x$name)),
 
 
-
-  # plotting
+  ## plotting ----
   plot_title_font = list(family = "Redhat Display", size = 14),
   plot_axis_font = list(family = "Redhat Text", size = 12),
-  site_attr_cols = c("site_id", "site_name", "site_lat", "site_lng", "temp"),
+  site_attr_cols = c("site_id", "site_name", "site_lat", "site_lng"),
   grid_attr_cols = c("grid_id", "grid_lat", "grid_lng", "date_min", "date_max", "days_expected", "days_actual", "days_missing", "days_missing_pct", "hours_expected", "hours_actual", "hours_missing", "hours_missing_pct", "geometry"),
   date_attr_cols = c("datetime_utc", "time_zone", "datetime_local", "date", "yday", "year", "month", "day", "hour", "night", "date_since_night"),
   daily_attr_cols = c("date", "yday", "year", "month", "day"),
@@ -511,7 +511,7 @@ noaa_parse_forecast <- function(periods) {
       # hoist the nested values
       p$probabilityOfPrecipitation <- p$probabilityOfPrecipitation$value
       # dewpoint is provided in Celsius
-      p$dewpoint <- p$dewpoint$value
+      p$dewPoint <- p$dewpoint$value
       p$relativeHumidity <- p$relativeHumidity$value
       p$windSpeed <- as.numeric(str_split_i(p$windSpeed, " ", 1))
       p
@@ -522,19 +522,20 @@ noaa_parse_forecast <- function(periods) {
     janitor::clean_names() %>%
     mutate(
       across(c(start_time, end_time), parse_datetime),
-      across(c(start_time, end_time), ~.x + minutes(20)),
-      across(temperature, f_to_c),
+      across(c(start_time, end_time), ~.x + minutes(20)), # align to IBM time 20 min past the hour
+      across(temperature, ~signif(f_to_c(.x), 4)),
       across(wind_speed, mi_to_km),
       across(wind_direction, wind_dir_to_deg)
     ) %>%
     select(
       datetime_utc = start_time,
       temperature,
-      temperature_dew_point = dewpoint,
+      dew_point,
       relative_humidity,
       wind_speed,
       wind_direction
-    )
+    ) %>%
+    mutate(dew_point_depression = abs(temperature - dew_point), .after = dew_point)
 }
 
 # get NOAA hourly forecast data
@@ -706,6 +707,14 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
 # )
 
 
+#' Create a single request for weather data, maximum length 1000 hours
+#' @param lat latitude of point
+#' @param lng longitude of point
+#' @param start_time dttm
+#' @param end_time dttm
+#' @param url endpoint, changed only for testing failures
+#' @param token IBM authentication token
+#' @returns httr2 request
 create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_weather_endpoint, token = get_ibm_token()) {
   request(url) %>%
     req_headers_redacted(
@@ -729,15 +738,15 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
 #   req_perform()
 
 
-#' Fetch hourly weather data from IBM
+#' Create a list of necessary to send to IBM for weather data
+#' Using the date vectors it selects time chunks and creates draft requests
 #' API documentation: https://docs.google.com/document/d/13HTLgJDpsb39deFzk_YCQ5GoGoZCO_cRYzIxbwvgJLI/edit?tab=t.0
 #' @param lat latitude of point
 #' @param lng longitude of point
 #' @param dates_need vector of dates needed
 #' @param dates_have vector of dates already downloaded
-#' @param url endpoint, changed only for testing failures
-#' @returns tibble, either with hourly data if successful or empty if failed
-get_ibm <- function(lat, lng, dates_need, dates_have = Date()) {
+#' @returns httr2 list of requests
+create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
   stime <- Sys.time()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
   chunks <- ibm_chunks(dates_need, dates_have, tz)
@@ -750,13 +759,32 @@ get_ibm <- function(lat, lng, dates_need, dates_have = Date()) {
   start_date <- min(dates_need)
   end_date <- max(dates_need)
 
-  responses <- tryCatch({
+  reqs <- lapply(chunks, function(chunk) {
+    create_ibm_request(lat, lng, chunk$start, chunk$end)
+  })
+
+  message(sprintf("Built requests for %.3f, %.3f from %s to %s with %s calls", lat, lng, start_date, end_date, length(reqs)))
+
+  reqs
+}
+
+# test_ibm_reqs <- create_ibm_reqs(43.0731, -89.4012, dates_need = seq.Date(ymd("2025-1-1"), ymd("2025-4-1"), by = 1))
+
+# str(test_ibm_reqs)
+
+
+
+#' Execute the list of IBM weather requests
+#' @param `reqs` list of IBM requests created by `create_ibm_reqs`
+#' @returns tibble ingestable by `clean_ibm` and ready for the data pipeline
+get_ibm <- function(reqs) {
+  stime <- Sys.time()
+
+  resps <- tryCatch({
     token <- get_ibm_token()
     if (!is.character(token)) stop("Failed to get IBM token.")
 
-    reqs <- lapply(chunks, \(chunk) create_ibm_request(lat, lng, chunk$start, chunk$end))
-
-    message(sprintf("Getting weather for %.3f, %.3f from %s to %s using %s requests...", lat, lng, start_date, end_date, length(reqs)))
+    message(sprintf("GET ==> %s IBM requests", length(reqs)))
 
     # perform parallel requests for each time chunk
     resps <- req_perform_parallel(reqs, on_error = "continue", progress = F)
@@ -780,28 +808,42 @@ get_ibm <- function(lat, lng, dates_need, dates_have = Date()) {
     tibble()
   })
 
-  wx <- bind_rows(responses)
+  wx <- bind_rows(resps)
   msg <- if (nrow(wx) > 0) {
-    str_glue("OK ==> Got weather for {lat}, {lng} from {start_date} to {end_date} in {round(Sys.time() - stime, 3)} using {length(chunks)} calls")
+    sprintf("OK ==> Performed %s requests in %s sec", length(reqs), round(Sys.time() - stime, 3))
   } else {
-    str_glue("FAIL ==> Could not get weather for {lat}, {lng} from {start_date} to {end_date}")
+    "FAIL ==> Requests did not succeed"
   }
   message(msg)
   wx
 }
 
+# get_ibm(test_ibm_reqs)
 
-# # should succeed
-# get_ibm(43.0731, -89.4012, dates_need = seq.Date(ymd("2025-1-1"), ymd("2025-1-10"), by = 1))
-# df <- get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31") %>% clean_ibm()
-# ggplot(df, aes(x = datetime_local, y = temperature)) + geom_line()
-#
-# # should fail
-# get_ibm(43.0731, -89.4012, "2024-1-1", "2024-12-31", url = 'foo')
-#
-# # should partially fail because start date is before earliest data 2015-6-29
-# get_ibm(43.0731, -89.4012, "2015-1-1", "2015-8-1")
 
+#' Does some minimal processing on the IBM response to set local time and date
+#' @param ibm_response hourly weather data received from API
+#' @returns tibble
+clean_ibm <- function(ibm_response) {
+  if (nrow(ibm_response) == 0) return(tibble())
+  ibm_response %>%
+    select(-OPTS$ibm_ignore_cols) %>%
+    select(
+      grid_id = gridpointId,
+      grid_lat = latitude,
+      grid_lng = longitude,
+      datetime_utc = validTimeUtc,
+      everything()
+    ) %>%
+    clean_names() %>%
+    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
+    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
+    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
+    mutate(date = as_date(datetime_local), .after = datetime_local)
+}
+
+# test_ibm <- test_ibm_raw %>% clean_ibm()
+# ggplot(test_ibm, aes(x = datetime_local, y = temperature)) + geom_line()
 
 
 #' Update weather for sites list and date range
@@ -813,6 +855,7 @@ fetch_weather <- function(sites, start_date, end_date) {
   all_dates <- seq.Date(start_date, end_date, 1)
   wx <- saved_weather
   sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+  reqs <- list()
 
   # for each site see how much weather is needed
   for (i in 1:nrow(sites)) {
@@ -846,24 +889,41 @@ fetch_weather <- function(sites, start_date, end_date) {
       }
     }
 
-    # get weather if needed
-    if (length(dates_need) > 0) {
-      resp <- get_ibm(site$lat, site$lng, dates_need, dates_have)
-      incProgress(1)
-      if (nrow(resp) == 0) {
-        status_msg <- sprintf("Unable to get some/all weather for %.2f, %.2f from %s to %s.", site$lat, site$lng, start_date, end_date)
-        next
-      }
-      new_wx <- resp %>%
-        clean_ibm() %>%
-        build_hourly()
-      wx <- bind_rows(new_wx, wx) %>%
-        distinct(grid_id, datetime_utc, .keep_all = T)
-    }
+    # skip if up to date
+    if (length(dates_need) == 0) next
+
+    # create requests
+    new_reqs <- create_ibm_reqs(
+      lat = coalesce(site$grid_lat, site$lat),
+      lng = coalesce(site$grid_lng, site$lng),
+      dates_need = dates_need,
+      dates_have = dates_have
+    )
+    reqs <- append(reqs, new_reqs)
+    incProgress(1)
   }
 
-  saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
-  write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
+  if (length(reqs) == 0) {
+    message("No requests in queue")
+    return()
+  }
+
+  resp <- get_ibm(reqs)
+
+  if (nrow(resp) == 0) {
+    status_msg <- "Unable to get some/all weather data requested. Please try again."
+  } else {
+    new_wx <- resp %>%
+      clean_ibm() %>%
+      build_hourly()
+
+    wx <- bind_rows(new_wx, wx) %>%
+      distinct(grid_id, datetime_utc, .keep_all = T)
+
+    saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
+    write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
+  }
+
   return(status_msg)
 }
 
@@ -1205,10 +1265,10 @@ predict_gls <- function(MinAT_21ma, MinDP_30ma) {
   logistic(mu)
 }
 
-# expand_grid(temp = 0:40, dp = 0:15) %>%
+# expand_grid(temp = 0:30, dp = 0:30) %>%
 #   mutate(prob = predict_gls(temp, dp)) %>%
-#   ggplot(aes(x = temp, y = dp, fill = prob)) +
-#   geom_tile() +
+#   ggplot(aes(x = temp, y = dp)) +
+#   geom_tile(aes(fill = prob)) +
 #   scale_fill_distiller(palette = "Spectral") +
 #   coord_cartesian(expand = F)
 
@@ -1704,25 +1764,20 @@ gdd_sine <- function(tmin, tmax, base) {
 
 # Data pipeline ----------------------------------------------------------------
 
-#' Does some minimal processing on the IBM response to set local time and date
-#' @param ibm_response hourly weather data received from API
-#' @returns tibble
-clean_ibm <- function(ibm_response) {
-  if (nrow(ibm_response) == 0) return(tibble())
-  ibm_response %>%
-    select(-OPTS$ibm_ignore_cols) %>%
-    select(
-      grid_id = gridpointId,
-      grid_lat = latitude,
-      grid_lng = longitude,
-      datetime_utc = validTimeUtc,
-      everything()
-    ) %>%
-    clean_names() %>%
-    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
-    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
-    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
-    mutate(date = as_date(datetime_local), .after = datetime_local)
+#' df must have cols `date` and `datetime_local`
+add_date_cols <- function(df) {
+  df %>%
+    mutate(
+      yday = yday(date),
+      year = year(date),
+      month = month(date),
+      day = day(date),
+      hour = hour(datetime_local),
+      night = !between(hour, 7, 19), # night is between 20:00 and 6:00
+      date_since_night = as_date(datetime_local + hours(4)),
+      .after = date,
+      .by = grid_id
+    )
 }
 
 
@@ -1736,21 +1791,22 @@ build_hourly <- function(ibm_hourly) {
       datetime_utc, time_zone, datetime_local, date,
       all_of(ibm_vars)
     ) %>%
-    mutate(
-      yday = yday(date),
-      year = year(date),
-      month = month(date),
-      day = day(date),
-      hour = hour(datetime_local),
-      night = !between(hour, 7, 19), # night is between 20:00 and 6:00
-      date_since_night = as_date(datetime_local + hours(4)),
-      .after = date,
-      .by = grid_id
-    ) %>%
+    add_date_cols() %>%
     arrange(grid_lat, grid_lng, datetime_local) %>%
-    mutate(precip_cumulative = cumsum(precip), .after = precip) %>%
-    mutate(snow_cumulative = cumsum(snow), .after = snow) %>%
-    mutate(dew_point_depression = abs(temperature - dew_point), .after = dew_point)
+    mutate(
+      precip_cumulative = cumsum(precip),
+      .by = grid_id,
+      .after = precip
+    ) %>%
+    mutate(
+      snow_cumulative = cumsum(snow),
+      .by = grid_id,
+      .after = snow
+    ) %>%
+    mutate(
+      dew_point_depression = abs(temperature - dew_point),
+      .after = dew_point
+    )
 }
 
 # saved_weather %>% build_hourly()
@@ -1838,7 +1894,7 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   attr <- daily %>% select(grid_id, any_of(OPTS$date_attr_cols))
 
   # define moving average functions
-  roll_mean <- function(vec, width) rollapply(vec, width, \(x) mean(x, na.rm = T), fill = NA, partial = T, align = align)
+  roll_mean <- function(vec, width) rollapply(vec, width, \(x) calc_mean(x), partial = TRUE, align = align)
   fns <- c(
     "7day" = ~roll_mean(.x, 7),
     "14day" = ~roll_mean(.x, 14),
@@ -1851,14 +1907,19 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
     select(-hours) %>%
     mutate(
       across(starts_with(c("temperature", "dew_point", "relative_humidity", "wind", "pressure", "hours")), fns),
+      .by = grid_id,
       .keep = "none"
-    )
+    ) %>%
+    select(-grid_id)
 
   # bind attributes
   bind_cols(attr, ma)
 }
 
-# saved_weather %>% build_hourly() %>% build_daily() %>% build_ma_from_daily()
+# test <- saved_weather %>% build_daily() %>% filter(grid_id == sample(grid_id, 1)) %>% build_ma_from_daily()
+# test <- saved_weather %>% build_daily() %>% build_ma_from_daily()
+# ggplot(test, aes(x = date, color = grid_id)) +
+#   geom_line(aes(y = dew_point_min_7day))
 
 
 
@@ -1878,7 +1939,8 @@ build_disease_from_daily <- function(daily) {
       alternaria_dsv = calc_alternaria_dsv(temperature_mean_rh_over_90, hours_rh_over_90),
       cercospora_div = calc_cercospora_div(temperature_mean_rh_over_90, hours_rh_over_90),
       botrytis_dsi = calc_botrytis_dsi(hot_past_5_days, dry, hours_rh_over_90, temperature_mean_rh_over_90),
-      .keep = "none", .by = grid_id
+      .by = grid_id,
+      .keep = "none"
     ) %>%
     # mutate(across(everything(), c(cumulative = cumsum)), .by = grid_id) %>%
     # select(sort(names(.))) %>%
@@ -1911,7 +1973,8 @@ build_disease_from_ma <- function(daily) {
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
       dew_point_min_30day = roll_mean(dew_point_min, 30),
       hours_rh_over_80_30day = roll_mean(hours_rh_over_80, 30),
-      hours_rh_over_90_night_14day = roll_mean(hours_rh_over_90_night, 14)
+      hours_rh_over_90_night_14day = roll_mean(hours_rh_over_90_night, 14),
+      .by = grid_id
     ) %>%
     mutate(
       white_mold_dry_prob = predict_whitemold_dry(temperature_max_30day, kmh_to_mps(wind_speed_max_30day), relative_humidity_max_30day) %>%
@@ -1927,7 +1990,8 @@ build_disease_from_ma <- function(daily) {
         attenuate_prob(temperature_min_21day),
       frogeye_leaf_spot_prob =
         predict_fls(temperature_max_30day, hours_rh_over_80_30day),
-      .keep = "none", .by = grid_id
+      .by = grid_id,
+      .keep = "none"
     ) %>%
     select(sort(names(.))) %>%
     select(-grid_id)
@@ -1966,7 +2030,10 @@ build_gdd_from_daily <- function(daily) {
 
   # assemble, add cumulative cols, sort names
   bind_cols(attr, gdd) %>%
-    mutate(across(starts_with("base_"), c(cumulative = cumsum)), .by = grid_id) %>%
+    mutate(
+      across(starts_with("base_"), c(cumulative = cumsum)),
+      .by = grid_id
+    ) %>%
     select(
       all_of(names(attr)),
       all_of(sort(names(.)))
@@ -1983,11 +2050,10 @@ sites_template <- tibble(
   id = integer(),
   name = character(),
   lat = numeric(),
-  lng = numeric(),
-  temp = logical()
+  lng = numeric()
 )
 
-Site <- function(name, lat, lng, temp = TRUE, id = 999) {
+Site <- function(name, lat, lng, id = 999) {
   site <- as.list(environment())
 }
 
@@ -2011,7 +2077,6 @@ load_sites <- function(fpath) {
   if (nrow(df) == 0) stop("No valid locations within service area.")
   df %>%
     mutate(id = row_number(), .before = 1) %>%
-    mutate(temp = FALSE) %>%
     head(OPTS$max_sites)
 }
 

@@ -184,7 +184,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         req(nrow(sites) > 1)
 
         choices <- set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-        selected <- selected_site()
+        selected <- first_truthy(input$plot_sites, selected_site())
 
         checkboxGroupInput(
           inputId = ns("plot_sites"),

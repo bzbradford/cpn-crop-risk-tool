@@ -72,7 +72,9 @@ mapServer <- function(rv, map_data) {
       }
 
       save_site <- function(site) {
-        if (nrow(rv$sites) == OPTS$max_sites) return()
+        sites <- rv$sites
+
+        if (nrow(sites) == OPTS$max_sites) return()
 
         if (!validate_ll(site$lat, site$lng)) {
           show_toast(
@@ -83,14 +85,36 @@ mapServer <- function(rv, map_data) {
           req(FALSE)
         }
 
-        sites <- rv$sites %>%
-          filter(!temp) %>%
-          bind_rows(as_tibble(site)) %>%
-          distinct(lat, lng, .keep_all = T) %>%
-          mutate(id = row_number())
+        # if several sites already, confirm each new map click
+        # value may be FALSE if cancelled or string (name of site from modal)
+        finalize <- function(value) {
+          req(value)
 
-        rv$sites <- sites
-        rv$selected_site <- last(sites$id)
+          value <- sanitize_loc_names(value)
+          req(value)
+
+          site$name <- value
+          sites <- sites %>%
+            bind_rows(as_tibble(site)) %>%
+            distinct(lat, lng, .keep_all = T) %>%
+            mutate(id = row_number())
+
+          rv$sites <- sites
+          rv$selected_site <- last(sites$id)
+        }
+
+        shinyalert(
+          text = sprintf("Add new site at %.2f, %.2f?", site$lat, site$lng),
+          type = "input",
+          inputType = "text",
+          inputValue = site$name,
+          closeOnClickOutside = FALSE,
+          showCancelButton = TRUE,
+          confirmButtonText = "Save",
+          confirmButtonCol = "#008bb6",
+          cancelButtonText = "Cancel",
+          callbackR = finalize
+        )
       }
 
       get_loc_name <- function(lat, lng, name) {
@@ -257,8 +281,7 @@ mapServer <- function(rv, map_data) {
               if_else((nrow(sites) > 1) & id == rv$selected_site, " [Selected]", ""),
               "</b><br>",
               sprintf("%.3f°N, %.3f°W", lat, lng),
-              "<br>", if_else(needs_download, "Download required", "Data ready"),
-              "<br>", if_else(temp, "Click to pin site", "Pinned site")
+              "<br>", if_else(needs_download, "Download required", "Data ready")
             ) %>% lapply(HTML)
           )
 
@@ -408,7 +431,6 @@ mapServer <- function(rv, map_data) {
         sites <- rv$sites
         site <- sites[id,]
         if (rv$selected_site != id) rv$selected_site <- id
-        if (site$temp == TRUE) sites$temp[id] <- FALSE
         rv$sites <- sites
         # fly_to(marker)
       }) %>%

@@ -210,7 +210,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
         site_data <- sites %>%
           st_drop_geometry() %>%
           select(site_label, grid_id) %>%
-          left_join(disease_data, join_by(grid_id)) %>%
+          left_join(disease_data, join_by(grid_id), relationship = "many-to-many") %>%
           mutate(name = fct_inorder(name))
 
         site_labels <- unique(sites$site_label)

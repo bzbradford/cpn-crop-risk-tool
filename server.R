@@ -313,7 +313,8 @@ server <- function(input, output, session) {
 
     df %>%
       mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
-      mutate(date = as_date(datetime_local), .after = datetime_local)
+      mutate(date = as_date(datetime_local), .after = datetime_local) %>%
+      add_date_cols()
   })
 
   # observe(echo(wx_forecasts()))
@@ -358,6 +359,7 @@ server <- function(input, output, session) {
       filter(grid_id %in% sites$grid_id) %>%
       filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
       bind_rows(forecast) %>%
+      distinct(grid_id, datetime_local, .keep_all = TRUE) %>%
       arrange(grid_id, datetime_local)
 
     # remove the earlier dates that were used for moving averages
@@ -402,12 +404,8 @@ server <- function(input, output, session) {
     sites <- rv$sites
     text <- if (nrow(sites) == 0) {
       "You don't have any sites. Click on the map or use the search boxes at the bottom of the map to set a location."
-    } else if (nrow(sites) == 1) {
-      "Use the pin icon to hold a site and add additional sites. Then click on the map or use the search boxes at the bottom of the map to set a location."
-    } else if (any(sites$temp)) {
-      "Use the pin icon to hold a site and add additional sites. Change the name of a pinned site using the pencil icon. Clicking on the map or using the search boxes will replace the last site on the list unless you pin it."
     } else {
-      "Edit or delete a site using the icons to the right. Click on the map or use the search boxes to add another location."
+      "Edit or delete a site using the pen or trash icons. Click on the map or use the search boxes to add another location."
     }
     p(style = "font-size: small", text)
   })
@@ -422,11 +420,10 @@ server <- function(input, output, session) {
         loc = sprintf("%.2f, %.2f", lat, lng),
         btns = paste0(
           "<div style='display:inline-flex; gap:10px; padding: 5px;'>",
-          if_else(temp, site_action_link("save", id), site_action_link("edit", id, name)),
+          site_action_link("edit", id, name),
           site_action_link("trash", id),
           "</div>"
-        ) %>% lapply(HTML),
-        name = sanitize_loc_names(name)
+        ) %>% lapply(HTML)
       ) %>%
       select(id, name, loc, btns)
   })
@@ -487,12 +484,6 @@ server <- function(input, output, session) {
   #   runjs(sprintf("$('#sites_dt table.dataTable tr:nth-child(%s)').addClass('selected')", selected))
   # })
 
-  ## Handle save_site button ----
-  # only ever 1 temporary site so just make all sites saved
-  observeEvent(input$save_site, {
-    rv$sites <- rv$sites %>% mutate(temp = FALSE)
-  })
-
   ## Handle trash_site button ----
   observeEvent(input$trash_site, {
     to_delete_id <- req(input$trash_site)
@@ -551,7 +542,7 @@ server <- function(input, output, session) {
       tags$label("Upload csv"), br(),
       div(
         style = "font-style: italic;",
-        "Upload a csv with columns: name, lat/latitude, lng/long/longitude. Latitude and longitude must be in +/- decimal degrees. Maximum of 10 sites."
+        paste("Upload a csv with columns: name, lat/latitude, lng/long/longitude. Latitude and longitude must be in +/- decimal degrees. Maximum of", OPTS$max_sites, "sites.")
       ),
       div(
         style = "margin-top: 10px;",
@@ -734,9 +725,9 @@ server <- function(input, output, session) {
     req(wx_args())
     req(need_weather())
 
-    message('Auto-fetching weather data in 10 seconds...')
-    delay(10000, {
-      message("Auto-fetching weather data...")
+    # message('Auto-fetching weather data in 15 seconds...')
+    delay(15000, {
+      # message("Auto-fetching weather data...")
       rv$fetch <- runif(1)
     })
   })
