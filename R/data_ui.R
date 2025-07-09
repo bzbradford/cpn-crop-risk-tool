@@ -170,7 +170,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## weather_missing_ui // renderUI ----
       output$weather_missing_ui <- renderUI({
         sites <- wx_data()$sites
-        req(rv$ready, nrow(sites) > 0, any(sites$days_missing > 0))
+        req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
 
         div(
           style = "margin-bottom: 15px;",
