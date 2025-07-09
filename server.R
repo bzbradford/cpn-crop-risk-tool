@@ -9,6 +9,9 @@ server <- function(input, output, session) {
     weather = saved_weather,
     weather_ready = nrow(saved_weather) > 0,
 
+    # can trigger a weather fetch
+    fetch = NULL,
+
     # table storing site locations
     sites = sites_template,
     sites_ready = FALSE,
@@ -355,10 +358,7 @@ server <- function(input, output, session) {
       filter(grid_id %in% sites$grid_id) %>%
       filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
       bind_rows(forecast) %>%
-      arrange(grid_id, datetime_local) %>%
-      build_hourly()
-
-    # runtime("hourly", t)
+      arrange(grid_id, datetime_local)
 
     # remove the earlier dates that were used for moving averages
     wx$hourly <- hourly_full %>% filter(date >= dates$start)
@@ -658,36 +658,44 @@ server <- function(input, output, session) {
 
 
   ## date_presets // reactive ----
+  # creates the named set of dates for the date preset buttons
   date_presets <- reactive({
     d <- today()
     y <- year(d)
+    jan1 <- make_date(y, 1, 1)
+    apr1 <- make_date(y, 4, 1)
+    nov1 <- make_date(y, 11, 1)
+    dec31 <- make_date(y, 12, 31)
     list(
-      "week" = c(d - 7, d),
-      "month" = c(d - 30, d),
-      "thisyear" = c(make_date(y, 1, 1), d),
-      "fullyear" = c(d - 365, d),
-      "lastyear" = c(make_date(y - 1, 1, 1), make_date(y - 1, 12, 31)),
-      "lastseason" = c(make_date(y - 1, 5, 1), make_date(y - 1, 10, 31))
+      "past_week" = c(d - 7, d),
+      "past_month" = c(d - 30, d),
+      "this_season" = c(min(d, apr1), min(d, nov1)),
+      "this_year" = c(jan1, d),
+      # "fullyear" = c(d - 365, d),
+      "last_year" = c(jan1 - years(1), dec31 - years(1)),
+      "last_season" = c(apr1 - years(1), nov1 - years(1))
     )
   })
 
   ## date_btns_ui ----
+  # create a date button element
   date_btn <- function(value, label, btn_class = c("default", "primary")) {
     btn_class <- match.arg(btn_class)
     HTML(str_glue("<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"))
   }
 
+  # create the date buttons component
   output$date_btns_ui <- renderUI({
-    btn_opts <- OPTS$date_btn_choices
     cur_dates <- as.Date(c(rv$start_date, rv$end_date))
     presets <- date_presets()
 
     div(
       class = "date-btns",
-      lapply(names(btn_opts), function(label) {
-        value <- btn_opts[[label]]
-        selected <- setequal(cur_dates, presets[[value]])
-        date_btn(value, label, btn_class = ifelse(selected, "primary", "default"))
+      lapply(names(presets), function(name) {
+        value <- presets[[name]]
+        label <- snakecase::to_sentence_case(name)
+        selected <- setequal(cur_dates, value)
+        date_btn(name, label, btn_class = ifelse(selected, "primary", "default"))
       })
     )
   })
@@ -719,6 +727,18 @@ server <- function(input, output, session) {
     if (anyNA(sites$grid_id)) return(TRUE)
     if (any(sites$needs_download)) return(TRUE)
     FALSE
+  })
+
+  # force a weather fetch if it's needed and hasn't been triggered in 10 seconds
+  observe({
+    req(wx_args())
+    req(need_weather())
+
+    message('Auto-fetching weather data in 10 seconds...')
+    delay(10000, {
+      message("Auto-fetching weather data...")
+      rv$fetch <- runif(1)
+    })
   })
 
   ## action_ui ----
@@ -797,7 +817,7 @@ server <- function(input, output, session) {
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
   }) %>%
-    bindEvent(input$fetch) # runs on launch & button press
+    bindEvent(input$fetch, rv$fetch) # runs on launch & button press
 
 
 

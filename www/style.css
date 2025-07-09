@@ -367,6 +367,15 @@ td.tbl-coords {
   border-radius: 5px;
 }
 
+.missing-weather-notice {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid orange;
+  border-radius: 5px;
+  background-color: white;
+  padding: 5px;
+}
 
 
 

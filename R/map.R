@@ -318,6 +318,7 @@ mapServer <- function(rv, map_data) {
         grids <- map_data()$grids
 
         proxy_map %>%
+          clearGroup("grid") %>%
           addPolylines(
             data = grids,
             color = "black",

@@ -51,6 +51,7 @@ plan(multisession(workers = 2))
 
 ## Load files ----
 saved_weather_file <- "data/saved_weather.fst"
+# file.remove(saved_weather_file)
 saved_weather <- if (file.exists(saved_weather_file)) {
   read_fst(saved_weather_file) %>%
     as_tibble() %>%
@@ -384,15 +385,6 @@ OPTS <- lst(
   ## dates ----
   earliest_date = ymd("2015-1-1"),
   default_start_date = today() - 30,
-  date_btn_choices = list(
-    "Past week" = "week",
-    "Past month" = "month",
-    "This year" = "thisyear",
-    "Full year" = "fullyear",
-    "Last year" = "lastyear",
-    "Last season" = "lastseason"
-  ),
-
 
   ## map ----
   # state_colors = {
@@ -860,7 +852,9 @@ fetch_weather <- function(sites, start_date, end_date) {
         status_msg <- sprintf("Unable to get some/all weather for %.2f, %.2f from %s to %s.", site$lat, site$lng, start_date, end_date)
         next
       }
-      new_wx <- clean_ibm(resp)
+      new_wx <- resp %>%
+        clean_ibm() %>%
+        build_hourly()
       wx <- bind_rows(new_wx, wx) %>%
         distinct(grid_id, datetime_utc, .keep_all = T)
     }
@@ -869,29 +863,6 @@ fetch_weather <- function(sites, start_date, end_date) {
   saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
   write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
   return(status_msg)
-}
-
-
-
-#' Does some minimal processing on the IBM response to set local time and date
-#' @param ibm_response hourly weather data received from API
-#' @returns tibble
-clean_ibm <- function(ibm_response) {
-  if (nrow(ibm_response) == 0) return(tibble())
-  ibm_response %>%
-    select(-OPTS$ibm_ignore_cols) %>%
-    select(
-      grid_id = gridpointId,
-      grid_lat = latitude,
-      grid_lng = longitude,
-      datetime_utc = validTimeUtc,
-      everything()
-    ) %>%
-    clean_names() %>%
-    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
-    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
-    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
-    mutate(date = as_date(datetime_local), .after = datetime_local)
 }
 
 
@@ -945,8 +916,8 @@ measures <- tribble(
   "relative_humidity",       "%",    "%",    \(x) x, # no conversion
   "precip",                  "mm",   "in",   mm_to_in,
   "snow",                    "cm",   "in",   cm_to_in,
-  "wind_speed",              "m/s",  "mph",  mps_to_mph,
-  "wind_gust",               "m/s",  "mph",  mps_to_mph,
+  "wind_speed",              "kmh",  "mph",  km_to_mi,
+  "wind_gust",               "kmh",  "mph",  km_to_mi,
   "wind_direction",          "°",    "°",    \(x) x, # no conversion
   "pressure_mean_sea_level", "mbar", "inHg", mbar_to_inHg,
   "pressure_change",         "mbar", "inHg", mbar_to_inHg,
@@ -1731,6 +1702,28 @@ gdd_sine <- function(tmin, tmax, base) {
 
 # Data pipeline ----------------------------------------------------------------
 
+#' Does some minimal processing on the IBM response to set local time and date
+#' @param ibm_response hourly weather data received from API
+#' @returns tibble
+clean_ibm <- function(ibm_response) {
+  if (nrow(ibm_response) == 0) return(tibble())
+  ibm_response %>%
+    select(-OPTS$ibm_ignore_cols) %>%
+    select(
+      grid_id = gridpointId,
+      grid_lat = latitude,
+      grid_lng = longitude,
+      datetime_utc = validTimeUtc,
+      everything()
+    ) %>%
+    clean_names() %>%
+    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
+    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
+    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
+    mutate(date = as_date(datetime_local), .after = datetime_local)
+}
+
+
 #' Creates the working hourly weather dataset from cleaned ibm response
 #' @param ibm_hourly hourly weather data from `clean_ibm` function
 #' @returns tibble
@@ -1853,6 +1846,7 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 
   # apply moving average functions to each primary data column
   ma <- daily %>%
+    select(-hours) %>%
     mutate(
       across(starts_with(c("temperature", "dew_point", "relative_humidity", "wind", "pressure", "hours")), fns),
       .keep = "none"
@@ -2056,7 +2050,7 @@ missing_weather_ui <- function(n = 1) {
   )
 
   div(
-    style = "width: 100%; display: inline-flex; align-items: center; border: 1px solid orange; border-radius: 5px; background-color: white; padding; 5px;",
+    class = "missing-weather-notice",
     div(style = "color: orange; padding: 10px; font-size: 1.5em;", icon("warning")),
     div(em(msg, "Press", strong("Fetch weather"), "on the sidebar to download any missing data."))
   )
