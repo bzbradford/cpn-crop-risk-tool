@@ -197,7 +197,7 @@ mapServer <- function(rv, map_data) {
       output$searchbox_ui <- renderUI({
         div(
           title = "Search by name for a city or place",
-          HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_maps_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+          HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_places_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
           # textInput("searchbox", "Find a location by name")
           textInput(ns("searchbox"), NULL)
         )

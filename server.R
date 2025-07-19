@@ -352,8 +352,6 @@ server <- function(input, output, session) {
     wx$sites <- sites
     wx$dates <- dates
 
-    # t <- runtime("wx_data")
-
     # allow up to 30 days before selected start date
     hourly_full <- weather %>%
       filter(grid_id %in% sites$grid_id) %>%
@@ -369,16 +367,6 @@ server <- function(input, output, session) {
 
     wx$daily_full <- build_daily(hourly_full)
     wx$daily <- wx$daily_full %>% filter(date >= dates$start)
-
-    # runtime("daily", t)
-
-    d1 <- build_disease_from_ma(wx$daily_full)
-    d2 <- build_disease_from_daily(wx$daily)
-    wx$disease <-
-      left_join(d1, d2, join_by(grid_id, date)) %>%
-      filter(date >= dates$start)
-
-    # runtime("disease", t)
 
     wx
   }) %>%
@@ -402,12 +390,19 @@ server <- function(input, output, session) {
   ## site_help_ui ----
   output$site_help_ui <- renderUI({
     sites <- rv$sites
-    text <- if (nrow(sites) == 0) {
+    n <- nrow(sites)
+    str <- if (n == 0) {
       "You don't have any sites. Click on the map or use the search boxes at the bottom of the map to set a location."
+    } else if (n == OPTS$max_sites) {
+      "Edit or delete a site using the pen or trash icons."
     } else {
       "Edit or delete a site using the pen or trash icons. Click on the map or use the search boxes to add another location."
     }
-    p(style = "font-size: small", text)
+    if (n > 10) {
+      str <- paste(str, "<i>Note: App may be slower when many sites are added.</i>")
+    }
+
+    p(style = "font-size: small", HTML(str))
   })
 
   ## sites_tbl_data ----
@@ -460,7 +455,8 @@ server <- function(input, output, session) {
           list(className = "dt-right", targets = 3)
         )
       )
-    )
+    ) %>%
+      formatStyle(0:3, lineHeight = "1rem")
 
     dt_observer$resume()
 
@@ -503,22 +499,31 @@ server <- function(input, output, session) {
 
   ### site_btns // renderUI ----
   output$site_btns <- renderUI({
-    btn <- function(id, label, ...) actionButton(id, label, class = "btn-sm", ...)
+    # btn <- function(id, label, ...) actionButton(id, label, class = "btn-sm", ...)
     sites <- isolate(rv$sites)
     div(
       style = "margin-top: 10px;",
       div(
         class = "flex-across",
         # btn("load_example", "Test sites"),
-        btn("upload_csv", "Upload csv"),
-        btn("clear_sites", "Clear sites", disabled = nrow(sites) == 0),
+        actionButton(
+          "upload_csv", "Upload csv",
+          class = sprintf(
+            "btn-sm btn-%s",
+            ifelse(isTruthy(rv$show_upload), "primary", "default")
+          )
+        ),
+        actionButton(
+          "clear_sites", "Clear sites",
+          class = "btn-sm",
+          disabled = nrow(sites) == 0
+        ),
         if (nrow(sites) == 0) {
           downloadButton("export_sites", "Export sites", class = "btn-sm", disabled = TRUE)
         } else {
           downloadButton("export_sites", "Export sites", class = "btn-sm")
         }
-      ),
-      uiOutput("file_upload_ui")
+      )
     )
   })
 
@@ -534,14 +539,23 @@ server <- function(input, output, session) {
     }
   })
 
-  ### file_upload_ui // renderUI ----
+
+  ## Site csv upload ----
+
+  observe({
+    rv$show_upload <- !rv$show_upload
+  }) %>% bindEvent(input$upload_csv)
+
+
+  ### file_upload_ui ----
+
   output$file_upload_ui <- renderUI({
     req(rv$show_upload)
+
     div(
-      style = "margin-top: 10px;",
+      style = "margin-top: 1rem;",
       tags$label("Upload csv"), br(),
-      div(
-        style = "font-style: italic;",
+      em(
         paste("Upload a csv with columns: name, lat/latitude, lng/long/longitude. Latitude and longitude must be in +/- decimal degrees. Maximum of", OPTS$max_sites, "sites.")
       ),
       div(
@@ -550,16 +564,11 @@ server <- function(input, output, session) {
           inputId = "sites_csv",
           label = NULL,
           accept = ".csv"
-        )
+        ),
       ),
       { if (!is.null(rv$upload_msg)) div(class = "shiny-error", rv$upload_msg) }
     )
   })
-
-  ### Handle file upload ----
-  observe({
-    rv$show_upload <- !rv$show_upload
-  }) %>% bindEvent(input$upload_csv)
 
   observe({
     upload <- req(input$sites_csv)
@@ -621,7 +630,7 @@ server <- function(input, output, session) {
   output$date_select_ui <- renderUI({
     div(
       class = "flex-across",
-      style = "row-gap: 0px;",
+      style = "row-gap: 0px; padding-top: 1rem;",
       div(
         style = "flex: 1 0; min-width: 120px",
         dateInput(
@@ -720,6 +729,8 @@ server <- function(input, output, session) {
     FALSE
   })
 
+  observe(echo(sites_with_status()))
+
   # force a weather fetch if it's needed and hasn't been triggered in 10 seconds
   observe({
     req(wx_args())
@@ -789,7 +800,7 @@ server <- function(input, output, session) {
 
   ## Handle fetching on click ----
   observe({
-    req(!already_fetched())
+    # req(!already_fetched())
 
     args <- fetch_args()
     disable("fetch")

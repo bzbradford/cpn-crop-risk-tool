@@ -33,20 +33,23 @@ ui <- fluidPage(
     div(class = "column sidebar-col",
 
       h2("Site selection", style = "margin-bottom: 1rem;"),
+
       div(
-        style = "max-height: 600px;",
         uiOutput("site_help_ui"),
         div(
           style = "max-height: 400px; overflow: auto;",
           DTOutput("sites_dt"),
         ),
-        uiOutput("site_btns")
+        uiOutput("site_btns"),
+        uiOutput("file_upload_ui")
       ),
+
       div(
-        style = "margin-top: 2rem;",
+        style = "margin-top: 1rem;",
         uiOutput("date_select_ui"),
         uiOutput("date_btns_ui")
       ),
+
       div(
         style = "margin-top: 1rem;",
         uiOutput("action_ui") %>%

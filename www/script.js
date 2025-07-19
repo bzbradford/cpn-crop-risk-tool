@@ -1,5 +1,11 @@
-// JS functions for Researcher's Weather Tool
+// JS functions for CPN Crop Risk Tool
 
+// make all modal links open in new tab
+$(document).on('shown.bs.modal', function() {
+  $('.modal a').attr('target', '_blank');
+});
+
+// helper to send values to the shiny server
 function sendShiny(inputId, content) {
   Shiny.setInputValue(inputId, content, { priority: 'event'} )
 }

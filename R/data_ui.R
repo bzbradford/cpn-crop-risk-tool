@@ -39,6 +39,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (nrow(wx$hourly) > 0) {
           wx$ma_center <- build_ma_from_daily(wx$daily_full, "center")
           wx$ma_right <- build_ma_from_daily(wx$daily_full, "right")
+          # d1 <- build_disease_from_ma(wx$daily_full)
+          # d2 <- build_disease_from_daily(wx$daily)
+          # wx$disease <-
+          #   left_join(d1, d2, join_by(grid_id, date)) %>%
+          #   filter(date >= wx$dates$start)
           wx$gdd <- build_gdd_from_daily(wx$daily)
           rv$data <- wx
         } else {
@@ -74,7 +79,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             "center" = wx$ma_center,
             "right" = wx$ma_right
           ),
-          "disease" = wx$disease,
+          # "disease" = wx$disease,
           "gdd" = wx$gdd
         )
 
@@ -132,7 +137,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             class = "plotly-container",
             plotlyOutput(ns("data_plot"))
           ),
-          downloadButton(ns("download_data"), "Download dataset")
+          div(
+            style = "text-align: right;",
+            downloadButton(ns("download_data"), "Download dataset", class = "btn-sm")
+          )
         )
       })
 
@@ -390,7 +398,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
 
         # indicate forecast
-        if (input$forecast) {
+        if (isTruthy(input$forecast)) {
           plt %>% plotly_show_forecast(xmax = opts$date_range[2])
         } else {
           plt

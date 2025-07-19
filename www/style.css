@@ -282,7 +282,7 @@ footer {
 }
 
 
-/*--- STYLES ---*/
+/*--- DATA TABLES ---*/
 
 /* fix for DTOutput and server=TRUE */
 table {
@@ -298,6 +298,9 @@ td.tbl-coords {
   max-width: 100%;
   overflow: auto;
 }
+
+
+/*--- STYLES ---*/
 
 .shiny-input-container:not(.shiny-input-container-inline) {
   width: unset;

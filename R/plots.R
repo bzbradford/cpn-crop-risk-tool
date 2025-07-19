@@ -23,7 +23,9 @@ plotly_show_forecast <- function(plt, xmax) {
     x = x, y = 1,
     text = label,
     showarrow = F,
-    opacity = .5
+    opacity = .5,
+    xanchor = "right",
+    align = "right"
   ))
 
   vline <- list(list(
