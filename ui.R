@@ -27,48 +27,39 @@ ui <- fluidPage(
       actionLink("about", icon("circle-info"))
     )
   ),
-  div(
-    class = "main",
-    div(
-      class = "column sidebar-col",
+
+  div(class = "main",
+
+    div(class = "column sidebar-col",
+
       h2("Site selection", style = "margin-bottom: 1rem;"),
+
       div(
-        style = "max-height: 600px;",
         uiOutput("site_help_ui"),
         div(
           style = "max-height: 400px; overflow: auto;",
           DTOutput("sites_dt"),
         ),
-        uiOutput("site_btns")
+        uiOutput("site_btns"),
+        uiOutput("file_upload_ui")
       ),
+
       div(
-        style = "margin-top: 2rem;",
+        style = "margin-top: 1rem;",
         uiOutput("date_select_ui"),
         uiOutput("date_btns_ui")
       ),
+
       div(
         style = "margin-top: 1rem;",
         uiOutput("action_ui") %>%
-          withSpinner(type = 8, size = .5, proxy.height = 50, caption = "Please wait..."),
+          withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Please wait..."),
         uiOutput("status_ui")
       )
     ),
-    div(
-      class = "column map-col",
-      div(
-        style = "padding: 1rem;",
-        h2("Site map"),
-      ),
-      div(
-        class = "map-container",
-        leafletOutput("map", height = "100%"),
-        div(
-          class = "search-overlay",
-          uiOutput("searchbox_ui"),
-          uiOutput("coord_search_ui")
-        )
-      ),
-    ),
+
+    div(class = "column map-col", mapUI()),
+
     div(
       class = "column data-col",
       tabsetPanel(
@@ -77,7 +68,9 @@ ui <- fluidPage(
         type = "pills"
       )
     )
+
   ),
+
   tags$footer(
     div(
       class = "badges",

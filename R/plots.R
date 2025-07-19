@@ -1,4 +1,4 @@
-#- plots.R -#
+#--- plots.R ---#
 
 # expand axis range by percentage
 expand_range <- function(lo, hi, amt = .05) {
@@ -23,7 +23,9 @@ plotly_show_forecast <- function(plt, xmax) {
     x = x, y = 1,
     text = label,
     showarrow = F,
-    opacity = .5
+    opacity = .5,
+    xanchor = "right",
+    align = "right"
   ))
 
   vline <- list(list(

@@ -1,4 +1,14 @@
-// JS functions for Researcher's Weather Tool
+// JS functions for CPN Crop Risk Tool
+
+// make all modal links open in new tab
+$(document).on('shown.bs.modal', function() {
+  $('.modal a').attr('target', '_blank');
+});
+
+// helper to send values to the shiny server
+function sendShiny(inputId, content) {
+  Shiny.setInputValue(inputId, content, { priority: 'event'} )
+}
 
 //--- Google Places integration ---//
 
@@ -10,29 +20,31 @@ const BOUNDS = {
 
 // callback for google location searchbox
 function initAutocomplete() {
-  const searchbox = document.getElementById('searchbox');
+  const searchbox = document.getElementById('map-searchbox');
+  const inputId = 'map-searched_loc'
   const opts = {
     types: ['geocode'],
     bounds: BOUNDS,
     strictBounds: true,
   }
+
   autocomplete = new google.maps.places.Autocomplete(searchbox, opts);
   autocomplete.setFields(['name', 'geometry']);
   autocomplete.addListener('place_changed', function() {
     const place = autocomplete.getPlace();
-    console.log(place)
+    // console.log(place)
     if (!place.geometry) return;
     const loc = place.geometry.location;
     const response = { name: place.name, lat: loc.lat(), lng: loc.lng() }
-    sendShiny('searched_loc', response);
+    sendShiny(inputId, response);
   });
 }
 
 // get locality name from coordinates
-function getLocalityName(lat, lng, apiKey) {
+function getLocalityName(lat, lng, name, apiKey) {
   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${lat},${lng}&key=${apiKey}`;
-  const inputId = 'locality_name'
-  const loc = { lat: lat, lng: lng, name: 'Clicked point' }
+  const inputId = 'map-locality_name'
+  const loc = { lat: lat, lng: lng, name: name }
 
   fetch(url)
     .then(response => response.json())
@@ -41,9 +53,9 @@ function getLocalityName(lat, lng, apiKey) {
       const locality = addressComponents.find(component => 
         component.types.includes('locality')
       );
-      const city = locality ? locality.long_name : fallbackName;
-      console.log('Nearest city:', city);
+      const city = locality ? locality.long_name : name;
       loc.name = city
+      // console.log('Parsed location as:', loc)
       sendShiny(inputId, loc)
     })
     .catch(error => {
@@ -95,10 +107,6 @@ function deleteCookie(name = COOKIE_NAME) {
 
 
 //--- Site action buttons ---//
-
-function sendShiny(inputId, content) {
-  Shiny.setInputValue(inputId, content, { priority: 'event'} )
-}
 
 function editSite(site_id, site_name = '') {
   let newName = prompt(`Enter a new name for site ${site_id}:`, site_name);
