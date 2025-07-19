@@ -39,6 +39,8 @@ server <- function(input, output, session) {
 
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
+
+    risk_last_value = tibble(),
   )
 
   ## rv$sites_ready ----
@@ -361,7 +363,15 @@ server <- function(input, output, session) {
       arrange(grid_id, datetime_local)
 
     # remove the earlier dates that were used for moving averages
-    wx$hourly <- hourly_full %>% filter(date >= dates$start)
+    wx$hourly <- hourly_full %>%
+      filter(date >= dates$start) %>%
+      mutate(
+        precip_cumulative = cumsum(precip),
+        snow_cumulative = cumsum(snow),
+        .by = grid_id
+      ) %>%
+      relocate(precip_cumulative, .after = precip) %>%
+      relocate(snow_cumulative, .after = snow)
 
     if (nrow(hourly_full) == 0 || nrow(wx$hourly) == 0) return(wx)
 
@@ -451,12 +461,13 @@ server <- function(input, output, session) {
           list(width = "40%", targets = 1),
           list(width = "25%", targets = 2),
           list(width = "50px", targets = 3),
+          list(className = "dt-right", targets = 0),
           list(className = "dt-center tbl-coords", targets = 2),
           list(className = "dt-right", targets = 3)
         )
       )
     ) %>%
-      formatStyle(0:3, lineHeight = "1rem")
+      formatStyle(0:3, lineHeight = "1rem", textWrap = "nowrap")
 
     dt_observer$resume()
 
@@ -465,13 +476,25 @@ server <- function(input, output, session) {
 
   ## Handle DT update ----
   dt_observer <- observe({
-    # df <- req(sites_dt_data())
-    # req(is_tibble(df))
-    df <- sites_dt_data()
+    selected_id <- rv$selected_site
+    df <- sites_dt_data() %>%
+      mutate(id = if_else(id == selected_id, paste0(">", id), as.character(id)))
 
     dataTableProxy("sites_dt") %>%
       replaceData(df, rownames = FALSE, clearSelection = "none")
   }, suspended = TRUE)
+
+  # observe(print(paste(names(input))))
+
+  # select clicked site
+  observe({
+    req(rv$sites_ready)
+    click <- req(input$sites_dt_cell_clicked)
+    row <- req(click$row)
+    req(row %in% rv$sites$id)
+
+    rv$selected_site <- row
+  })
 
   # highlight selected site
   # observe({
@@ -729,8 +752,6 @@ server <- function(input, output, session) {
     FALSE
   })
 
-  observe(echo(sites_with_status()))
-
   # force a weather fetch if it's needed and hasn't been triggered in 10 seconds
   observe({
     req(wx_args())
@@ -763,7 +784,6 @@ server <- function(input, output, session) {
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
     msg <- req(rv$status_msg)
-    echo(msg)
     div(
       class = "shiny-output-error",
       style = "margin-top: 5px; padding: 10px;",
@@ -847,9 +867,8 @@ server <- function(input, output, session) {
   ## Disease models tab ----
 
   riskServer(
-    wx_data = reactive(wx_data()),
-    selected_site = reactive(rv$selected_site),
-    sites_ready = reactive(rv$sites_ready)
+    rv = rv,
+    wx_data = reactive(wx_data())
   )
 
 }

@@ -11,7 +11,10 @@
   );
   --wide: 1200px;
   --narrow: 700px;
+
+  /*--dt-row-selected: 237, 242, 247 !important;*/
 }
+
 
 /*--- UW STYLE ---*/
 
@@ -412,6 +415,29 @@ td.tbl-coords {
 
 .leaflet-control-layers-overlays::before {
   content: 'Layers:';
+  font-weight: bold;
+}
+
+.leaflet-shadow-pane {
+  z-index: 500;
+}
+
+.map-title-container {
+  position: absolute;
+  text-align: center;
+  display: flex;
+  justify-content: center;
+  width: 95%;
+  margin-top: 10px;
+  z-index: 999;
+}
+
+.map-title {
+  border: 1px solid rgba(0, 0, 0, .25);
+  border-radius: 5px;
+  padding: 4px 8px;
+  background: rgba(255, 255, 255, .8);
+  font-size: 16px;
   font-weight: bold;
 }
 

@@ -10,6 +10,7 @@ mapUI <- function() {
     # ),
     div(
       class = "map-container",
+      div(class = "map-title-container", uiOutput(ns("map_title"))),
       leafletOutput(ns("map"), height = "100%"),
       div(
         class = "search-overlay",
@@ -143,10 +144,10 @@ mapServer <- function(rv, map_data) {
         }
 
         leaflet(options = leafletOptions(preferCanvas = T)) %>%
-          addMapPane("extent", 400) %>%
+          addMapPane("extent", 501) %>%
           # addMapPane("counties", 410) %>%
-          addMapPane("grid", 420) %>%
-          addMapPane("sites", 430) %>%
+          addMapPane("grid", 502) %>%
+          addMapPane("sites", 503) %>%
           add_basemaps() %>%
           addLayersControl(
             baseGroups = names(OPTS$map_tiles),
@@ -190,6 +191,15 @@ mapServer <- function(rv, map_data) {
             options = pathOptions(pane = "extent", interactive = FALSE)
           ) %>%
           fit_bounds(OPTS$map_bounds_wi)
+      })
+
+
+      ## Map title ----
+
+      output$map_title <- renderUI({
+        title <- req(rv$map_title)
+
+        div(class = "map-title", title)
       })
 
 
@@ -263,6 +273,7 @@ mapServer <- function(rv, map_data) {
       observe({
         wx <- rv$weather
         sites <- rv$sites
+
         proxy_map %>% clearGroup("sites")
         req(nrow(sites) > 0)
 
@@ -273,32 +284,59 @@ mapServer <- function(rv, map_data) {
           map_data()$sites_with_status
         }
 
+        color_by_risk <- FALSE
+        risk_values <- rv$risk_last_value
+
         sites <- sites %>%
           mutate(
-            marker_color = if_else(id == rv$selected_site, "red", "blue"),
+            selection_color = if_else(id == rv$selected_site, "red", "blue"),
+            marker_color = selection_color,
+            text_color = "#fff",
             label = paste0(
               "<b>Site ", id, ": ", name,
               if_else((nrow(sites) > 1) & id == rv$selected_site, " [Selected]", ""),
               "</b><br>",
               sprintf("%.3f°N, %.3f°W", lat, lng),
-              "<br>", if_else(needs_download, "Download required", "Data ready")
-            ) %>% lapply(HTML)
+              if_else(needs_download, "<br>Download required", "")
+            )
           )
+
+        # color by risk value if available
+        try({
+          if (nrow(risk_values) > 0) {
+            sites <- sites %>%
+              left_join(risk_values, join_by(id)) %>%
+              rowwise() %>%
+              mutate(
+                risk_color = coalesce(risk_color, "#aaa"),
+                as_tibble(find_closest_css_color(risk_color))
+              ) %>%
+              mutate(marker_color = css_color) %>%
+              mutate(label = paste(label, sprintf("<br>%s: %s", model_name, value_label)))
+            color_by_risk <- TRUE
+          }
+        })
+
+        # echo(sites %>% select(id, name, marker_color, any_of(c("risk_color", "css_color", "text_color"))))
 
         proxy_map %>%
           addAwesomeMarkers(
             data = sites,
             lat = ~lat,
             lng = ~lng,
-            label = ~label,
+            label = ~lapply(label, HTML),
             layerId = ~id,
             group = "sites",
             icon = ~makeAwesomeIcon(
               library = "fa",
               # icon = icon,
               markerColor = marker_color,
-              iconColor = "#fff",
-              text = id
+              iconColor = text_color,
+              text = if_else(
+                id == rv$selected_site,
+                sprintf("(%s)", id),
+                as.character(id)
+              )
             ),
             options = markerOptions(pane = "sites")
           )

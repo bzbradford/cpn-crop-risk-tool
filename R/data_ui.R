@@ -105,7 +105,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       # Interface ----
 
-      ## main_ui // renderUI ----
+      ## main_ui ----
       output$main_ui <- renderUI({
         validate(need(sites_ready(), OPTS$validation_sites_ready))
         validate(need(rv$ready, OPTS$validation_weather_ready))
@@ -113,22 +113,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         tagList(
           div(
             class = "flex-across", style = "margin-top: 1rem; gap: 30px;",
-            materialSwitch(
-              inputId = ns("metric"),
-              label = "Use metric",
-              value = input$metric %||% FALSE,
-              status = "primary"
-            ),
+            uiOutput(ns("metric_switch")),
             uiOutput(ns("forecast_switch"))
           ),
-          radioGroupButtons(
-            inputId = ns("data_type"),
-            label = "Dataset",
-            choices = OPTS$data_type_choices,
-            selected = input$data_type %||% first(OPTS$data_type_choices),
-            individual = TRUE,
-            size = "sm"
-          ),
+          uiOutput(ns("data_type_ui")),
           uiOutput(ns("data_options_ui")),
           uiOutput(ns("plot_cols_ui")),
           uiOutput(ns("plot_sites_ui")),
@@ -144,6 +132,19 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
+
+      ## metric_switch ----
+      output$metric_switch <- renderUI({
+        materialSwitch(
+          inputId = ns("metric"),
+          label = "Use metric",
+          value = isolate(input$metric) %||% FALSE,
+          status = "primary"
+        )
+      })
+
+
+      ## forecast_switch ----
       output$forecast_switch <- renderUI({
         dates <- wx_data()$dates
         req(dates$end == today())
@@ -155,7 +156,21 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-      ## data_options // renderUI ----
+
+      ## data_type_ui ----
+      output$data_type_ui <- renderUI({
+        radioGroupButtons(
+          inputId = ns("data_type"),
+          label = "Dataset",
+          choices = OPTS$data_type_choices,
+          selected = isolate(input$data_type) %||% first(OPTS$data_type_choices),
+          individual = TRUE,
+          size = "sm"
+        )
+      })
+
+
+      ## data_options ----
       output$data_options_ui <- renderUI({
         type <- req(input$data_type)
 
@@ -175,7 +190,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
       })
 
-      ## weather_missing_ui // renderUI ----
+
+      ## weather_missing_ui ----
       output$weather_missing_ui <- renderUI({
         sites <- wx_data()$sites
         req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
@@ -186,13 +202,25 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-      ## plot_sites // renderUI ----
+
+      ## plot_sites_ui ----
+      # plot_sites_choices <- reactive({
+      #   sites <- wx_data()$sites
+      #   req(nrow(sites) > 1)
+      #
+      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
+      # }) %>%
+      #   debounce(1000)
+
+
       output$plot_sites_ui <- renderUI({
+        # choices <- plot_sites_choices()
+
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
 
         choices <- set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-        selected <- first_truthy(input$plot_sites, selected_site())
+        selected <- isolate(input$plot_sites) %||% selected_site()
 
         checkboxGroupInput(
           inputId = ns("plot_sites"),
@@ -203,14 +231,28 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-      ## plot_cols // reactive ----
+
+      ## change selection ----
+      observe({
+        selected <- selected_site()
+
+        updateCheckboxGroupInput(
+          session,
+          inputId = "plot_sites",
+          selected = selected
+        )
+      })
+
+
+      ## plot_cols - reactive ----
       plot_cols <- reactive({
         cols <- names(selected_data())
         cols <- cols[!(cols %in% OPTS$plot_ignore_cols)]
         set_names(cols, make_clean_names(cols, "title"))
       })
 
-      ## plot_cols // renderUI ----
+
+      ## plot_cols_ui ----
       output$plot_cols_ui <- renderUI({
         cols <- plot_cols()
         prev_selection <- intersect(cols, isolate(input$plot_cols))
@@ -238,6 +280,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
+
       ## Reset plot columns ----
       reset_plot_cols <- function() {
         cols <- plot_cols()
@@ -254,7 +297,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # reset on button press
       observe(reset_plot_cols()) %>% bindEvent(input$reset_plot_cols)
 
-      ## data_plot // renderPlotly ----
+
+      ## data_plot - renderPlotly ----
       output$data_plot <- renderPlotly({
         wx <- wx_data()
         sites <- wx$sites
@@ -408,7 +452,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       # Download button ----
 
-      ## download_data // reactive ----
+      ## download_data - reactive ----
       download_data <- reactive({
         unit_system <- if_else(input$metric, "metric", "imperial")
         selected_data() %>%
@@ -417,7 +461,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           clean_names("big_camel")
       })
 
-      ## download_filename // reactive ----
+
+      ## download_filename - reactive ----
       # for both the csv download and plot png export
       download_filename <- reactive({
         type <- req(input$data_type)
@@ -437,7 +482,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-      ## download_data // downloadHandler ----
+
+      ## download_data - downloadHandler ----
       output$download_data <- downloadHandler(
         filename = function() {
           paste0(download_filename()$csv, ".csv")

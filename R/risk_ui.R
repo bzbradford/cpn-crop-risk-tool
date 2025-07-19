@@ -3,33 +3,23 @@ riskUI <- function() {
   div(
     style = "margin-top: 10px;",
     p("Risk models are only valid when the crop is present and in a vulnerable growth stage. Risk may be mitigated in commercial production by application of a protective fungicide. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
-    uiOutput(ns("main_ui"))
+    uiOutput(ns("main_ui")) %>% withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Loading...")
   )
 }
 
-riskServer <- function(wx_data, selected_site, sites_ready) {
+riskServer <- function(rv, wx_data) {
   moduleServer(
     id = "risk",
     function(input, output, session) {
       ns <- session$ns
 
-      ## rv - reactiveValues ----
-      rv <- reactiveValues(
-        weather_ready = FALSE
-      )
-
-      # fill local data when available
-      observe({
-        wr <- nrow(wx_data()$hourly) > 0
-        if (rv$weather_ready != wr) rv$weather_ready <- wr
-      })
-
-
       ## main_ui ----
       # shown when sites/weather validation pass
       output$main_ui <- renderUI({
-        validate(need(sites_ready(), OPTS$validation_sites_ready))
-        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
+        validate(
+          need(rv$sites_ready, OPTS$validation_sites_ready),
+          need(rv$weather_ready, OPTS$validation_weather_ready)
+        )
 
         tagList(
           uiOutput(ns("crop_picker")),
@@ -209,10 +199,6 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
       joined_data <- reactive({
         sites <- wx_data()$sites
 
-        if (req(!is.null(input$show_all_sites)) & input$show_all_sites == FALSE) {
-          sites <- sites %>% filter(id == selected_site())
-        }
-
         sites %>%
           st_drop_geometry() %>%
           select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) %>%
@@ -228,6 +214,20 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
           mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
         req(nrow(model_data) > 0)
         dates <- wx_data()$dates
+
+        last_values <- model_data %>%
+          filter(date == min(today(), max(date)), .by = id)
+
+        # write values for map
+        rv$risk_last_value <- last_values %>%
+          select(id, model_value, value_label, risk, risk_color) %>%
+          mutate(model_name = model$name)
+        rv$map_title <- paste(model$name, "risk,", format(dates$end, "%b %d, %Y"))
+
+        if (req(!is.null(input$show_all_sites)) & input$show_all_sites == FALSE) {
+          model_data <- model_data %>% filter(id == rv$selected_site)
+        }
+
         site_labels <- unique(model_data$site_label)
 
         # generate plots
@@ -240,7 +240,8 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
           # to show in site feed
           content <- if (nrow(df) > 0) {
             date_range <- c(dates$start, max(dates$end, max(df$date)))
-            last_value <- df %>% filter(date == min(today(), max(date)))
+            last_value <- last_values %>% filter(site_label == !!label)
+
             risk_info <- sprintf(
               "For %s: %s",
               format(last_value$date, "%b %d, %Y"),
@@ -293,7 +294,7 @@ riskServer <- function(wx_data, selected_site, sites_ready) {
 
           header <- tibble(line = c(
             sprintf("=== Crop Risk Tool - %s model ===", model$name),
-            sprintf("Downloaded: %s", Sys.time()),
+            sprintf("Generated: %s", Sys.time()),
             sprintf("Host: %s", session$clientData$url_hostname)
           ))
 

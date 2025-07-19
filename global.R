@@ -379,6 +379,8 @@ noaa_parse_forecast <- function(periods) {
     lapply(function(p) {
       # hoist the nested values
       p$probabilityOfPrecipitation <- p$probabilityOfPrecipitation$value
+      # indicate 1 mm of precip if prob > 50% since I don't know how much will fall
+      p$precip <- ifelse(p$probabilityOfPrecipitation > 50, 1, 0)
       # dewpoint is provided in Celsius
       p$dewPoint <- p$dewpoint$value
       p$relativeHumidity <- p$relativeHumidity$value
@@ -399,6 +401,7 @@ noaa_parse_forecast <- function(periods) {
     select(
       datetime_utc = start_time,
       temperature,
+      precip,
       dew_point,
       relative_humidity,
       wind_speed,
@@ -1860,16 +1863,6 @@ build_hourly <- function(ibm_hourly) {
     ) %>%
     add_date_cols() %>%
     arrange(grid_lat, grid_lng, datetime_local) %>%
-    mutate(
-      precip_cumulative = cumsum(precip),
-      .by = grid_id,
-      .after = precip
-    ) %>%
-    mutate(
-      snow_cumulative = cumsum(snow),
-      .by = grid_id,
-      .after = snow
-    ) %>%
     mutate(
       dew_point_depression = abs(temperature - dew_point),
       .after = dew_point
