@@ -25,7 +25,6 @@ riskServer <- function(rv, wx_data) {
           uiOutput(ns("crop_picker")),
           uiOutput(ns("model_picker")),
           uiOutput(ns("model_ui")),
-          uiOutput(ns("show_all_sites_ui")),
           uiOutput(ns("selected_site_ui")),
           uiOutput(ns("weather_missing_ui")),
           uiOutput(ns("plots_ui"))
@@ -95,6 +94,10 @@ riskServer <- function(rv, wx_data) {
         model <- req(input$model)
         req(model == "white_mold")
 
+        uiOutput(ns("white_mold_opts"))
+      })
+
+      output$white_mold_opts <- renderUI({
         irrigation_choices <- list("Dry" = FALSE, "Irrigated" = TRUE)
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
@@ -132,22 +135,25 @@ riskServer <- function(rv, wx_data) {
 
       ## show_all_sites_ui ----
       # shown when more than one site
-      output$show_all_sites_ui <- renderUI({
+      output$selected_site_ui <- renderUI({
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
 
+        uiOutput(ns("selected_site_opts"))
+      })
+
+      output$selected_site_opts <- renderUI({
         div(
           class = "flex-across",
           tags$label("Show results for:"),
           radioButtons(
             inputId = ns("show_all_sites"),
-            # label = "Show results for:",
             label = NULL,
             choices = list(
               "All sites" = TRUE,
               "Selected site" = FALSE
             ),
-            selected = input$show_all_sites %||% TRUE,
+            selected = isolate(input$show_all_sites) %||% TRUE,
             inline = TRUE
           )
         )
@@ -196,6 +202,9 @@ riskServer <- function(rv, wx_data) {
         filter(df, date >= date_range$start)
       })
 
+      # observe(echo(model_data()))
+
+
       joined_data <- reactive({
         sites <- wx_data()$sites
 
@@ -205,6 +214,8 @@ riskServer <- function(rv, wx_data) {
           left_join(model_data(), join_by(grid_id), relationship = "many-to-many")
       })
 
+      # observe(echo(joined_data()))
+
 
       ## plots_ui ----
       # generate the feed of mini plots by site
@@ -213,7 +224,18 @@ riskServer <- function(rv, wx_data) {
         model_data <- joined_data() %>%
           mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
         req(nrow(model_data) > 0)
-        dates <- wx_data()$dates
+
+        wx <- wx_data()
+        sites <- wx$sites
+        dates <- wx$dates
+
+        # show only selected site option
+        if (nrow(sites) > 1) {
+          i <- req(input$show_all_sites)
+          if (i == FALSE) {
+            model_data <- model_data %>% filter(id == rv$selected_site)
+          }
+        }
 
         last_values <- model_data %>%
           filter(date == min(today(), max(date)), .by = id)
@@ -223,10 +245,6 @@ riskServer <- function(rv, wx_data) {
           select(id, model_value, value_label, risk, risk_color) %>%
           mutate(model_name = model$name)
         rv$map_title <- paste(model$name, "risk,", format(dates$end, "%b %d, %Y"))
-
-        if (req(!is.null(input$show_all_sites)) & input$show_all_sites == FALSE) {
-          model_data <- model_data %>% filter(id == rv$selected_site)
-        }
 
         site_labels <- unique(model_data$site_label)
 

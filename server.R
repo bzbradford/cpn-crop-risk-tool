@@ -218,11 +218,19 @@ server <- function(input, output, session) {
         distinct() %>%
         head(OPTS$max_sites) %>%
         mutate(id = row_number())
+
       req(nrow(sites) > 0)
+
       rv$sites <- sites
       rv$selected_site <- first(sites$id)
       rv$map_cmd <- "fit_sites"
+
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
+
+      # trigger weather fetch after a second
+      delay(1000, {
+        rv$fetch <- runif(1)
+      })
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
       delete_cookie()
@@ -760,6 +768,7 @@ server <- function(input, output, session) {
     # message('Auto-fetching weather data in 15 seconds...')
     delay(15000, {
       # message("Auto-fetching weather data...")
+      req(need_weather())
       rv$fetch <- runif(1)
     })
   })
@@ -813,22 +822,20 @@ server <- function(input, output, session) {
   })
 
   ## already_fetched // reactive ----
-  already_fetched <- reactive({
-    args <- fetch_args()
-    rlang::hash(args) %in% rv$fetch_hashes
-  })
+  # already_fetched <- reactive({
+  #   args <- fetch_args()
+  #   rlang::hash(args) %in% rv$fetch_hashes
+  # })
 
-  ## Handle fetching on click ----
-  observe({
-    # req(!already_fetched())
-
+  ## Handle fetching weather ----
+  do_fetch_weather <- function() {
     args <- fetch_args()
     disable("fetch")
     runjs("$('#fetch').html('Downloading weather...')")
 
     withProgress(
       message = "Downloading weather...",
-      value = 0, min = 0, max = nrow(args$sites),
+      value = 0, min = 0, max = 2,
       {
         msg <- do.call(fetch_weather, args)
         rv$status_msg <- msg
@@ -838,9 +845,17 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
     rv$weather <- saved_weather
     rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  }) %>%
-    bindEvent(input$fetch, rv$fetch) # runs on launch & button press
+  }
 
+  # fetch on button click
+  observeEvent(input$fetch, {
+    do_fetch_weather()
+  })
+
+  # fetch on program trigger
+  observeEvent(rv$fetch, {
+    do_fetch_weather()
+  })
 
 
 # Module servers ----------------------------------------------------------

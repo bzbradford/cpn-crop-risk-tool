@@ -635,7 +635,7 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
     create_ibm_request(lat, lng, chunk$start, chunk$end)
   })
 
-  message(sprintf("Built requests for %.3f, %.3f from %s to %s with %s calls", lat, lng, start_date, end_date, length(reqs)))
+  message(sprintf("Built requests for %.3f, %.3f from %s to %s with %s calls in %.05fs", lat, lng, start_date, end_date, length(reqs), Sys.time() - stime))
 
   reqs
 }
@@ -772,8 +772,10 @@ fetch_weather <- function(sites, start_date, end_date) {
       dates_have = dates_have
     )
     reqs <- append(reqs, new_reqs)
-    incProgress(1)
   }
+
+  # increment progress bar when requests are ready
+  incProgress(1)
 
   if (length(reqs) == 0) {
     message("No requests in queue")
