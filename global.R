@@ -46,13 +46,55 @@ suppressPackageStartupMessages({
 # options(forecast = FALSE)
 
 # set up a second session for asynchronous tasks
-plan(multisession(workers = 2))
+plan(multisession, workers = 2)
 
 
 
 # Startup ----------------------------------------------------------------------
 
 ## Load files ----
+
+# list_fst_files <- function(grids = NULL, dir = "cache") {
+#   if (is.null(grids)) {
+#     list.files(path = dir, pattern = "*.fst", full.names = TRUE)
+#   } else {
+#     file.path(dir, paste0(grids, ".fst"))
+#   }
+# }
+#
+# list_fst_files()
+# list_fst_files(c("a", "b"))
+#
+#
+# load_from_fst <- function(grids = NULL) {
+#   list_fst_files(grids) %>%
+#     lapply(read_fst) %>%
+#     bind_rows() %>%
+#     as_tibble() %>%
+#     arrange(grid_id, datetime_utc)
+# }
+#
+# load_from_fst()
+#
+#
+# save_to_fst <- function(wx) {
+#   tryCatch({
+#     grids <- unique(wx$grid_id)
+#     fnames <- list_fst_files(grids)
+#     for (i in 1:length(grids)) {
+#       grid_wx <- subset(wx, grid_id == grids[i])
+#       fname <- fnames[i]
+#       # temp <- paste0(fname, ".tmp")
+#       write_fst(grid_wx, fname)
+#       # if (file.exists(fname)) file.remove(fname)
+#       # file.rename(temp, fname)
+#     }
+#   }, error = function(e) {
+#     message(e)
+#   })
+# }
+
+
 saved_weather_file <- "data/saved_weather.fst"
 # file.remove(saved_weather_file)
 saved_weather <- if (file.exists(saved_weather_file)) {
@@ -353,7 +395,7 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
       req_retry(max_tries = 3, retry_on_failure = TRUE, after = \(resp) 0)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
-    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    message(sprintf("GET => '%s' completed in %.5f", url, now() - t))
     resp$properties$forecastHourly
   }, error = function(e) {
     message("Failed to retrieve ", url, ": ", e$message)
@@ -418,7 +460,7 @@ noaa_get_forecast <- function(url) {
       req_retry(max_tries = 3, retry_on_failure = TRUE)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
-    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    message(sprintf("GET => '%s' completed in %.5f", url, now() - t))
     noaa_parse_forecast(resp$properties$periods)
   }, error = function(e) {
     message("Failed to get forecast from ", url, ": ", e$message)
@@ -619,7 +661,7 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
 #' @param dates_have vector of dates already downloaded
 #' @returns httr2 list of requests
 create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
-  stime <- Sys.time()
+  t <- now()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
   chunks <- ibm_chunks(dates_need, dates_have, tz)
 
@@ -635,7 +677,7 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
     create_ibm_request(lat, lng, chunk$start, chunk$end)
   })
 
-  message(sprintf("Built requests for %.3f, %.3f from %s to %s with %s calls in %.05fs", lat, lng, start_date, end_date, length(reqs), Sys.time() - stime))
+  message(sprintf("Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f", lat, lng, start_date, end_date, length(reqs), now() - t))
 
   reqs
 }
@@ -723,9 +765,8 @@ clean_ibm <- function(ibm_response) {
 #' @param start_date
 #' @param end_date
 fetch_weather <- function(sites, start_date, end_date) {
-  status_msg <- NULL
-  all_dates <- seq.Date(start_date, end_date, 1)
   wx <- saved_weather
+  all_dates <- seq.Date(start_date, end_date, 1)
   sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
   reqs <- list()
 
@@ -775,30 +816,29 @@ fetch_weather <- function(sites, start_date, end_date) {
   }
 
   # increment progress bar when requests are ready
-  incProgress(1)
+  # incProgress(1)
 
   if (length(reqs) == 0) {
-    message("No requests in queue")
+    message("No weather requests in queue")
     return()
   }
 
   resp <- get_ibm(reqs)
 
+  # handle response
   if (nrow(resp) == 0) {
-    status_msg <- "Unable to get some/all weather data requested. Please try again."
-  } else {
-    new_wx <- resp %>%
-      clean_ibm() %>%
-      build_hourly()
-
-    wx <- bind_rows(new_wx, wx) %>%
-      distinct(grid_id, datetime_utc, .keep_all = T)
-
-    saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
-    write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
+    message("Failed to get any weather response")
+    return (tibble())
   }
 
-  return(status_msg)
+  status_msg <- NULL
+  new_wx <- resp %>%
+    clean_ibm() %>%
+    build_hourly()
+  wx <- bind_rows(new_wx, wx) %>%
+    distinct(grid_id, datetime_utc, .keep_all = T) %>%
+    arrange(grid_id, datetime_utc)
+  return(wx)
 }
 
 

@@ -119,15 +119,18 @@ server <- function(input, output, session) {
   ## sites_sf ----
   sites_sf <- reactive({
     sites <- rv$sites
-    req(nrow(sites) > 0)
 
-    sf <- sites %>%
-      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+    if (nrow(sites) > 0) {
+      sf <- sites %>%
+        st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
 
-    if (rv$weather_ready) {
-      sf %>% st_join(wx_grids())
+      if (rv$weather_ready) {
+        sf %>% st_join(wx_grids())
+      } else {
+        sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+      }
     } else {
-      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+      NULL
     }
   })
 
@@ -156,9 +159,14 @@ server <- function(input, output, session) {
   ## sites_with_status ----
   # will be blocked when no weather in date range
   sites_with_status <- reactive({
-    req(sites_sf()) %>%
-      left_join(wx_status(), join_by(grid_id)) %>%
-      replace_na(list(needs_download = TRUE))
+    sites <- sites_sf()
+    if (is.null(sites)) {
+      NULL
+    } else {
+      sites %>%
+        left_join(wx_status(), join_by(grid_id)) %>%
+        replace_na(list(needs_download = TRUE))
+    }
   })
 
 
@@ -238,7 +246,7 @@ server <- function(input, output, session) {
   })
 
 
-  # NOAA forecasts ----
+  # NOAA Forecast Extended Task ----
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
     message("Getting forecasts...")
@@ -261,9 +269,9 @@ server <- function(input, output, session) {
         list(urls = urls, forecasts = forecasts)
       }, seed = NULL)
     })
-
   })
 
+  ## Invoke NOAA requests ----
   observe({
     req(getOption("forecast", TRUE))
 
@@ -274,10 +282,59 @@ server <- function(input, output, session) {
     task_get_forecasts$invoke(grids, urls, forecasts)
   })
 
+  ## Collect result of NOAA requests ----
   observe({
+    req(task_get_forecasts$status() == "success")
     res <- req(task_get_forecasts$result())
     rv$noaa_urls <- res$urls
     rv$noaa_forecasts <- res$forecasts
+  })
+
+
+  # IBM Weather Extended Task ----
+
+  task_get_weather <- ExtendedTask$new(function(args) {
+    message("Getting weather...")
+    future_promise({
+      do.call(fetch_weather, args)
+    }, seed = NULL)
+  })
+
+  ## Invoke IBM weather request ----
+  invoke_get_weather <- function() {
+    req(task_get_weather$status() != "running")
+    req(need_weather())
+    args <- fetch_args()
+    disable("fetch")
+    runjs("$('#fetch').html('Downloading weather...')")
+    task_get_weather$invoke(args)
+    # rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
+  }
+
+  # fetch on button click
+  observeEvent(input$fetch, {
+    invoke_get_weather()
+  })
+
+  # fetch on program trigger
+  observeEvent(rv$fetch, {
+    invoke_get_weather()
+  })
+
+  ## Handle IBM request response ----
+  observe({
+    req(task_get_weather$status() == "success")
+    res <- task_get_weather$result()
+
+    rv$action_nonce <- runif(1) # regenerates the action button
+
+    if (is.null(res)) {
+      return()
+    } else if (nrow(res) > 0) {
+      saved_weather <<- res
+      try(write_fst(saved_weather, "data/saved_weather.fst", compress = 99))
+      rv$weather <- saved_weather
+    }
   })
 
 
@@ -827,35 +884,7 @@ server <- function(input, output, session) {
   #   rlang::hash(args) %in% rv$fetch_hashes
   # })
 
-  ## Handle fetching weather ----
-  do_fetch_weather <- function() {
-    args <- fetch_args()
-    disable("fetch")
-    runjs("$('#fetch').html('Downloading weather...')")
 
-    withProgress(
-      message = "Downloading weather...",
-      value = 0, min = 0, max = 2,
-      {
-        msg <- do.call(fetch_weather, args)
-        rv$status_msg <- msg
-      }
-    )
-
-    rv$action_nonce <- runif(1) # regenerates the action button
-    rv$weather <- saved_weather
-    rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  }
-
-  # fetch on button click
-  observeEvent(input$fetch, {
-    do_fetch_weather()
-  })
-
-  # fetch on program trigger
-  observeEvent(rv$fetch, {
-    do_fetch_weather()
-  })
 
 
 # Module servers ----------------------------------------------------------
