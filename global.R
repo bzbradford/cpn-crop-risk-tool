@@ -628,7 +628,8 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
     create_ibm_request(lat, lng, chunk$start, chunk$end)
   })
 
-  message(sprintf("Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f", lat, lng, start_date, end_date, length(reqs), now() - t))
+  duration <- now() - t
+  message(sprintf("Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f", lat, lng, start_date, end_date, length(reqs), duration))
 
   reqs
 }
