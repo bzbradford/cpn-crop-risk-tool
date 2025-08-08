@@ -65,9 +65,53 @@ function getLocalityName(lat, lng, name, apiKey) {
 }
 
 
-//--- Cookie handling ---//
+//--- Cookie handling with User ID ---//
 
 const COOKIE_NAME = 'ibm_weather_tool'
+
+// Generate a unique user ID
+function generateUserId() {
+  return Math.random().toString(36).substr(2, 12) + Date.now().toString(36);
+}
+
+// Get or create user data object
+function getUserData() {
+  let cookieValue = getCookie();
+  let userData;
+  
+  try {
+    userData = cookieValue ? JSON.parse(cookieValue) : {};
+  } catch (e) {
+    console.warn('Invalid cookie data, resetting:', e);
+    userData = {};
+  }
+  
+  // Ensure user has an ID
+  if (!userData.userId) {
+    userData.userId = generateUserId();
+  }
+  
+  // Ensure sites array exists
+  if (!userData.sites) {
+    userData.sites = [];
+  }
+  
+  return userData;
+}
+
+// Save user data to cookie
+function saveUserData(userData) {
+  setCookie(userData);
+  return userData;
+}
+
+// Update sites and save
+function updateSites(newSites) {
+  const userData = getUserData();
+  userData.sites = newSites;
+  saveUserData(userData);
+  return userData;
+}
 
 function setCookie(value, name = COOKIE_NAME, days = 30) {
   let expires = '';
@@ -95,9 +139,9 @@ function getCookie(name = COOKIE_NAME) {
 }
 
 function sendCookieToShiny(name = COOKIE_NAME) {
-  let value = getCookie(name);
-  sendShiny('cookie', value);
-  return value;
+  let userData = getUserData();
+  sendShiny('cookie', userData);
+  return userData;
 }
 
 function deleteCookie(name = COOKIE_NAME) {

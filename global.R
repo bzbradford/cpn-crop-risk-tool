@@ -27,6 +27,9 @@ suppressPackageStartupMessages({
   # library(gt)
 })
 
+
+# Dev settings ----
+
 ## development mode
 # shiny::devmode(TRUE)
 
@@ -45,65 +48,12 @@ suppressPackageStartupMessages({
 # disable NOAA forecasts for testing
 # options(forecast = FALSE)
 
-# set up a second session for asynchronous tasks
-plan(multisession, workers = 2)
-
 
 
 # Startup ----------------------------------------------------------------------
 
-## Load files ----
-
-# list_fst_files <- function(grids = NULL, dir = "cache") {
-#   if (is.null(grids)) {
-#     list.files(path = dir, pattern = "*.fst", full.names = TRUE)
-#   } else {
-#     file.path(dir, paste0(grids, ".fst"))
-#   }
-# }
-#
-# list_fst_files()
-# list_fst_files(c("a", "b"))
-#
-#
-# load_from_fst <- function(grids = NULL) {
-#   list_fst_files(grids) %>%
-#     lapply(read_fst) %>%
-#     bind_rows() %>%
-#     as_tibble() %>%
-#     arrange(grid_id, datetime_utc)
-# }
-#
-# load_from_fst()
-#
-#
-# save_to_fst <- function(wx) {
-#   tryCatch({
-#     grids <- unique(wx$grid_id)
-#     fnames <- list_fst_files(grids)
-#     for (i in 1:length(grids)) {
-#       grid_wx <- subset(wx, grid_id == grids[i])
-#       fname <- fnames[i]
-#       # temp <- paste0(fname, ".tmp")
-#       write_fst(grid_wx, fname)
-#       # if (file.exists(fname)) file.remove(fname)
-#       # file.rename(temp, fname)
-#     }
-#   }, error = function(e) {
-#     message(e)
-#   })
-# }
-
-
-saved_weather_file <- "data/saved_weather.fst"
-# file.remove(saved_weather_file)
-saved_weather <- if (file.exists(saved_weather_file)) {
-  read_fst(saved_weather_file) %>%
-    as_tibble() %>%
-    arrange(grid_lat, grid_lng, datetime_utc)
-} else {
-  tibble()
-}
+# set up a second session for asynchronous tasks
+plan(multisession, workers = 2)
 
 # EPSG 4326 for use in Leaflet
 service_bounds <- read_rds("data/us_ca_clip.rds")
@@ -643,7 +593,7 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
       units = "m"
     ) %>%
     req_timeout(5) %>%
-    req_retry(max_tries = 2, failure_timeout = 5) %>%
+    req_retry(max_tries = 2, failure_timeout = 5, retry_on_failure = TRUE) %>%
     req_throttle(rate = 20)
 }
 
@@ -761,11 +711,11 @@ clean_ibm <- function(ibm_response) {
 
 
 #' Update weather for sites list and date range
+#' @param wx existing weather data
 #' @param sites sf with site locs
 #' @param start_date
 #' @param end_date
-fetch_weather <- function(sites, start_date, end_date) {
-  wx <- saved_weather
+fetch_weather <- function(wx, sites, start_date, end_date) {
   all_dates <- seq.Date(start_date, end_date, 1)
   sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
   reqs <- list()
@@ -807,17 +757,15 @@ fetch_weather <- function(sites, start_date, end_date) {
 
     # create requests
     new_reqs <- create_ibm_reqs(
-      lat = coalesce(site$grid_lat, site$lat),
-      lng = coalesce(site$grid_lng, site$lng),
+      lat = site$lat,
+      lng = site$lng,
       dates_need = dates_need,
       dates_have = dates_have
     )
     reqs <- append(reqs, new_reqs)
   }
 
-  # increment progress bar when requests are ready
-  # incProgress(1)
-
+  # send requests if any
   if (length(reqs) == 0) {
     message("No weather requests in queue")
     return()
@@ -831,6 +779,7 @@ fetch_weather <- function(sites, start_date, end_date) {
     return (tibble())
   }
 
+  # process response
   status_msg <- NULL
   new_wx <- resp %>%
     clean_ibm() %>%
@@ -841,6 +790,7 @@ fetch_weather <- function(sites, start_date, end_date) {
   return(wx)
 }
 
+# fetch_weather(tibble(), tibble(lat = 45, lng = -89), today() - days(7), today())
 
 
 # Weather helpers ---------------------------------------------------------
@@ -1015,7 +965,12 @@ annotate_grids <- function(grids_with_status) {
 weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date)) {
   dates_expected <- seq.Date(start_date, end_date, 1)
   wx <- filter(wx, between(date, start_date, end_date))
-  if (nrow(wx) == 0) return(tibble(grid_id = NA, needs_download = TRUE))
+
+  if (nrow(wx) == 0) {
+    fallback_df <- tibble(grid_id = NA, grid_lat = NA, grid_lng = NA, needs_download = TRUE)
+    return(fallback_df)
+  }
+
   wx %>%
     summarize(
       tz = coalesce(first(time_zone), "UTC"),
@@ -2520,6 +2475,20 @@ show_modal <- function(md, title = NULL) {
     footer = modalButton("Close"),
     easyClose = TRUE
   ) %>% showModal()
+}
+
+
+
+
+# Shutdown ----------------------------------------------------------------
+
+clean_old_caches <- function(max_age_days = 30) {
+  cache_files <- list.files(path = "cache", pattern = ".*\\.fst", full.names = TRUE)
+  old_files <- cache_files[file.mtime(cache_files) < Sys.Date() - max_age_days]
+  if (length(old_files) > 0) {
+    file.remove(old_files)
+    message("Cleaned ", length(old_files), " old cache files")
+  }
 }
 
 
