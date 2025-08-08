@@ -71,7 +71,11 @@ const COOKIE_NAME = 'ibm_weather_tool'
 
 // Generate a unique user ID
 function generateUserId() {
-  return Math.random().toString(36).substr(2, 12) + Date.now().toString(36);
+  // Generate a cryptographically secure UUID v4
+  // https://stackoverflow.com/a/2117523/1422451
+  return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+    (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+  );
 }
 
 // Get or create user data object
