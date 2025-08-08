@@ -345,7 +345,8 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
       req_retry(max_tries = 3, retry_on_failure = TRUE, after = \(resp) 0)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
-    message(sprintf("GET => '%s' completed in %.5f", url, now() - t))
+    duration <- now() - t
+    message(sprintf("GET => '%s' completed in %.5f", url, duration))
     resp$properties$forecastHourly
   }, error = function(e) {
     message("Failed to retrieve ", url, ": ", e$message)
