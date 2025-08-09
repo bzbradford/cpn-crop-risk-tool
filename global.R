@@ -27,6 +27,9 @@ suppressPackageStartupMessages({
   # library(gt)
 })
 
+
+# Dev settings ----
+
 ## development mode
 # shiny::devmode(TRUE)
 
@@ -45,23 +48,12 @@ suppressPackageStartupMessages({
 # disable NOAA forecasts for testing
 # options(forecast = FALSE)
 
-# set up a second session for asynchronous tasks
-plan(multisession(workers = 2))
-
 
 
 # Startup ----------------------------------------------------------------------
 
-## Load files ----
-saved_weather_file <- "data/saved_weather.fst"
-# file.remove(saved_weather_file)
-saved_weather <- if (file.exists(saved_weather_file)) {
-  read_fst(saved_weather_file) %>%
-    as_tibble() %>%
-    arrange(grid_lat, grid_lng, datetime_utc)
-} else {
-  tibble()
-}
+# set up a second session for asynchronous tasks
+plan(multisession, workers = 2)
 
 # EPSG 4326 for use in Leaflet
 service_bounds <- read_rds("data/us_ca_clip.rds")
@@ -353,7 +345,8 @@ noaa_get_forecast_url <- function(lat, lng, url = noaa_point_url(lat, lng)) {
       req_retry(max_tries = 3, retry_on_failure = TRUE, after = \(resp) 0)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
-    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    duration <- now() - t
+    message(sprintf("GET => '%s' completed in %.5f", url, duration))
     resp$properties$forecastHourly
   }, error = function(e) {
     message("Failed to retrieve ", url, ": ", e$message)
@@ -418,7 +411,7 @@ noaa_get_forecast <- function(url) {
       req_retry(max_tries = 3, retry_on_failure = TRUE)
     t <- now()
     resp <- req_perform(req) %>% resp_body_json()
-    message("GET => '", url, "' completed in ", as.numeric(now() - t))
+    message(sprintf("GET => '%s' completed in %.5f", url, now() - t))
     noaa_parse_forecast(resp$properties$periods)
   }, error = function(e) {
     message("Failed to get forecast from ", url, ": ", e$message)
@@ -601,7 +594,7 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
       units = "m"
     ) %>%
     req_timeout(5) %>%
-    req_retry(max_tries = 2, failure_timeout = 5) %>%
+    req_retry(max_tries = 2, failure_timeout = 5, retry_on_failure = TRUE) %>%
     req_throttle(rate = 20)
 }
 
@@ -619,7 +612,7 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
 #' @param dates_have vector of dates already downloaded
 #' @returns httr2 list of requests
 create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
-  stime <- Sys.time()
+  t <- now()
   tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
   chunks <- ibm_chunks(dates_need, dates_have, tz)
 
@@ -635,7 +628,8 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
     create_ibm_request(lat, lng, chunk$start, chunk$end)
   })
 
-  message(sprintf("Built requests for %.3f, %.3f from %s to %s with %s calls", lat, lng, start_date, end_date, length(reqs)))
+  duration <- now() - t
+  message(sprintf("Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f", lat, lng, start_date, end_date, length(reqs), duration))
 
   reqs
 }
@@ -719,13 +713,12 @@ clean_ibm <- function(ibm_response) {
 
 
 #' Update weather for sites list and date range
+#' @param wx existing weather data
 #' @param sites sf with site locs
 #' @param start_date
 #' @param end_date
-fetch_weather <- function(sites, start_date, end_date) {
-  status_msg <- NULL
+fetch_weather <- function(wx, sites, start_date, end_date) {
   all_dates <- seq.Date(start_date, end_date, 1)
-  wx <- saved_weather
   sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
   reqs <- list()
 
@@ -766,39 +759,40 @@ fetch_weather <- function(sites, start_date, end_date) {
 
     # create requests
     new_reqs <- create_ibm_reqs(
-      lat = coalesce(site$grid_lat, site$lat),
-      lng = coalesce(site$grid_lng, site$lng),
+      lat = site$lat,
+      lng = site$lng,
       dates_need = dates_need,
       dates_have = dates_have
     )
     reqs <- append(reqs, new_reqs)
-    incProgress(1)
   }
 
+  # send requests if any
   if (length(reqs) == 0) {
-    message("No requests in queue")
+    message("No weather requests in queue")
     return()
   }
 
   resp <- get_ibm(reqs)
 
+  # handle response
   if (nrow(resp) == 0) {
-    status_msg <- "Unable to get some/all weather data requested. Please try again."
-  } else {
-    new_wx <- resp %>%
-      clean_ibm() %>%
-      build_hourly()
-
-    wx <- bind_rows(new_wx, wx) %>%
-      distinct(grid_id, datetime_utc, .keep_all = T)
-
-    saved_weather <<- wx %>% arrange(grid_lat, grid_lng, datetime_utc)
-    write_fst(saved_weather, "data/saved_weather.fst", compress = 99)
+    message("Failed to get any weather response")
+    return (tibble())
   }
 
-  return(status_msg)
+  # process response
+  status_msg <- NULL
+  new_wx <- resp %>%
+    clean_ibm() %>%
+    build_hourly()
+  wx <- bind_rows(new_wx, wx) %>%
+    distinct(grid_id, datetime_utc, .keep_all = T) %>%
+    arrange(grid_id, datetime_utc)
+  return(wx)
 }
 
+# fetch_weather(tibble(), tibble(lat = 45, lng = -89), today() - days(7), today())
 
 
 # Weather helpers ---------------------------------------------------------
@@ -973,7 +967,12 @@ annotate_grids <- function(grids_with_status) {
 weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date)) {
   dates_expected <- seq.Date(start_date, end_date, 1)
   wx <- filter(wx, between(date, start_date, end_date))
-  if (nrow(wx) == 0) return(tibble(grid_id = NA, needs_download = TRUE))
+
+  if (nrow(wx) == 0) {
+    fallback_df <- tibble(grid_id = NA, grid_lat = NA, grid_lng = NA, needs_download = TRUE)
+    return(fallback_df)
+  }
+
   wx %>%
     summarize(
       tz = coalesce(first(time_zone), "UTC"),
@@ -2478,6 +2477,20 @@ show_modal <- function(md, title = NULL) {
     footer = modalButton("Close"),
     easyClose = TRUE
   ) %>% showModal()
+}
+
+
+
+
+# Shutdown ----------------------------------------------------------------
+
+clean_old_caches <- function(max_age_days = 30) {
+  cache_files <- list.files(path = "cache", pattern = ".*\\.fst", full.names = TRUE)
+  old_files <- cache_files[file.mtime(cache_files) < Sys.Date() - max_age_days]
+  if (length(old_files) > 0) {
+    file.remove(old_files)
+    message("Cleaned ", length(old_files), " old cache files")
+  }
 }
 
 

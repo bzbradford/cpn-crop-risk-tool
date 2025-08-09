@@ -5,9 +5,8 @@ account: bbradford
 server: connect.doit.wisc.edu
 hostUrl: https://connect.doit.wisc.edu/__api__
 appId: 438
-bundleId: 3986
+bundleId: 4045
 url: https://connect.doit.wisc.edu/cpn-risk-tool/
 version: 1
 asMultiple: FALSE
 asStatic: FALSE
-ignoredFiles: .RData

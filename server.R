@@ -1,13 +1,125 @@
 
 server <- function(input, output, session) {
 
+  # Startup and cookie handling ----
+
+  set_cookie <- function(sites) {
+    sites_json <- jsonlite::toJSON(sites)
+    runjs(str_glue('updateSites({sites_json})'))
+  }
+
+  clear_cookie <- function() {
+    set_cookie(tibble())
+  }
+
+  cookie <- reactive({
+    req(input$cookie)
+  })
+
+  # observe(echo(cookie()))
+
+  user_id <- reactive({
+    cookie()[["userId"]]
+  })
+
+  # observe(echo(user_id()))
+
+  cache_file <- reactive({
+    id <- req(user_id())
+    cache_path <- "cache"
+    if (!dir.exists(cache_path)) {
+      dir.create(cache_path)
+    }
+    fname <- paste0(id, ".fst")
+    file.path(cache_path, fname)
+  })
+
+  # observe(echo(cache_file()))
+
+
+  ## Initialize cookie ----
+  # on startup read cookie data then start cookie writer
+  observe({
+    runjs("sendCookieToShiny();")
+
+    cookie_writer <- observe({
+      sites <- rv$sites
+      set_cookie(sites)
+    })
+  })
+
+
+  ## Read cached weather ----
+  observe({
+    fname <- cache_file()
+    req(file.exists(fname))
+
+    tryCatch({
+      rv$weather <- read_fst(fname) %>% as_tibble()
+    }, error = function(e) {
+      message("Failed to read cache file '", fname, "'")
+      file.remove(fname)
+    })
+  }) %>%
+    bindEvent(cache_file())
+
+
+  ## Write weather to cache ----
+  observe({
+    wx <- rv$weather
+    saved_weather <<- wx
+    fname <- cache_file()
+    tryCatch({
+      write_fst(wx, fname, compress = 99)
+    }, error = function(e) {
+      message("Could not write cache file '", fname, "': ", e)
+    })
+  }) %>%
+    bindEvent(rv$weather)
+
+
+  ## Parse sites from cookie ----
+  observeEvent(cookie(), {
+    cookie <- req(cookie())
+    cookie_sites <- cookie[["sites"]]
+    req(length(cookie_sites) > 0)
+
+    tryCatch({
+      sites <- cookie_sites %>%
+        bind_rows() %>%
+        select(all_of(names(sites_template))) %>%
+        filter(validate_ll(lat, lng)) %>%
+        distinct() %>%
+        head(OPTS$max_sites) %>%
+        mutate(id = row_number())
+
+      req(nrow(sites) > 0)
+
+      rv$sites <- sites
+      rv$selected_site <- first(sites$id)
+      rv$map_cmd <- "fit_sites"
+
+      showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
+
+      # trigger weather fetch after a second
+      # delay(1000, {
+      #   rv$fetch <- runif(1)
+      # })
+
+    }, error = function(e) {
+      message("Failed to read sites from cookie: ", e)
+      clear_cookie()
+    })
+  })
+
+
   # Reactive values ----
 
   ## rv ----
   rv <- reactiveValues(
     # IBM hourly weather, lightly modified
-    weather = saved_weather,
-    weather_ready = nrow(saved_weather) > 0,
+    weather = tibble(),
+    weather_ready = FALSE,
 
     # can trigger a weather fetch
     fetch = NULL,
@@ -119,15 +231,18 @@ server <- function(input, output, session) {
   ## sites_sf ----
   sites_sf <- reactive({
     sites <- rv$sites
-    req(nrow(sites) > 0)
 
-    sf <- sites %>%
-      st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+    if (nrow(sites) > 0) {
+      sf <- sites %>%
+        st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
 
-    if (rv$weather_ready) {
-      sf %>% st_join(wx_grids())
+      if (rv$weather_ready) {
+        sf %>% st_join(wx_grids())
+      } else {
+        sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+      }
     } else {
-      sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+      NULL
     }
   })
 
@@ -156,9 +271,14 @@ server <- function(input, output, session) {
   ## sites_with_status ----
   # will be blocked when no weather in date range
   sites_with_status <- reactive({
-    req(sites_sf()) %>%
-      left_join(wx_status(), join_by(grid_id)) %>%
-      replace_na(list(needs_download = TRUE))
+    sites <- sites_sf()
+    if (is.null(sites)) {
+      NULL
+    } else {
+      sites %>%
+        left_join(wx_status(), join_by(grid_id)) %>%
+        replace_na(list(needs_download = TRUE))
+    }
   })
 
 
@@ -182,55 +302,10 @@ server <- function(input, output, session) {
   })
 
 
-  # Cookie handling ----
-
-  set_cookie <- function(sites) {
-    sites_json <- jsonlite::toJSON(sites)
-    runjs(str_glue('setCookie({sites_json})'))
-  }
-
-  delete_cookie <- function() {
-    runjs("deleteCookie()")
-  }
-
-  # on load read cookie data then start cookie writer
-  observe({
-    runjs("sendCookieToShiny()")
-
-    cookie_writer <- observe({
-      sites <- rv$sites
-      if (nrow(sites) > 0) {
-        set_cookie(sites)
-      } else {
-        delete_cookie()
-      }
-    })
-  })
-
-  ### Parse sites from cookie ----
-  observeEvent(input$cookie, {
-    cookie <- req(input$cookie)
-    tryCatch({
-      cookie_sites <- jsonlite::fromJSON(cookie)
-      sites <- cookie_sites %>%
-        select(all_of(names(sites_template))) %>%
-        filter(validate_ll(lat, lng)) %>%
-        distinct() %>%
-        head(OPTS$max_sites) %>%
-        mutate(id = row_number())
-      req(nrow(sites) > 0)
-      rv$sites <- sites
-      rv$selected_site <- first(sites$id)
-      rv$map_cmd <- "fit_sites"
-      showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
-    }, error = function(e) {
-      message("Failed to read sites from cookie: ", e)
-      delete_cookie()
-    })
-  })
 
 
-  # NOAA forecasts ----
+
+  # NOAA Forecast Extended Task ----
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
     message("Getting forecasts...")
@@ -253,9 +328,9 @@ server <- function(input, output, session) {
         list(urls = urls, forecasts = forecasts)
       }, seed = NULL)
     })
-
   })
 
+  ## Invoke NOAA requests ----
   observe({
     req(getOption("forecast", TRUE))
 
@@ -266,10 +341,57 @@ server <- function(input, output, session) {
     task_get_forecasts$invoke(grids, urls, forecasts)
   })
 
+  ## Collect result of NOAA requests ----
   observe({
+    req(task_get_forecasts$status() == "success")
     res <- req(task_get_forecasts$result())
     rv$noaa_urls <- res$urls
     rv$noaa_forecasts <- res$forecasts
+  })
+
+
+  # IBM Weather Extended Task ----
+
+  task_get_weather <- ExtendedTask$new(function(args) {
+    message("Getting weather...")
+    future_promise({
+      do.call(fetch_weather, args)
+    }, seed = NULL)
+  })
+
+  ## Invoke IBM weather request ----
+  invoke_get_weather <- function() {
+    req(task_get_weather$status() != "running")
+    req(need_weather())
+    args <- fetch_args()
+    disable("fetch")
+    runjs("$('#fetch').html('Downloading weather...')")
+    task_get_weather$invoke(args)
+    # rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
+  }
+
+  # fetch on button click
+  observeEvent(input$fetch, {
+    invoke_get_weather()
+  })
+
+  # fetch on program trigger
+  observeEvent(rv$fetch, {
+    invoke_get_weather()
+  })
+
+  ## Handle IBM request response ----
+  observe({
+    req(task_get_weather$status() == "success")
+    res <- task_get_weather$result()
+
+    rv$action_nonce <- runif(1) # regenerates the action button
+
+    if (is.null(res)) {
+      return()
+    } else if (nrow(res) > 0) {
+      rv$weather <- res
+    }
   })
 
 
@@ -279,6 +401,8 @@ server <- function(input, output, session) {
   wx_forecasts <- reactive({
     sites <- sites_sf()
     req(nrow(sites) > 0)
+    req_cols <- c("grid_id", "grid_lat", "grid_lng", "time_zone")
+    req(all(req_cols %in% names(sites)))
 
     grids <- sites %>%
       st_drop_geometry() %>%
@@ -628,7 +752,7 @@ server <- function(input, output, session) {
         if (confirmed) {
           rv$sites <- sites_template
           rv$selected_site <- 1
-          delete_cookie()
+          clear_cookie()
         }
       }
     )
@@ -760,6 +884,7 @@ server <- function(input, output, session) {
     # message('Auto-fetching weather data in 15 seconds...')
     delay(15000, {
       # message("Auto-fetching weather data...")
+      req(need_weather())
       rv$fetch <- runif(1)
     })
   })
@@ -795,7 +920,8 @@ server <- function(input, output, session) {
   # record coordinates and dates queried from IBM to avoid duplicate attempts
   # uses the grid lat/lng instead of site lat/lng if available
   fetch_args <- reactive({
-    sites <- req(sites_sf()) %>%
+    sites <- req(sites_sf())
+    sites <- sites %>%
       st_drop_geometry() %>%
       mutate(
         lat = coalesce(grid_lat, lat),
@@ -806,44 +932,28 @@ server <- function(input, output, session) {
     date_range <- expanded_dates()
 
     list(
+      wx = saved_weather,
       sites = sites,
       start_date = date_range$start,
       end_date = date_range$end
     )
   })
 
+  # observe(echo(fetch_args()))
+
+
   ## already_fetched // reactive ----
-  already_fetched <- reactive({
-    args <- fetch_args()
-    rlang::hash(args) %in% rv$fetch_hashes
-  })
+  # already_fetched <- reactive({
+  #   args <- fetch_args()
+  #   rlang::hash(args) %in% rv$fetch_hashes
+  # })
 
-  ## Handle fetching on click ----
-  observe({
-    # req(!already_fetched())
-
-    args <- fetch_args()
-    disable("fetch")
-    runjs("$('#fetch').html('Downloading weather...')")
-
-    withProgress(
-      message = "Downloading weather...",
-      value = 0, min = 0, max = nrow(args$sites),
-      {
-        msg <- do.call(fetch_weather, args)
-        rv$status_msg <- msg
-      }
-    )
-
-    rv$action_nonce <- runif(1) # regenerates the action button
-    rv$weather <- saved_weather
-    rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
-  }) %>%
-    bindEvent(input$fetch, rv$fetch) # runs on launch & button press
 
 
 
 # Module servers ----------------------------------------------------------
+
+  ## Map server ----
 
   mapServer(
     rv = rv,
@@ -870,5 +980,13 @@ server <- function(input, output, session) {
     rv = rv,
     wx_data = reactive(wx_data())
   )
+
+
+
+# Cleanup -----------------------------------------------------------------
+
+  session$onSessionEnded(function() {
+    clean_old_caches()
+  })
 
 }

@@ -13,19 +13,25 @@ riskServer <- function(rv, wx_data) {
     function(input, output, session) {
       ns <- session$ns
 
+      # Interface --------------------------------------------------------------
+
       ## main_ui ----
-      # shown when sites/weather validation pass
+      # handle validation messages
       output$main_ui <- renderUI({
         validate(
           need(rv$sites_ready, OPTS$validation_sites_ready),
           need(rv$weather_ready, OPTS$validation_weather_ready)
         )
 
+        uiOutput(ns("main_ui_elems")) %>% withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Loading...")
+      })
+
+      # shown when validation passes
+      output$main_ui_elems <- renderUI({
         tagList(
           uiOutput(ns("crop_picker")),
           uiOutput(ns("model_picker")),
           uiOutput(ns("model_ui")),
-          uiOutput(ns("show_all_sites_ui")),
           uiOutput(ns("selected_site_ui")),
           uiOutput(ns("weather_missing_ui")),
           uiOutput(ns("plots_ui"))
@@ -95,6 +101,10 @@ riskServer <- function(rv, wx_data) {
         model <- req(input$model)
         req(model == "white_mold")
 
+        uiOutput(ns("white_mold_opts"))
+      })
+
+      output$white_mold_opts <- renderUI({
         irrigation_choices <- list("Dry" = FALSE, "Irrigated" = TRUE)
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
@@ -129,28 +139,44 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-
       ## show_all_sites_ui ----
       # shown when more than one site
-      output$show_all_sites_ui <- renderUI({
+      output$selected_site_ui <- renderUI({
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
 
+        uiOutput(ns("selected_site_opts"))
+      })
+
+      output$selected_site_opts <- renderUI({
         div(
           class = "flex-across",
           tags$label("Show results for:"),
           radioButtons(
             inputId = ns("show_all_sites"),
-            # label = "Show results for:",
             label = NULL,
             choices = list(
               "All sites" = TRUE,
               "Selected site" = FALSE
             ),
-            selected = input$show_all_sites %||% TRUE,
+            selected = isolate(input$show_all_sites) %||% TRUE,
             inline = TRUE
           )
         )
+      })
+
+      ## selected_sites - reactive ----
+      selected_sites <- reactive({
+        sites <- wx_data()$sites
+
+        if (nrow(sites) > 1) {
+          i <- req(input$show_all_sites)
+          if (i == FALSE) {
+            sites <- subset(sites, id == rv$selected_site)
+          }
+        }
+
+        sites
       })
 
 
@@ -168,7 +194,7 @@ riskServer <- function(rv, wx_data) {
 
       # Generate model data ----
 
-      ## model_data() - reactive ----
+      ## model_data - reactive ----
       model_data <- reactive({
         model <- req(input$model)
         wx_data <- wx_data()
@@ -196,24 +222,32 @@ riskServer <- function(rv, wx_data) {
         filter(df, date >= date_range$start)
       })
 
-      joined_data <- reactive({
-        sites <- wx_data()$sites
+      # observe(echo(model_data()))
 
-        sites %>%
+      ## joined_data - reactive ----
+      joined_data <- reactive({
+        selected_sites() %>%
           st_drop_geometry() %>%
           select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) %>%
-          left_join(model_data(), join_by(grid_id), relationship = "many-to-many")
+          left_join(model_data(), join_by(grid_id), relationship = "many-to-many") %>%
+          mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
       })
 
+      # observe(echo(joined_data()))
+
+
+      # Build risk plots -------------------------------------------------------
 
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
-        model_data <- joined_data() %>%
-          mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
+        model_data <- joined_data()
         req(nrow(model_data) > 0)
-        dates <- wx_data()$dates
+
+        wx <- wx_data()
+        sites <- wx$sites
+        dates <- wx$dates
 
         last_values <- model_data %>%
           filter(date == min(today(), max(date)), .by = id)
@@ -223,10 +257,6 @@ riskServer <- function(rv, wx_data) {
           select(id, model_value, value_label, risk, risk_color) %>%
           mutate(model_name = model$name)
         rv$map_title <- paste(model$name, "risk,", format(dates$end, "%b %d, %Y"))
-
-        if (req(!is.null(input$show_all_sites)) & input$show_all_sites == FALSE) {
-          model_data <- model_data %>% filter(id == rv$selected_site)
-        }
 
         site_labels <- unique(model_data$site_label)
 
@@ -275,7 +305,10 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-      ## Download handler ----
+
+      # Download handler -------------------------------------------------------
+
+      ## download_data ----
       output$download_data <- downloadHandler(
         filename = function() {
           data <- wx_data()
@@ -289,7 +322,7 @@ riskServer <- function(rv, wx_data) {
           model <- selected_model()
           model_data <- joined_data() %>%
             select(-any_of(OPTS$grid_attr_cols)) %>%
-            select(-c(risk_color, value_label)) %>%
+            select(-c(risk_color, value_label, site_label)) %>%
             rename_with_units("metric")
 
           header <- tibble(line = c(
@@ -298,7 +331,7 @@ riskServer <- function(rv, wx_data) {
             sprintf("Host: %s", session$clientData$url_hostname)
           ))
 
-          sites <- data$sites %>%
+          sites <- selected_sites() %>%
             st_drop_geometry() %>%
             select(id:days_missing)
 
