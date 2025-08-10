@@ -1,3 +1,4 @@
+#--- main server ---#
 
 server <- function(input, output, session) {
 
@@ -151,8 +152,6 @@ server <- function(input, output, session) {
 
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
-
-    risk_last_value = tibble(),
   )
 
   ## rv$sites_ready ----
@@ -194,6 +193,15 @@ server <- function(input, output, session) {
     msg <- validate_dates(start, end)
     rv$status_msg <- msg
     rv$dates_valid <- !isTruthy(msg)
+  })
+
+  ## rv$map_risk_data ----
+  # used by the map to render pin colors
+  # set by the risk module
+  # cleared here when sites change
+  observe({
+    sites <- rv$sites
+    rv$map_risk_data <- NULL
   })
 
 

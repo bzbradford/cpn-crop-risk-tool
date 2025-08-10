@@ -1,3 +1,5 @@
+#--- crop risk module ---#
+
 riskUI <- function() {
   ns <- NS("risk")
   div(
@@ -13,7 +15,7 @@ riskServer <- function(rv, wx_data) {
     function(input, output, session) {
       ns <- session$ns
 
-      # Interface --------------------------------------------------------------
+      # Interface ----
 
       ## main_ui ----
       # handle validation messages
@@ -236,24 +238,24 @@ riskServer <- function(rv, wx_data) {
       # observe(echo(joined_data()))
 
 
-      # Build risk plots -------------------------------------------------------
+      # Build risk plots ----
 
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
         model_data <- joined_data()
-        req(nrow(model_data) > 0)
-
         wx <- wx_data()
         sites <- wx$sites
         dates <- wx$dates
+
+        req(nrow(model_data) > 0)
 
         last_values <- model_data %>%
           filter(date == min(today(), max(date)), .by = id)
 
         # write values for map
-        rv$risk_last_value <- last_values %>%
+        rv$map_risk_data <- last_values %>%
           select(id, model_value, value_label, risk, risk_color) %>%
           mutate(model_name = model$name)
         rv$map_title <- paste(model$name, "risk,", format(dates$end, "%b %d, %Y"))

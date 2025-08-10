@@ -1,4 +1,4 @@
-#--- map.R ---#
+#--- map module ---#
 
 mapUI <- function() {
   ns <- NS("map")
@@ -197,6 +197,7 @@ mapServer <- function(rv, map_data) {
       ## Map title ----
 
       output$map_title <- renderUI({
+        req(rv$map_risk_data)
         title <- req(rv$map_title)
 
         div(class = "map-title", title)
@@ -285,7 +286,6 @@ mapServer <- function(rv, map_data) {
         }
 
         color_by_risk <- FALSE
-        risk_values <- rv$risk_last_value
 
         sites <- sites %>%
           mutate(
@@ -302,8 +302,9 @@ mapServer <- function(rv, map_data) {
           )
 
         # color by risk value if available
+        risk_values <- rv$map_risk_data
         try({
-          if (nrow(risk_values) > 0) {
+          if (!is.null(risk_values) && nrow(risk_values) > 0) {
             sites <- sites %>%
               left_join(risk_values, join_by(id)) %>%
               rowwise() %>%
@@ -372,9 +373,8 @@ mapServer <- function(rv, map_data) {
 
 
       ## Show all weather data grids ----
-      # only in development
       observe({
-        req(session$clientData$url_hostname == "127.0.0.1")
+        # req(session$clientData$url_hostname == "127.0.0.1")
 
         grids <- map_data()$grids
 

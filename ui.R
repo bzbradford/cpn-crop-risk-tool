@@ -1,4 +1,4 @@
-#-- ui.R --#
+#--- main ui --#
 
 ui <- fluidPage(
 

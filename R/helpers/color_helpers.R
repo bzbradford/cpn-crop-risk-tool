@@ -1,3 +1,6 @@
+#' Find the closest CSS color name for a given hex color
+#' @param hex_color A hex color string (e.g., "#FF5733")
+#' @returns A list containing the closest CSS color name, hex value, and contrast text color
 find_closest_css_color <- function(hex_color) {
   # Define CSS named colors with their hex values
   css_colors <- list(
