@@ -306,12 +306,15 @@ mapServer <- function(rv, map_data) {
             sites <- sites %>%
               left_join(risk_values, join_by(id)) %>%
               rowwise() %>%
-              mutate(
-                risk_color = coalesce(risk_color, "#aaa"),
-                as_tibble(find_closest_css_color(risk_color))
-              ) %>%
+              mutate(risk_color = coalesce(risk_color, "#aaa")) %>%
+              mutate(as_tibble(find_closest_css_color(risk_color))) %>%
               mutate(marker_color = css_color) %>%
-              mutate(label = paste(label, sprintf("<br>%s: %s", model_name, value_label)))
+              mutate(model_text = if_else(
+                is.na(model_name),
+                "No model data",
+                sprintf("%s: %s", model_name, value_label)
+              )) %>%
+              mutate(label = paste0(label, "<br>", model_text))
             color_by_risk <- TRUE
           }
         })
