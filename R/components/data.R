@@ -4,7 +4,6 @@ dataUI <- function() {
   ns <- NS("data")
   div(
     # class = "tab-content",
-
     div(
       em("Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information.")
     ),
@@ -71,12 +70,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             grid_id
           )
 
-        data <- switch(
-          opts$data_type,
+        data <- switch(opts$data_type,
           "hourly" = wx$hourly,
           "daily" = wx$daily,
-          "ma" = switch(
-            opts$ma_align,
+          "ma" = switch(opts$ma_align,
             "center" = wx$ma_center,
             "right" = wx$ma_right
           ),
@@ -90,7 +87,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           left_join(data, join_by(grid_id), relationship = "many-to-many") %>%
           drop_na(grid_id, date) %>%
           select(-grid_id) %>%
-          mutate(across(where(is.numeric), ~signif(.x)))
+          mutate(across(where(is.numeric), ~ signif(.x)))
 
         if (isFALSE(input$forecast)) {
           df <- if (opts$data_type == "hourly") {
@@ -322,7 +319,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
 
         if (opts$multi_site) {
-          opts$selected_ids = req(input$plot_sites)
+          opts$selected_ids <- req(input$plot_sites)
           df <- filter(df, site_id %in% opts$selected_ids)
         }
         req(nrow(df) > 0)
@@ -353,7 +350,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         # try to assign the columns to axes with values in similar ranges
         # also bunches the more numerous columns on the left
         col_ranges <- df %>%
-          summarize(across(all_of(opts$cols), ~max(.x, na.rm = T))) %>%
+          summarize(across(all_of(opts$cols), ~ calc_max(.x))) %>%
           pivot_longer(everything()) %>%
           drop_na(value) %>%
           mutate(value = sqrt(abs(value))) %>%
@@ -418,7 +415,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
           add_trace_to_plot <- function(plt, x, y, name) {
             add_trace(
-              plt, x = x, y = y,
+              plt,
+              x = x, y = y,
               name = name, type = "scatter", mode = opts$mode,
               yaxis = col_axis,
               hovertemplate = paste0("%{y:.3~f}", find_unit(col, opts$unit_system)),
@@ -431,13 +429,15 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
               site_df <- df %>% filter(site_id == id)
               name <- str_trunc(first(site_df$site_name), 15)
               plt <- add_trace_to_plot(
-                plt, x = site_df$date, y = site_df[[col]],
+                plt,
+                x = site_df$date, y = site_df[[col]],
                 name = sprintf("%s: %s - %s", id, name, col_name)
               )
             }
           } else {
             plt <- add_trace_to_plot(
-              plt, x = df$date, y = df[[col]], name = col_name
+              plt,
+              x = df$date, y = df[[col]], name = col_name
             )
           }
         }
@@ -493,8 +493,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           download_data() %>% write_excel_csv(file, na = "")
         }
       )
-
-
     } # end module
   )
 }

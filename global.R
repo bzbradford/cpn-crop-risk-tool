@@ -28,6 +28,10 @@ suppressPackageStartupMessages({
 
 # Dev settings ----
 
+# library("languageserver")
+# library("lintr")
+# library("styler")
+
 ## development mode
 # shiny::devmode(TRUE)
 
@@ -79,4 +83,3 @@ source_dir("R/models")
 
 # components
 source_dir("R/components")
-

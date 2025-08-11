@@ -9,9 +9,10 @@ echo <- function(x) {
 runtime <- function(label = "timestamp", ref = NULL) {
   t <- now()
   message(">> ", label, " [", t, "]")
-  if (!is.null(ref))
+  if (!is.null(ref)) {
     message(difftime(t, ref), " elapsed")
-  return(t)
+  }
+  t
 }
 
 # swaps names and values in a list or vector
@@ -31,7 +32,9 @@ build_choices <- function(obj, name, value) {
 
 # return the first truthy argument
 first_truthy <- function(...) {
-  for (arg in list(...)) if (shiny::isTruthy(arg)) return(arg)
+  for (arg in list(...)) if (shiny::isTruthy(arg)) {
+    return(arg)
+  }
   NULL
 }
 
@@ -44,22 +47,30 @@ hours_diff <- function(start, end) {
 ## NA-safe summary functions ----
 
 calc_sum <- function(x) {
-  if (all(is.na(x))) return(NA)
+  if (all(is.na(x))) {
+    return(NA)
+  }
   sum(x, na.rm = TRUE)
 }
 
 calc_min <- function(x) {
-  if (all(is.na(x))) return(NA)
+  if (all(is.na(x))) {
+    return(NA)
+  }
   min(x, na.rm = TRUE)
 }
 
 calc_mean <- function(x) {
-  if (all(is.na(x))) return(NA)
+  if (all(is.na(x))) {
+    return(NA)
+  }
   mean(x, na.rm = TRUE)
 }
 
 calc_max <- function(x) {
-  if (all(is.na(x))) return(NA)
+  if (all(is.na(x))) {
+    return(NA)
+  }
   max(x, na.rm = TRUE)
 }
 
@@ -67,11 +78,11 @@ calc_max <- function(x) {
 ## Rolling functions ----
 
 roll_mean <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = T)
+  zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = TRUE)
 }
 
 roll_sum <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_sum(x), partial = T)
+  zoo::rollapplyr(vec, width, \(x) calc_sum(x), partial = TRUE)
 }
 
 

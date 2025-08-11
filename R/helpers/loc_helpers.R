@@ -12,7 +12,9 @@ service_bounds_3857 <- st_transform(service_bounds, 3857)
 #' @returns boolean
 validate_ll <- function(lat, lng) {
   mapply(function(lat, lng) {
-    if (!is.numeric(lat) | !is.numeric(lng)) return(F)
+    if (!is.numeric(lat) | !is.numeric(lng)) {
+      return(FALSE)
+    }
     pt <- st_point(c(lng, lat)) %>%
       st_sfc(crs = 4326) %>%
       st_transform(st_crs(service_bounds_3857))
@@ -25,7 +27,7 @@ validate_ll <- function(lat, lng) {
 #' @param lng longitude of point
 #' @param d decimal degree distance from center to edge of grid
 #' @returns sf object
-ll_to_grid <- function(lat, lon, d = 1/45.5) {
+ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
   m <- list(rbind(
     c(lon - d, lat + d),
     c(lon + d, lat + d),

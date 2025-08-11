@@ -91,11 +91,11 @@ daily_status <- function(wx, tz = "UTC") {
 #' @param end_date
 fetch_weather <- function(wx, sites, start_date, end_date) {
   all_dates <- seq.Date(start_date, end_date, 1)
-  sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+  sites <- sites %>% st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = FALSE)
   reqs <- list()
 
   # for each site see how much weather is needed
-  for (i in 1:nrow(sites)) {
+  for (i in seq_len(nrow(sites))) {
     site <- slice(sites, i)
 
     # already have some weather? find dates to download
@@ -150,7 +150,7 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
   # handle response
   if (nrow(resp) == 0) {
     message("Failed to get any weather response")
-    return (tibble())
+    return(tibble())
   }
 
   # process response
@@ -158,10 +158,12 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
   new_wx <- resp %>%
     clean_ibm() %>%
     build_hourly()
+
   wx <- bind_rows(new_wx, wx) %>%
-    distinct(grid_id, datetime_utc, .keep_all = T) %>%
+    distinct(grid_id, datetime_utc, .keep_all = TRUE) %>%
     arrange(grid_id, datetime_utc)
-  return(wx)
+
+  wx
 }
 
 # fetch_weather(tibble(), tibble(lat = 45, lng = -89), today() - days(7), today())

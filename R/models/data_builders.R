@@ -25,7 +25,7 @@ build_daily <- function(hourly) {
       hours_rh_over_90 = sum(relative_humidity >= 90),
       .by = c(grid_id, date, yday, year, month, day)
     ) %>%
-    mutate(precip_cumulative = cumsum(precip_daily), .after = precip_max_hourly, .by = grid_id ) %>%
+    mutate(precip_cumulative = cumsum(precip_daily), .after = precip_max_hourly, .by = grid_id) %>%
     mutate(snow_cumulative = cumsum(snow_daily), .after = snow_max_hourly, .by = grid_id) %>%
     mutate(
       # for botcast
@@ -80,10 +80,10 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   # define moving average functions
   roll_mean <- function(vec, width) rollapply(vec, width, \(x) calc_mean(x), partial = TRUE, align = align)
   fns <- c(
-    "7day" = ~roll_mean(.x, 7),
-    "14day" = ~roll_mean(.x, 14),
-    "21day" = ~roll_mean(.x, 21),
-    "30day" = ~roll_mean(.x, 30)
+    "7day" = ~ roll_mean(.x, 7),
+    "14day" = ~ roll_mean(.x, 14),
+    "21day" = ~ roll_mean(.x, 21),
+    "30day" = ~ roll_mean(.x, 30)
   )
 
   # apply moving average functions to each primary data column
@@ -140,7 +140,8 @@ build_tar_spot <- function(daily) {
       ) %>% attenuate_prob(temperature_min_21day),
       assign_risk("tar_spot_prob", model_value),
       .by = grid_id, .keep = "used"
-    ) %>% select(-grid_id)
+    ) %>%
+    select(-grid_id)
   bind_cols(attr, disease)
 }
 
@@ -156,7 +157,8 @@ build_gray_leaf_spot <- function(daily) {
       model_value = predict_gls(temperature_min_21day, dew_point_min_30day),
       assign_risk("gray_leaf_spot_prob", model_value),
       .by = grid_id, .keep = "used"
-    ) %>% select(-grid_id)
+    ) %>%
+    select(-grid_id)
   bind_cols(attr, disease)
 }
 
@@ -184,7 +186,8 @@ build_don <- function(daily) {
       ),
       assign_risk("don_prob", model_value),
       .by = grid_id, .keep = "used"
-    ) %>% select(-grid_id)
+    ) %>%
+    select(-grid_id)
   bind_cols(attr, disease) %>%
     drop_na(model_value)
 }

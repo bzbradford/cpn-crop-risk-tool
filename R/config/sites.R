@@ -53,7 +53,7 @@ sanitize_loc_names <- function(str) {
 #' Try read sites list from csv
 #' @param fpath location of csv to read
 load_sites <- function(fpath) {
-  df <- read_csv(fpath, col_types = "c", show_col_types = F)
+  df <- read_csv(fpath, col_types = "c", show_col_types = FALSE)
   if (nrow(df) == 0) stop("File was empty")
   df <- df %>%
     clean_names() %>%

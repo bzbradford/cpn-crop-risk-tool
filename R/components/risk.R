@@ -337,16 +337,15 @@ riskServer <- function(rv, wx_data) {
             st_drop_geometry() %>%
             select(id:days_missing)
 
-          write_excel_csv(header, file, na = "", col_names = F)
+          write_excel_csv(header, file, na = "", col_names = FALSE)
           tibble(line = c("", "=== Site list ===")) %>%
-            write_excel_csv(file, append = T)
-          write_excel_csv(sites, file, na = "", col_names = T, append = T)
+            write_excel_csv(file, append = TRUE)
+          write_excel_csv(sites, file, na = "", col_names = TRUE, append = TRUE)
           tibble(line = c("", "=== Model data ===")) %>%
-            write_excel_csv(file, append = T)
-          write_excel_csv(model_data, file, na = "", col_names = T, append = T)
+            write_excel_csv(file, append = TRUE)
+          write_excel_csv(model_data, file, na = "", col_names = TRUE, append = TRUE)
         }
       )
-
     } # end module
   )
 }

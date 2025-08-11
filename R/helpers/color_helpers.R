@@ -6,7 +6,7 @@ find_closest_css_color <- function(hex_color) {
   css_colors <- list(
     "red" = "#FF0000",
     "darkred" = "#8B0000",
-    "lightred" = "#FFB6C1",  # Using light pink as proxy
+    "lightred" = "#FFB6C1", # Using light pink as proxy
     "orange" = "#FFA500",
     "beige" = "#F5F5DC",
     "green" = "#008000",
@@ -16,7 +16,7 @@ find_closest_css_color <- function(hex_color) {
     "darkblue" = "#00008B",
     "lightblue" = "#ADD8E6",
     "purple" = "#800080",
-    "darkpurple" = "#483D8B",  # Using dark slate blue as proxy
+    "darkpurple" = "#483D8B", # Using dark slate blue as proxy
     "pink" = "#FFC0CB",
     "cadetblue" = "#5F9EA0",
     "white" = "#FFFFFF",
@@ -29,14 +29,16 @@ find_closest_css_color <- function(hex_color) {
   hex_to_rgb <- function(hex) {
     hex <- gsub("#", "", hex)
     if (nchar(hex) == 3) {
-      hex <- paste0(substr(hex, 1, 1), substr(hex, 1, 1),
+      hex <- paste0(
+        substr(hex, 1, 1), substr(hex, 1, 1),
         substr(hex, 2, 2), substr(hex, 2, 2),
-        substr(hex, 3, 3), substr(hex, 3, 3))
+        substr(hex, 3, 3), substr(hex, 3, 3)
+      )
     }
     r <- as.numeric(paste0("0x", substr(hex, 1, 2)))
     g <- as.numeric(paste0("0x", substr(hex, 3, 4)))
     b <- as.numeric(paste0("0x", substr(hex, 5, 6)))
-    return(c(r, g, b))
+    c(r, g, b)
   }
 
   # Function to calculate Euclidean distance in RGB space
@@ -50,20 +52,17 @@ find_closest_css_color <- function(hex_color) {
     rgb_norm <- rgb / 255
     rgb_linear <- ifelse(rgb_norm <= 0.03928,
       rgb_norm / 12.92,
-      ((rgb_norm + 0.055) / 1.055)^2.4)
+      ((rgb_norm + 0.055) / 1.055)^2.4
+    )
     luminance <- 0.2126 * rgb_linear[1] + 0.7152 * rgb_linear[2] + 0.0722 * rgb_linear[3]
-    return(luminance)
+    luminance
   }
 
   # Function to determine text color based on contrast
   get_text_color <- function(bg_luminance) {
     # Use a luminance threshold of 0.5 for better visual results
     # Colors darker than this threshold get white text, lighter colors get black text
-    if (bg_luminance < 0.5) {
-      return("#fff")
-    } else {
-      return("#000")
-    }
+    if (bg_luminance < 0.5) "#fff" else "#000"
   }
 
   # Validate and clean input hex color
@@ -94,13 +93,13 @@ find_closest_css_color <- function(hex_color) {
   text_color <- get_text_color(input_luminance)
 
   # Return results
-  return(list(
+  list(
     input_hex = paste0("#", hex_color),
     css_color = closest_color,
     css_hex_value = css_colors[[closest_color]],
     distance = round(min_distance, 2),
     text_color = text_color
-  ))
+  )
 }
 
 # Example usage:

@@ -25,7 +25,6 @@ mapServer <- function(rv, map_data) {
   moduleServer(
     id = "map",
     function(input, output, session) {
-
       ns <- session$ns
 
 
@@ -46,7 +45,7 @@ mapServer <- function(rv, map_data) {
       fit_bounds <- function(map = proxy_map, bounds, options = NULL) {
         args <- as.list(bounds)
         args$map <- map
-        args$options = options
+        args$options <- options
         do.call(fitBounds, args)
       }
 
@@ -75,7 +74,9 @@ mapServer <- function(rv, map_data) {
       save_site <- function(site) {
         sites <- rv$sites
 
-        if (nrow(sites) == OPTS$max_sites) return()
+        if (nrow(sites) == OPTS$max_sites) {
+          return()
+        }
 
         if (!validate_ll(site$lat, site$lng)) {
           show_toast(
@@ -97,7 +98,7 @@ mapServer <- function(rv, map_data) {
           site$name <- value
           sites <- sites %>%
             bind_rows(as_tibble(site)) %>%
-            distinct(lat, lng, .keep_all = T) %>%
+            distinct(lat, lng, .keep_all = TRUE) %>%
             mutate(id = row_number())
 
           rv$sites <- sites
@@ -126,8 +127,7 @@ mapServer <- function(rv, map_data) {
       # trigger local functions from the main server
       observe({
         cmd <- req(rv$map_cmd)
-        switch(
-          cmd,
+        switch(cmd,
           "fit_sites" = fit_sites(),
           warning(sprintf("Unrecognized message '%s'", cmd))
         )
@@ -138,12 +138,11 @@ mapServer <- function(rv, map_data) {
 
       ## map // renderLeaflet ----
       output$map <- renderLeaflet({
-
         btn_js <- function(id) {
           JS(paste0("(btn, map) => { sendShiny('map-map_btn', '", id, "') };"))
         }
 
-        leaflet(options = leafletOptions(preferCanvas = T)) %>%
+        leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
           addMapPane("extent", 501) %>%
           # addMapPane("counties", 410) %>%
           addMapPane("grid", 502) %>%
@@ -151,8 +150,8 @@ mapServer <- function(rv, map_data) {
           add_basemaps() %>%
           addLayersControl(
             baseGroups = names(OPTS$map_tiles),
-            overlayGroups = unlist(OPTS$map_layers, use.names = F),
-            options = layersControlOptions(collapsed = T)
+            overlayGroups = unlist(OPTS$map_layers, use.names = FALSE),
+            options = layersControlOptions(collapsed = TRUE)
           ) %>%
           addEasyButtonBar(
             easyButton(
@@ -179,8 +178,8 @@ mapServer <- function(rv, map_data) {
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
-            hoverToWake = F,
-            sleepNote = F,
+            hoverToWake = FALSE,
+            sleepNote = FALSE,
             sleepOpacity = 1
           ) %>%
           addPolygons(
@@ -218,7 +217,6 @@ mapServer <- function(rv, map_data) {
       ## coord_search_ui // renderUI ----
       # Coordinate searchbox under map
       output$coord_search_ui <- renderUI({
-
         # treat pressing Enter as clicking "go"
         runjs("
           $(document).keyup((event) => {
@@ -325,10 +323,10 @@ mapServer <- function(rv, map_data) {
             data = sites,
             lat = ~lat,
             lng = ~lng,
-            label = ~lapply(label, HTML),
+            label = ~ lapply(label, HTML),
             layerId = ~id,
             group = "sites",
-            icon = ~makeAwesomeIcon(
+            icon = ~ makeAwesomeIcon(
               library = "fa",
               # icon = icon,
               markerColor = marker_color,
@@ -424,13 +422,16 @@ mapServer <- function(rv, map_data) {
       # try to parse coords and save if it works
       observe({
         str <- req(input$coord_search)
-        tryCatch({
-          coords <- parse_coords(str)
-          runjs("$('#map-coord_search').val(null);")
-          get_loc_name(coords$lat, coords$lng, "Searched point")
-        }, error = function(e) {
-          show_toast("Invalid coordinate search", text = sprintf("'%s' could not be parsed as valid coordinates. Expected something like '45.12, -89.34'", str), position = "center")
-        })
+        tryCatch(
+          {
+            coords <- parse_coords(str)
+            runjs("$('#map-coord_search').val(null);")
+            get_loc_name(coords$lat, coords$lng, "Searched point")
+          },
+          error = function(e) {
+            show_toast("Invalid coordinate search", text = sprintf("'%s' could not be parsed as valid coordinates. Expected something like '45.12, -89.34'", str), position = "center")
+          }
+        )
       }) %>%
         bindEvent(input$coord_search_go)
 
@@ -467,14 +468,12 @@ mapServer <- function(rv, map_data) {
         marker <- req(input$map_marker_click)
         id <- marker$id
         sites <- rv$sites
-        site <- sites[id,]
+        site <- sites[id, ]
         if (rv$selected_site != id) rv$selected_site <- id
         rv$sites <- sites
         # fly_to(marker)
       }) %>%
         bindEvent(input$map_marker_click$.nonce)
-
-
     } # end module
   )
 }

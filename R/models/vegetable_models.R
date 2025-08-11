@@ -8,10 +8,10 @@
 #' @param tmax Maximum daily temperature, Celsius
 #' @returns numeric daily potato physiological days, approx 0-10 per day
 calc_pdays <- function(tmin, tmax) {
-  a = 5 * pday(tmin)
-  b = 8 * pday((2 * tmin / 3) + (tmax / 3))
-  c = 8 * pday((2 * tmax / 3) + (tmin / 3))
-  d = 3 * pday(tmin)
+  a <- 5 * pday(tmin)
+  b <- 8 * pday((2 * tmin / 3) + (tmax / 3))
+  c <- 8 * pday((2 * tmax / 3) + (tmin / 3))
+  d <- 3 * pday(tmin)
   (a + b + c + d) / 24.0
 }
 
@@ -23,8 +23,8 @@ pday <- function(temp) {
   case_when(
     temp < 7 ~ 0,
     between(temp, 7, 21) ~ 10 * (1 - ((temp - 21)^2 / 196)), # 196 = (21-7)^2
-    between(temp, 21, 30) ~ 10 * (1 - ((temp - 21)**2 / 81)), # 81 = (30-21)^2
-    T ~ 0
+    between(temp, 21, 30) ~ 10 * (1 - ((temp - 21)^2 / 81)), # 81 = (30-21)^2
+    TRUE ~ 0
   )
 }
 
@@ -48,7 +48,7 @@ pday <- function(temp) {
 calc_late_blight_dsv <- function(t, h) {
   case_when(
     is.na(t) | is.na(h) ~ 0,
-    t <   7.2 ~ 0,
+    t < 7.2 ~ 0,
     t <= 11.6 ~ (h > 21) + (h > 18) + (h > 15),
     t <= 15.0 ~ (h > 21) + (h > 18) + (h > 15) + (h > 12),
     t <= 26.6 ~ (h > 18) + (h > 15) + (h > 12) + (h > 9),
@@ -75,11 +75,11 @@ calc_late_blight_dsv <- function(t, h) {
 calc_alternaria_dsv <- function(temp, h) {
   case_when(
     is.na(temp) | is.na(h) ~ 0,
-    temp <  13 ~ 0,
+    temp < 13 ~ 0,
     temp <= 18 ~ (h > 20) + (h > 15) + (h > 7),
     temp <= 21 ~ (h > 22) + (h > 15) + (h > 8) + (h > 4),
     temp <= 26 ~ (h > 20) + (h > 12) + (h > 5) + (h > 2),
-    temp >  26 ~ (h > 22) + (h > 15) + (h > 8) + (h > 3)
+    temp > 26 ~ (h > 22) + (h > 15) + (h > 8) + (h > 3)
   )
 }
 
@@ -118,7 +118,7 @@ calc_cercospora_div <- function(t, h) {
     t <= 80 ~ 1 + (h > 3) + (h > 6) + (h > 8) + (h > 10) + (h > 12) + (h > 15),
     t <= 81 ~ 1 + (h > 2) + (h > 4) + (h > 6) + (h > 7) + (h > 9) + (h > 11),
     t <= 82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 10),
-    t >  82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 9)
+    t > 82 ~ 1 + (h > 2) + (h > 4) + (h > 5) + (h > 7) + (h > 8) + (h > 9)
   )
 }
 
@@ -190,8 +190,8 @@ botcast_dinfv <- function(t, h) {
 
 
 calc_botrytis_dsi <- function(hot, dry, hours_rh90, mean_temp_rh90) {
-  dinov = botcast_dinov(hot, hours_rh90, lag(dry, default = FALSE))
-  dinfv = botcast_dinfv(mean_temp_rh90, hours_rh90)
+  dinov <- botcast_dinov(hot, hours_rh90, lag(dry, default = FALSE))
+  dinfv <- botcast_dinfv(mean_temp_rh90, hours_rh90)
   dinov * dinfv
 }
 

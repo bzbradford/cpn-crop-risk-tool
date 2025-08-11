@@ -36,7 +36,7 @@ predict_tarspot <- function(MeanAT_30ma, MaxRH_30ma, HrsRH90Night_14ma) {
 #' @param MinDP_30ma Minimum dew point temperature, 30-day moving average, Celsius
 #' @returns probability of spore presence
 predict_gls <- function(MinAT_21ma, MinDP_30ma) {
-  mu = -2.9467 - 0.03729 * MinAT_21ma + 0.6534 * MinDP_30ma
+  mu <- -2.9467 - 0.03729 * MinAT_21ma + 0.6534 * MinDP_30ma
   logistic(mu)
 }
 
@@ -54,14 +54,13 @@ predict_gls <- function(MinAT_21ma, MinDP_30ma) {
 #' @param
 #'
 predict_don <- function(
-  w7_max_temp_14ma,
-  w7_min_temp_14ma,
-  w7_days_temp_over_25_14ma,
-  w7_days_precip_14ma,
-  w0_mean_rh_14ma,
-  w0_days_rh_over_80_14ma
-) {
-  mu =
+    w7_max_temp_14ma,
+    w7_min_temp_14ma,
+    w7_days_temp_over_25_14ma,
+    w7_days_precip_14ma,
+    w0_mean_rh_14ma,
+    w0_days_rh_over_80_14ma) {
+  mu <-
     -59.6309 +
     1.3057 * w7_max_temp_14ma +
     0.9090 * w7_min_temp_14ma +

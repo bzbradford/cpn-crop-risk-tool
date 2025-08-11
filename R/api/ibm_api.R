@@ -23,7 +23,9 @@ dates_to_dttm <- function(dates, tz = "UTC") {
 #' @param tz time zone to use
 #' @returns list of lists `list(start, end, length)`
 ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
-  if (all(dates_need %in% dates_have)) return(NULL)
+  if (all(dates_need %in% dates_have)) {
+    return(NULL)
+  }
 
   chunk_size <- 40 # days
   dates <- seq.Date(min(dates_need), max(dates_need), 1)
@@ -34,7 +36,7 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
   while (length(dates) > 0) {
     # pick chunks from outside in
     if (i %% 2 != 0) {
-      picked <- dates[1:min(chunk_size, length(dates))]
+      picked <- dates[seq_len(min(chunk_size, length(dates)))]
     } else {
       picked <- dates[max(1, length(dates) - chunk_size):length(dates)]
     }
@@ -119,7 +121,7 @@ create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_we
 #' @returns httr2 list of requests
 create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
   t <- now()
-  tz <- lutz::tz_lookup_coords(lat, lng, warn = F)
+  tz <- lutz::tz_lookup_coords(lat, lng, warn = FALSE)
   chunks <- ibm_chunks(dates_need, dates_have, tz)
 
   if (length(chunks) == 0) {
@@ -152,33 +154,39 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
 get_ibm <- function(reqs) {
   stime <- Sys.time()
 
-  resps <- tryCatch({
-    token <- get_ibm_token()
-    if (!is.character(token)) stop("Failed to get IBM token.")
+  resps <- tryCatch(
+    {
+      token <- get_ibm_token()
+      if (!is.character(token)) stop("Failed to get IBM token.")
 
-    message(sprintf("GET ==> %s IBM requests", length(reqs)))
+      message(sprintf("GET ==> %s IBM requests", length(reqs)))
 
-    # perform parallel requests for each time chunk
-    resps <- req_perform_parallel(reqs, on_error = "continue", progress = F)
+      # perform parallel requests for each time chunk
+      resps <- req_perform_parallel(reqs, on_error = "continue", progress = FALSE)
 
-    # gather response data
-    lapply(resps, function(resp) {
-      tryCatch({
-        if ("httr2_failure" %in% class(resp)) {
-          echo(resp)
-          stop("Request failed")
-        }
-        if (resp_status(resp) != 200) stop(paste0("Received status ", resp_status(resp), " with message ", resp_status_desc(resp)))
-        resp_body_json(resp, simplifyVector = T) %>% as_tibble()
-      }, error = function(e) {
-        message(e$message)
-        tibble()
+      # gather response data
+      lapply(resps, function(resp) {
+        tryCatch(
+          {
+            if ("httr2_failure" %in% class(resp)) {
+              echo(resp)
+              stop("Request failed")
+            }
+            if (resp_status(resp) != 200) stop(paste0("Received status ", resp_status(resp), " with message ", resp_status_desc(resp)))
+            resp_body_json(resp, simplifyVector = TRUE) %>% as_tibble()
+          },
+          error = function(e) {
+            message(e$message)
+            tibble()
+          }
+        )
       })
-    })
-  }, error = function(e) {
-    message(e$message)
-    tibble()
-  })
+    },
+    error = function(e) {
+      message(e$message)
+      tibble()
+    }
+  )
 
   wx <- bind_rows(resps)
   msg <- if (nrow(wx) > 0) {
@@ -197,7 +205,9 @@ get_ibm <- function(reqs) {
 #' @param ibm_response hourly weather data received from API
 #' @returns tibble
 clean_ibm <- function(ibm_response) {
-  if (nrow(ibm_response) == 0) return(tibble())
+  if (nrow(ibm_response) == 0) {
+    return(tibble())
+  }
   ibm_response %>%
     select(-OPTS$ibm_ignore_cols) %>%
     select(
@@ -208,8 +218,8 @@ clean_ibm <- function(ibm_response) {
       everything()
     ) %>%
     clean_names() %>%
-    mutate(across(datetime_utc, ~parse_date_time(.x, "YmdHMSz"))) %>%
-    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = F), .after = datetime_utc) %>%
+    mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz"))) %>%
+    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE), .after = datetime_utc) %>%
     mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
     mutate(date = as_date(datetime_local), .after = datetime_local)
 }

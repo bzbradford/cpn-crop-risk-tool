@@ -21,12 +21,12 @@ missing_weather_ui <- function(n = 1) {
 
 site_action_link <- function(action = c("edit", "save", "trash"), site_id, site_name = "") {
   action <- match.arg(action)
-  hovertext = switch(action,
+  hovertext <- switch(action,
     edit = "Rename this site",
     save = "Pin this site to list",
     trash = "Delete this site"
   )
-  onclick = switch(action,
+  onclick <- switch(action,
     edit = sprintf("editSite(%s, \"%s\")", site_id, site_name),
     save = sprintf("saveSite(%s)", site_id),
     trash = sprintf("trashSite(%s)", site_id)

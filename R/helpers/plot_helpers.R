@@ -22,7 +22,7 @@ plotly_show_forecast <- function(plt, xmax) {
     yref = "paper",
     x = x, y = 1,
     text = label,
-    showarrow = F,
+    showarrow = FALSE,
     opacity = .5,
     xanchor = "right",
     align = "right"
@@ -60,9 +60,9 @@ axis_defaults <- local({
     fixedrange = TRUE,
     tickfont = OPTS$plot_axis_font
   )
-  x$showticklabels = TRUE
-  x$hoverformat = "<b>%b %d, %Y</b>"
-  x$fixedrange = FALSE
+  x$showticklabels <- TRUE
+  x$hoverformat <- "<b>%b %d, %Y</b>"
+  x$fixedrange <- FALSE
 
   list(x = x, y = y)
 })

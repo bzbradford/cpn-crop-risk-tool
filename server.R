@@ -4,15 +4,18 @@ server <- function(input, output, session) {
 
   # Startup and cookie handling ----
 
+  # cookie has .userId and .sites keys
+  read_cookie <- function() {
+    runjs("sendCookieToShiny();")
+  }
+
+  # set the .sites key on the cookie
   set_cookie <- function(sites) {
     sites_json <- jsonlite::toJSON(sites)
     runjs(str_glue('updateSites({sites_json})'))
   }
 
-  read_cookie <- function() {
-    runjs("sendCookieToShiny();")
-  }
-
+  # clear out the .sites key on the cookie
   clear_cookie <- function() {
     set_cookie(tibble())
   }
