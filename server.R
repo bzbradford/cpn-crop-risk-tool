@@ -9,45 +9,84 @@ server <- function(input, output, session) {
     runjs(str_glue('updateSites({sites_json})'))
   }
 
+  read_cookie <- function() {
+    runjs("sendCookieToShiny();")
+  }
+
   clear_cookie <- function() {
     set_cookie(tibble())
   }
-
-  cookie <- reactive({
-    req(input$cookie)
-  })
-
-  # observe(echo(cookie()))
-
-  user_id <- reactive({
-    cookie()[["userId"]]
-  })
-
-  # observe(echo(user_id()))
-
-  cache_file <- reactive({
-    id <- req(user_id())
-    cache_path <- "cache"
-    if (!dir.exists(cache_path)) {
-      dir.create(cache_path)
-    }
-    fname <- paste0(id, ".fst")
-    file.path(cache_path, fname)
-  })
-
-  # observe(echo(cache_file()))
 
 
   ## Initialize cookie ----
   # on startup read cookie data then start cookie writer
   observe({
-    runjs("sendCookieToShiny();")
+    read_cookie()
 
     cookie_writer <- observe({
       sites <- rv$sites
       set_cookie(sites)
     })
   })
+
+  ## Parse sites from cookie ----
+  observeEvent(input$cookie, {
+    cookie <- req(input$cookie)
+
+    tryCatch({
+      cookie_sites <- cookie[["sites"]]
+
+      if (length(cookie_sites) == 0) return()
+
+      sites <- cookie_sites %>%
+        bind_rows() %>%
+        select(all_of(names(sites_template))) %>%
+        filter(validate_ll(lat, lng)) %>%
+        distinct() %>%
+        head(OPTS$max_sites) %>%
+        mutate(id = row_number())
+
+      req(nrow(sites) > 0)
+
+      rv$sites <- sites
+      rv$selected_site <- first(sites$id)
+      rv$map_cmd <- "fit_sites"
+
+      showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
+
+      # trigger weather fetch after a second
+      # delay(1000, {
+      #   rv$fetch <- runif(1)
+      # })
+
+    }, error = function(e) {
+      message("Failed to read sites from cookie: ", e)
+      echo(cookie)
+    })
+  })
+
+
+  # based on user ID which is set by javascript on the client
+  cache_file <- reactive({
+    cookie <- req(input$cookie)
+
+    tryCatch({
+      id <- cookie[["userId"]]
+      req(length(id) > 0)
+
+      cache_path <- "cache"
+      if (!dir.exists(cache_path)) {
+        dir.create(cache_path)
+      }
+      fname <- paste0(id, ".fst")
+      file.path(cache_path, fname)
+    }, error = function(e) {
+      message("Failed to read user ID from cookie: ", e)
+      echo(cookie)
+    })
+  })
+
+  # observe(echo(cache_file()))
 
 
   ## Read cached weather ----
@@ -77,41 +116,6 @@ server <- function(input, output, session) {
     })
   }) %>%
     bindEvent(rv$weather)
-
-
-  ## Parse sites from cookie ----
-  observeEvent(cookie(), {
-    cookie <- req(cookie())
-    cookie_sites <- cookie[["sites"]]
-    req(length(cookie_sites) > 0)
-
-    tryCatch({
-      sites <- cookie_sites %>%
-        bind_rows() %>%
-        select(all_of(names(sites_template))) %>%
-        filter(validate_ll(lat, lng)) %>%
-        distinct() %>%
-        head(OPTS$max_sites) %>%
-        mutate(id = row_number())
-
-      req(nrow(sites) > 0)
-
-      rv$sites <- sites
-      rv$selected_site <- first(sites$id)
-      rv$map_cmd <- "fit_sites"
-
-      showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
-
-      # trigger weather fetch after a second
-      # delay(1000, {
-      #   rv$fetch <- runif(1)
-      # })
-
-    }, error = function(e) {
-      message("Failed to read sites from cookie: ", e)
-      clear_cookie()
-    })
-  })
 
 
   # Reactive values ----
