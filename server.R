@@ -58,9 +58,9 @@ server <- function(input, output, session) {
       showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
 
       # trigger weather fetch after a second
-      # delay(1000, {
-      #   rv$fetch <- runif(1)
-      # })
+      delay(1000, {
+        rv$fetch <- runif(1)
+      })
 
     }, error = function(e) {
       message("Failed to read sites from cookie: ", e)
@@ -271,6 +271,8 @@ server <- function(input, output, session) {
 
     weather_status(wx, dates$start, dates$end)
   })
+
+  # observe(echo(wx_status()))
 
 
   ## grids_with_status ----
