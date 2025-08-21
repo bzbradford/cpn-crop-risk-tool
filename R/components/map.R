@@ -408,7 +408,7 @@ mapServer <- function(rv, map_data) {
 
         if (btn == "user_loc") {
           runjs("
-            map.getMap().locate({ setView: false }).on('locationfound', (event) => {
+            map.locate({ setView: false }).on('locationfound', (event) => {
               sendShiny('map-user_loc', event.latlng)
             })
           ")
