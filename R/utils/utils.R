@@ -40,8 +40,12 @@ first_truthy <- function(...) {
 
 # calculate the difference in hours between two timestamps
 hours_diff <- function(start, end) {
-  as.integer(difftime(end, start, units = "hours"))
+  as.integer(ceiling(difftime(end, start, units = "hours")))
 }
+
+# hours_diff(now(), now())
+# hours_diff(now() - hours(6), now())
+# hours_diff(now() - days(1), now())
 
 
 ## NA-safe summary functions ----

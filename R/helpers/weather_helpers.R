@@ -17,6 +17,32 @@ add_date_cols <- function(df) {
 }
 
 
+#' Similar to weather_status but returns number of hours per day
+#' to check for any incomplete days
+#' @param wx hourly weather data
+#' @param tz time
+daily_status <- function(wx) {
+  wx %>%
+    summarize(
+      tz = coalesce(first(time_zone), "UTC"),
+      hours = n(),
+      .by = c(grid_id, date)
+    ) %>%
+    mutate(
+      start_hour = ymd_hms(paste(date, "00:20:00"), tz = first(tz)),
+      end_hour = if_else(
+        date == today(tzone = first(tz)),
+        now(tzone = tz),
+        ymd_hms(paste(date, "23:20:00"), tz = first(tz))
+      ),
+      hours_expected = hours_diff(start_hour, end_hour) + 1,
+      hours_missing = hours_expected - hours
+    )
+}
+
+# saved_weather %>% filter(grid_id == sample(grid_id, 1)) %>% daily_status() %>% tail()
+
+
 #' Summarize downloaded weather data by grid cell and creates sf object
 #' used to intersect site points with existing weather data
 #' @param wx hourly weather data from `clean_ibm` function
@@ -32,56 +58,37 @@ weather_status <- function(wx, start_date = min(wx$date), end_date = max(wx$date
     return(fallback_df)
   }
 
-  wx %>%
+  daily <- daily_status(wx)
+
+  daily %>%
     summarize(
-      tz = coalesce(first(time_zone), "UTC"),
+      tz = first(tz),
       date_min = min(date),
       date_max = max(date),
+      time_min = min(start_hour),
+      time_max = max(end_hour),
       days_expected = length(dates_expected),
       days_actual = n_distinct(date),
       days_missing = days_expected - days_actual,
       days_missing_pct = days_missing / days_expected,
-      time_min_expected = ymd_hms(paste(start_date, "00:20:00"), tz = tz),
-      time_min_actual = min(datetime_local),
-      time_max_expected = min(now(tzone = tz), ymd_hms(paste(end_date, "23:20:00"), tz = tz)),
-      time_max_actual = max(datetime_local),
-      hours_expected = hours_diff(time_max_expected, time_min_expected),
-      hours_actual = n(),
-      hours_missing = hours_expected - hours_actual,
+      days_incomplete = sum(hours_missing > OPTS$ibm_stale_hours),
+      hours_expected = sum(hours_expected),
+      hours_missing = sum(hours_missing),
       hours_missing_pct = hours_missing / hours_expected,
-      hours_stale = hours_diff(time_max_expected, time_max_actual),
+      hours_stale = if_else(
+        date_max == today(tzone = tz),
+        hours_diff(time_max, now(tzone = tz)),
+        0
+      ),
       stale = hours_stale > OPTS$ibm_stale_hours,
-      needs_download = stale | days_missing > 0,
+      needs_download = stale | days_incomplete > 0,
       .by = grid_id
     ) %>%
     select(-tz)
 }
 
 # weather_status(saved_weather, start_date = ymd("2025-1-1"), end_date = ymd("2025-2-21"))
-# saved_weather %>% weather_status(today() - 7,today())
-
-
-#' Similar to weather_status but returns number of hours per day
-#' to check for any incomplete days
-#' @param wx hourly weather data
-#' @param tz time
-daily_status <- function(wx, tz = "UTC") {
-  if (length(unique(wx$grid_id)) > 1) warning("More than 1 gridpoint sent to daily_status")
-  wx %>%
-    summarize(hours = n(), .by = date) %>%
-    mutate(
-      start_hour = ymd_hms(paste(date, "00:20:00"), tz = tz),
-      end_hour = if_else(
-        date == today(tzone = tz),
-        now(tzone = tz),
-        ymd_hms(paste(date, "23:20:00"), tz = tz)
-      ),
-      hours_expected = hours_diff(end_hour, start_hour) + 1,
-      hours_missing = hours_expected - hours
-    )
-}
-
-# saved_weather %>% filter(grid_id == sample(grid_id, 1)) %>% daily_status(tz = "America/Chicago") %>% tail()
+# saved_weather %>% weather_status(today() - 7, today()) %>% view()
 
 
 #' Update weather for sites list and date range
@@ -114,11 +121,11 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
 
       # if there is at least one day already downloaded check each date for completeness
       if (isTruthy(site$days_actual)) {
-        tz <- site$time_zone
+        # tz <- site$time_zone
         date_status <- wx %>%
           filter(grid_id == site$grid_id) %>%
           filter(between(date, start_date, end_date)) %>%
-          daily_status(tz = tz)
+          daily_status()
         dates_have <- date_status %>%
           filter(hours_missing <= 2) %>%
           pull(date)
