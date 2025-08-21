@@ -63,7 +63,7 @@ get_app_settings <- function() {
     ),
     map_layers = list(
       # counties = "States/Counties"
-      grid = "Weather grid"
+      grid = "Weather data grids"
     ),
     map_click_zoom = 10,
 

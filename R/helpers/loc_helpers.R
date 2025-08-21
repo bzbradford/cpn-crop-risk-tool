@@ -78,3 +78,4 @@ annotate_grids <- function(grids_with_status) {
 # test_status <- saved_weather %>% weather_status(today() - days(30), today())
 # left_join(test_grids, test_status) %>%
 #   annotate_grids()
+

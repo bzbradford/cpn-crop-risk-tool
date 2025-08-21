@@ -32,11 +32,13 @@ mapServer <- function(rv, map_data) {
 
       proxy_map <- leafletProxy(ns("map"))
 
+
       # wrapper for leaflet flyTo
       fly_to <- function(loc) {
         proxy_map %>%
           flyTo(loc$lng, loc$lat, max(10, isolate(input$map_zoom)))
       }
+
 
       #' wrapper for leaflet fitBounds
       #' @param map leaflet proxy object
@@ -48,6 +50,7 @@ mapServer <- function(rv, map_data) {
         args$options <- options
         do.call(fitBounds, args)
       }
+
 
       # fits all sites on the map
       fit_sites <- function() {
@@ -62,15 +65,8 @@ mapServer <- function(rv, map_data) {
         fit_bounds(bounds = bounds, options = list(padding = c(100, 100), maxZoom = 10))
       }
 
-      # wrapper for leaflet addProviderTiles
-      add_basemaps <- function(map) {
-        basemaps <- OPTS$map_tiles
-        for (name in names(basemaps)) {
-          map <- addProviderTiles(map, basemaps[[name]], group = name)
-        }
-        map
-      }
 
+      # validates a potential new site then offers a popup to rename and finalize
       save_site <- function(site) {
         sites <- rv$sites
 
@@ -119,12 +115,16 @@ mapServer <- function(rv, map_data) {
         )
       }
 
+
+      # calls google geocoding api to get locality name
       get_loc_name <- function(lat, lng, name) {
         cmd <- sprintf("getLocalityName(%s, %s, '%s', '%s')", lat, lng, name, OPTS$google_geocoding_key)
         runjs(cmd)
       }
 
-      # trigger local functions from the main server
+
+      # Cross-module comms ----
+      # handle commands sent from other modules as set in the reactive value
       observe({
         cmd <- req(rv$map_cmd)
         switch(cmd,
@@ -136,21 +136,37 @@ mapServer <- function(rv, map_data) {
 
       # UI components ----
 
-      ## map // renderLeaflet ----
+      ## map - renderLeaflet ----
       output$map <- renderLeaflet({
         btn_js <- function(id) {
           JS(paste0("(btn, map) => { sendShiny('map-map_btn', '", id, "') };"))
         }
 
-        leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
+        map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
           addMapPane("extent", 501) %>%
           # addMapPane("counties", 410) %>%
           addMapPane("grid", 502) %>%
           addMapPane("sites", 503) %>%
-          add_basemaps() %>%
+          addPolygons(
+            data = service_bounds,
+            color = "black",
+            weight = 2,
+            fill = FALSE,
+            options = pathOptions(pane = "extent", interactive = FALSE)
+          ) %>%
+          fit_bounds(OPTS$map_bounds_wi)
+
+        # add basemaps
+        basemaps <- OPTS$map_tiles
+        for (name in names(basemaps)) {
+          map <- addProviderTiles(map, basemaps[[name]], group = name)
+        }
+
+        # finalize map
+        map %>%
           addLayersControl(
-            baseGroups = names(OPTS$map_tiles),
-            overlayGroups = unlist(OPTS$map_layers, use.names = FALSE),
+            baseGroups = names(basemaps),
+            overlayGroups = OPTS$map_layers %>% set_names(NULL),
             options = layersControlOptions(collapsed = TRUE)
           ) %>%
           addEasyButtonBar(
@@ -173,28 +189,20 @@ mapServer <- function(rv, map_data) {
               onClick = btn_js("zoom_extent")
             )
           ) %>%
+          addFullscreenControl() %>%
           # assign leaflet map object to global var 'map'
-          htmlwidgets::onRender("() => { map = this; }") %>%
+          onRender("() => { map = this.getMap(); }") %>%
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
             hoverToWake = FALSE,
             sleepNote = FALSE,
             sleepOpacity = 1
-          ) %>%
-          addPolygons(
-            data = service_bounds,
-            color = "black",
-            weight = 2,
-            fill = FALSE,
-            options = pathOptions(pane = "extent", interactive = FALSE)
-          ) %>%
-          fit_bounds(OPTS$map_bounds_wi)
+          )
       })
 
 
-      ## Map title ----
-
+      ## map_title - renderUI ----
       output$map_title <- renderUI({
         req(rv$map_risk_data)
         title <- req(rv$map_title)
@@ -203,7 +211,7 @@ mapServer <- function(rv, map_data) {
       })
 
 
-      ## searchbox_ui // renderUI ----
+      ## searchbox_ui - renderUI ----
       output$searchbox_ui <- renderUI({
         div(
           title = "Search by name for a city or place",
@@ -344,6 +352,7 @@ mapServer <- function(rv, map_data) {
           )
       })
 
+
       ## Show user weather data grids ----
       # will only show grids that the user has interacted with in the session
       observe({
@@ -374,6 +383,7 @@ mapServer <- function(rv, map_data) {
 
 
       ## Show all weather data grids ----
+      # these are any grids in the saved weather data
       observe({
         # req(session$clientData$url_hostname == "127.0.0.1")
 
@@ -386,7 +396,7 @@ mapServer <- function(rv, map_data) {
             color = "black",
             weight = 0.25,
             opacity = 1,
-            group = "grid",
+            group = OPTS$map_layers$grid,
             options = pathOptions(pane = "grid")
           )
       })

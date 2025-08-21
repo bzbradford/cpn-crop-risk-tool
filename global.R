@@ -21,6 +21,7 @@ suppressPackageStartupMessages({
 
   library(leaflet)
   library(leaflet.extras)
+  library(htmlwidgets)
   library(plotly)
   library(DT)
 })
@@ -83,3 +84,4 @@ source_dir("R/models")
 
 # components
 source_dir("R/components")
+
