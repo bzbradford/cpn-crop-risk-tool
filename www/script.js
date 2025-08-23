@@ -23,12 +23,12 @@ function sendShiny(inputId, content) {
 
 //--- Google Places integration ---//
 
-// Lat/lng bounds of the continental US
+// Lat/lng bounds of the US and Canada
 const BOUNDS = {
-  south: 24.5,
-  north: 49.0,
-  west: -125.0,
-  east: -66.9,
+  south: 17.5,
+  north: 71.5,
+  west: -170.0,
+  east: -52.5,
 };
 
 // Format address components into "City, State" format

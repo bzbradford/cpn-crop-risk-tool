@@ -35,9 +35,9 @@ Hourly data includes the timestamp in UTC and an adjustment to local time based 
 
 Note: A wind gust is defined as a brief increase in wind speed that is at least 10 mph (16 km/h) faster than the average wind speed and peaks above 18 mph (30 km/h). Due to these definitions not every hour or day will have recorded wind gusts.
 
-#### 7-day hourly forecast
+#### Hourly weather forecast
 
-When the End Date is set to today's date, 7-day forecasts are retrieved from [NOAA's API](https://www.weather.gov/documentation/services-web-api) (available for most locations in the United States) and incorporated into charts and calculations. Forecasted parameters include temperature, dew point, relative humidity, wind speed, and wind direction.
+When the End Date is set to today's date, 14-day forecasts are retrieved from [Open Meteo](https://open-meteo.com/en/docs) and incorporated into charts and model calculations. Open Meteo sources weather forecasts from multiple governmental sources to ensure broad coverage.
 
 #### Daily data
 

@@ -150,12 +150,8 @@ server <- function(input, output, session) {
     # which grids have been retrieved this session, for displaying on map
     grids = tibble(),
 
-    # forecasts for sites
-    # keyed by grid_id
-    noaa_urls = list(),
-
-    # keyed by forecast url
-    noaa_forecasts = list(),
+    # forecasts for sites, keyed by grid_id
+    forecasts = list(),
 
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
@@ -254,7 +250,8 @@ server <- function(input, output, session) {
       if (rv$weather_ready) {
         sf %>% st_join(wx_grids())
       } else {
-        sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+        # create blank cols that would come from wx_grids
+        sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA, time_zone = NA)
       }
     } else {
       NULL
@@ -272,7 +269,7 @@ server <- function(input, output, session) {
     weather_status(wx, dates$start, dates$end)
   })
 
-  # observe(echo(wx_status()))
+  # observe(echo(wx_status() %>% select(grid_id, days_missing, hours_missing, needs_download)))
 
 
   ## grids_with_status ----
@@ -309,62 +306,58 @@ server <- function(input, output, session) {
     sites <- sites %>%
       st_drop_geometry() %>%
       drop_na(grid_id) %>%
-      distinct(grid_id, grid_lat, grid_lng)
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
 
     req(nrow(sites) > 0)
 
     rv$grids <- rv$grids %>%
       bind_rows(sites) %>%
-      distinct(grid_id, grid_lat, grid_lng)
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
   })
 
+  # observe(echo(rv$grids))
 
 
+  # Forecasts Extended Task ----
 
-
-  # NOAA Forecast Extended Task ----
-
-  task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
+  task_get_forecasts <- ExtendedTask$new(function(grids, cur_forecasts) {
     message("Getting forecasts...")
     suppressWarnings({
       future_promise({
-        urls <- cur_urls %||% list()
-        for (i in 1:nrow(grids)) {
-          grid <- grids[i,]
-          if (isTruthy(urls[[grid$grid_id]])) next # already have it
-          urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-        }
-
         forecasts <- cur_forecasts %||% list()
-        for (url in unique(urls)) {
-          if (!isTruthy(url) || url == "404") next # bad url
-          if (isTruthy(forecasts[[url]])) next # already have it
-          forecasts[[url]] <- noaa_get_forecast(url = url)
+        for (i in seq_len(nrow(grids))) {
+          grid <- grids[i,]
+          id <- grid$grid_id
+          if (isTruthy(forecasts[[id]])) next # already have it
+          fc <- get_openmeteo_forecast(grid$grid_lat, grid$grid_lng)
+          forecasts[[id]] <- fc
         }
-
-        list(urls = urls, forecasts = forecasts)
+        forecasts
       }, seed = NULL)
     })
   })
 
-  ## Invoke NOAA requests ----
+  ## Invoke forecast requests ----
   observe({
     req(getOption("forecast", TRUE))
 
     grids <- rv$grids
     req(nrow(grids) > 0)
-    urls <- isolate(rv$noaa_urls)
-    forecasts <- isolate(rv$noaa_forecasts)
-    task_get_forecasts$invoke(grids, urls, forecasts)
+    forecasts <- isolate(rv$forecasts)
+    task_get_forecasts$invoke(grids, forecasts)
   })
 
-  ## Collect result of NOAA requests ----
+  # observe(echo(rv$grids))
+
+
+  ## Collect result of forecast requests ----
   observe({
     req(task_get_forecasts$status() == "success")
     res <- req(task_get_forecasts$result())
-    rv$noaa_urls <- res$urls
-    rv$noaa_forecasts <- res$forecasts
+    rv$forecasts <- res
   })
+
+  # observe(echo(rv$forecasts))
 
 
   # IBM Weather Extended Task ----
@@ -416,37 +409,22 @@ server <- function(input, output, session) {
 
   ## wx_forecasts ----
   wx_forecasts <- reactive({
-    sites <- sites_sf()
-    req(nrow(sites) > 0)
-    req_cols <- c("grid_id", "grid_lat", "grid_lng", "time_zone")
-    req(all(req_cols %in% names(sites)))
-
-    grids <- sites %>%
-      st_drop_geometry() %>%
-      as_tibble() %>%
-      distinct(grid_id, grid_lat, grid_lng, time_zone)
-
-    urls <- rv$noaa_urls
-    fcs <- rv$noaa_forecasts
+    grids <- req(rv$grids)
+    fcs <- rv$forecasts
 
     if (length(fcs) == 0) {
       # message("no forecasts")
       return(tibble())
     }
 
-    if (!(any(names(urls) %in% grids$grid_id))) {
+    if (!(any(names(fcs) %in% grids$grid_id))) {
       # message('no forecasts for selected sites')
       return(tibble())
     }
 
-    fc_data <- bind_rows(fcs, .id = "url")
-    fc <- tibble(
-      grid_id = names(urls),
-      url = unlist(urls)
-    ) %>%
-      left_join(fc_data, join_by(url)) %>%
-      select(-url)
-
+    fc_data <- bind_rows(fcs, .id = "grid_id")
+    fc <- tibble(grid_id = names(fcs)) %>%
+      left_join(fc_data, join_by(grid_id))
     df <- grids %>%
       drop_na(time_zone) %>%
       left_join(fc, join_by(grid_id))
@@ -893,18 +871,31 @@ server <- function(input, output, session) {
     FALSE
   })
 
-  # force a weather fetch if it's needed and hasn't been triggered in 10 seconds
+
+  ## Auto-fetch timer ----
+
+  # set a timestamp of the last inputs if weather is needed
   observe({
     req(wx_args())
     req(need_weather())
-
-    # message('Auto-fetching weather data in 15 seconds...')
-    delay(15000, {
-      # message("Auto-fetching weather data...")
-      req(need_weather())
-      rv$fetch <- runif(1)
-    })
+    message('Auto-fetching weather data in 15 seconds...')
+    rv$fetch_timer <- now()
   })
+
+  # force a weather fetch if it's needed and hasn't been triggered in 15 seconds
+  observe({
+    req(wx_args())
+    req(need_weather())
+    timestamp <- rv$fetch_timer
+    elapsed <- now() - timestamp
+    invalidateLater(15000)
+    req(elapsed >= 15)
+    if (need_weather()) {
+      message("Auto-fetching weather data...")
+      rv$fetch <- runif(1)
+    }
+  })
+
 
   ## action_ui ----
   output$action_ui <- renderUI({

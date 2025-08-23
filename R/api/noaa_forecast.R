@@ -68,9 +68,9 @@ noaa_parse_forecast <- function(periods) {
     select(
       datetime_utc = start_time,
       temperature,
-      precip,
       dew_point,
       relative_humidity,
+      precip,
       wind_speed,
       wind_direction
     ) %>%
