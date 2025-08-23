@@ -878,7 +878,7 @@ server <- function(input, output, session) {
   observe({
     req(wx_args())
     req(need_weather())
-    message('Auto-fetching weather data in 15 seconds...')
+    # message('Auto-fetching weather data in 15 seconds...')
     rv$fetch_timer <- now()
   })
 
@@ -891,7 +891,7 @@ server <- function(input, output, session) {
     invalidateLater(15000)
     req(elapsed >= 15)
     if (need_weather()) {
-      message("Auto-fetching weather data...")
+      # message("Auto-fetching weather data...")
       rv$fetch <- runif(1)
     }
   })
