@@ -9,12 +9,12 @@ diseases <- list(
   # Corn
   tar_spot = Disease(
     name = "Tar spot",
-    info = "Corn is susceptible to tar spot when in the growth stages V10-R3. Risk is based on proability of spore presence. Model depends on temperature and relative humidity.",
+    info = "Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk). Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
     doc = "docs/tar-spot.md"
   ),
   gray_leaf_spot = Disease(
     name = "Gray leaf spot",
-    info = "Corn is susceptible to gray leaf spot when in the growth stages V10-R3. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
+    info = "Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk). Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
     doc = "docs/gray-leaf-spot.md"
   ),
   don = Disease(
@@ -26,12 +26,12 @@ diseases <- list(
   # Soybean
   white_mold = Disease(
     name = "White mold",
-    info = "Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering). Risk is based on probability of spore presence. Model depends on temperature, wind speed, and relative humidity.",
+    info = "Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - early pod). Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
     doc = "docs/white-mold.md"
   ),
   frogeye = Disease(
     name = "Frogeye leaf spot",
-    info = "Corn is vulnerable to tar spot when in the growth stages V10-R3. Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
+    info = "Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - early seed). Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
     doc = "docs/frogeye.md"
   ),
 
@@ -57,7 +57,7 @@ diseases <- list(
   # Carrot + Beet
   cercospora = Disease(
     name = "Cercospora leaf spot",
-    info = "Carrots and beets are susceptible to Cercospora leaf blight. Risk depends on the average disease severity values in the past 2 days and 7 days. model depends on temperature and hours of high humidity.",
+    info = "Carrots and beets are susceptible to Cercospora leaf blight. Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora.md"
   ),
 

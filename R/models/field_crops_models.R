@@ -49,44 +49,44 @@ predict_gls <- function(MinAT_21ma, MinDP_30ma) {
 
 
 #' Giberella ear rot / DON model
-#' Corn silking
+#' Risk applies during corn silking
 #' Risk criteria: High >= 80%, Med >= 40%, Low >= 20%
-#' @param
-#'
-predict_don <- function(
-    w7_max_temp_14ma,
-    w7_min_temp_14ma,
-    w7_days_temp_over_25_14ma,
-    w7_days_precip_14ma,
-    w0_mean_rh_14ma,
-    w0_days_rh_over_80_14ma) {
+#' "w7" weather window is 21-7 days before model date
+#' "w0" window is 14-0 days before model date
+#' @param w7_max_temp mean maximum temperature, w7 window
+#' @param w7_min_temp mean minimum temperature, w7 window
+#' @param w7_days_temp_over_25 n days temperature over 25C, w7 window
+#' @param w7_days_precip n days with precip, w7 window
+#' @param w0_mean_rh mean RH, w0 window
+#' @param w0_days_rh_over_80 n days RH > 80%, w0 window
+predict_don <- function(w7_max_temp, w7_min_temp, w7_days_temp_over_25, w7_days_precip, w0_mean_rh, w0_days_rh_over_80) {
   mu <-
     -59.6309 +
-    1.3057 * w7_max_temp_14ma +
-    0.9090 * w7_min_temp_14ma +
-    -1.6158 * w7_days_temp_over_25_14ma +
-    -0.9350 * w7_days_precip_14ma +
-    0.2255 * w0_mean_rh_14ma +
-    -0.9249 * w0_days_rh_over_80_14ma
+    1.3057 * w7_max_temp +
+    0.9090 * w7_min_temp +
+    -1.6158 * w7_days_temp_over_25 +
+    -0.9350 * w7_days_precip +
+    0.2255 * w0_mean_rh +
+    -0.9249 * w0_days_rh_over_80
   logistic(mu)
 }
 
 # test <- expand_grid(
-#   w7_max_temp_14ma = 10:30,
-#   w7_min_temp_14ma = 0:30,
-#   w7_days_temp_over_25_14ma = 0:14,
-#   w7_days_precip_14ma = 0:14,
-#   w0_mean_rh_14ma = 10 * (0:10),
-#   w0_days_rh_over_80_14ma = 0:14
+#   w7_max_temp = 10:30,
+#   w7_min_temp = 0:30,
+#   w7_days_temp_over_25 = 0:14,
+#   w7_days_precip = 0:14,
+#   w0_mean_rh = 10 * (0:10),
+#   w0_days_rh_over_80 = 0:14
 # ) %>%
-#   filter(w7_max_temp_14ma > w7_min_temp_14ma) %>%
+#   filter(w7_max_temp > w7_min_temp) %>%
 #   mutate(don = predict_don(
-#     w7_max_temp_14ma,
-#     w7_min_temp_14ma,
-#     w7_days_temp_over_25_14ma,
-#     w7_days_precip_14ma,
-#     w0_mean_rh_14ma,
-#     w0_days_rh_over_80_14ma
+#     w7_max_temp,
+#     w7_min_temp,
+#     w7_days_temp_over_25,
+#     w7_days_precip,
+#     w0_mean_rh,
+#     w0_days_rh_over_80
 #   ))
 #
 # hist(test$don)

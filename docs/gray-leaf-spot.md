@@ -2,7 +2,7 @@
 
 The fungus survives in corn residue, and, consequently, the disease is often more severe in corn following corn. Spores are dispersed by wind and splashing water. Infection of corn leaves and disease development are favored by warm (80s°F), humid (\>90% for 12+ hours) weather. Disease severity depends on hybrid susceptibility and environmental conditions.
 
-Resistant hybrids and inbreds are available. Crop rotation and tillage reduce survival of the fungus. Foliar fungicides labeled for gray leaf spot are available. 
+Resistant hybrids and inbreds are available. Crop rotation and tillage reduce survival of the fungus. Foliar fungicides labeled for gray leaf spot are available.
 
 ### Model details
 
