@@ -1,18 +1,21 @@
 # UI builders ----
 
+warning_box <- function(html) {
+  div(
+    class = "warning-box-container",
+    div(
+      style = "color: orange; padding: 10px; font-size: 1.5em;",
+      icon("warning")
+    ),
+    div(HTML(html))
+  )
+}
+
 #' Create the missing data element based on number of sites missing
 missing_weather_ui <- function(n = 1) {
-  msg <- ifelse(
-    n == 1,
-    "This site is missing data based on your date selections.",
-    "One or more sites are missing data based on your date selections."
-  )
-
-  div(
-    class = "missing-weather-notice",
-    div(style = "color: orange; padding: 10px; font-size: 1.5em;", icon("warning")),
-    div(em(msg, "Press", strong("Fetch weather"), "on the sidebar to download any missing data."))
-  )
+  str <- ifelse(n == 1, "This site is ", "One or more sites are")
+  html <- paste0("<i>", str, " missing data based on your date selections. Press <b>Fetch weather</b> on the sidebar to download any missing data.</i>")
+  warning_box(html)
 }
 
 # missing_weather_ui(1)

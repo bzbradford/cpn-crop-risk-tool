@@ -4,7 +4,7 @@ riskUI <- function() {
   ns <- NS("risk")
   div(
     style = "margin-top: 10px;",
-    p("Risk models are only valid when the crop is present and in a vulnerable growth stage. Risk may be mitigated in commercial production by application of a protective fungicide. Set the start date to the approximate date of crop emergence for accurate risk assessments."),
+    p(strong("Risk models are only valid when the crop is present and in a vulnerable growth stage."), "Risk may be mitigated in commercial production by application of a protective fungicide."),
     uiOutput(ns("main_ui")) %>% withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Loading...")
   )
 }
@@ -35,7 +35,8 @@ riskServer <- function(rv, wx_data) {
           uiOutput(ns("model_picker")),
           uiOutput(ns("model_ui")),
           uiOutput(ns("selected_site_ui")),
-          uiOutput(ns("weather_missing_ui")),
+          uiOutput(ns("risk_period_warning")),
+          uiOutput(ns("weather_missing_warning")),
           uiOutput(ns("plots_ui"))
         )
       })
@@ -182,13 +183,35 @@ riskServer <- function(rv, wx_data) {
       })
 
 
-      ## weather_missing_ui ----
-      # display warning when days_missing > 0 for any site
-      output$weather_missing_ui <- renderUI({
-        sites <- wx_data()$sites
-        req(rv$weather_ready && nrow(sites) > 0 && any(sites$needs_download))
+      ## risk_period_warning ----
+      # shows a warning when the entire date range is outside the risk window
+      output$risk_period_warning <- renderUI({
+        req(rv$weather_ready)
+        model <- selected_model()
+        selected_dates <- req(wx_data()$dates)
+        risk_dates <- req(model$risk_period)
+
+        dates <- c(selected_dates$start, selected_dates$end)
+        does_overlap <- check_date_overlap(dates, risk_dates)
+
+        req(!any(does_overlap))
+
         div(
-          style = "margin-bottom: 15px;",
+          style = "margin-bottom: 1rem;",
+          warning_box("<b>Note:</b> The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle.")
+        )
+      })
+
+
+      ## weather_missing_warning ----
+      # display warning when days_missing > 0 for any site
+      output$weather_missing_warning <- renderUI({
+        req(rv$weather_ready)
+        sites <- selected_sites()
+        req(nrow(sites) > 0 && any(sites$needs_download))
+
+        div(
+          style = "margin-bottom: 1rem;",
           missing_weather_ui(n = nrow(sites))
         )
       })
@@ -279,7 +302,7 @@ riskServer <- function(rv, wx_data) {
               format(last_value$date, "%b %d, %Y"),
               last_value$value_label
             )
-            plt <- plot_risk(df, name = model$name, xrange = date_range)
+            plt <- plot_risk(df, name = model$name, xrange = date_range, risk_period = model$risk_period)
 
             div(
               strong(model$name),

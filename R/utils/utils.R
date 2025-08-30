@@ -32,10 +32,17 @@ build_choices <- function(obj, name, value) {
 
 # return the first truthy argument
 first_truthy <- function(...) {
-  for (arg in list(...)) if (shiny::isTruthy(arg)) {
-    return(arg)
+  for (arg in list(...)) {
+    if (shiny::isTruthy(arg)) {
+      return(arg)
+    }
   }
   NULL
+}
+
+# restrict a value to between two extremes
+clamp <- function(x, min, max) {
+  pmax(min, pmin(max, x))
 }
 
 # calculate the difference in hours between two timestamps
@@ -46,6 +53,34 @@ hours_diff <- function(start, end) {
 # hours_diff(now(), now())
 # hours_diff(now() - hours(6), now())
 # hours_diff(now() - days(1), now())
+
+
+#' @param ... partial dates like 'aug 1' to convert to yday using current year
+get_yday <- function(...) {
+  args <- list(...)
+  sapply(args, function(v) {
+    paste(year(Sys.Date()), v) |>
+      ymd() |>
+      yday()
+  })
+}
+
+# get_yday("jun 1", "aug 2")
+
+check_date_overlap <- function(dates_actual, dates_partial) {
+  dates_actual <- as_date(dates_actual)
+  date_seq <- seq.Date(dates_actual[1], dates_actual[2], 1)
+  yrs <- unique(year(date_seq))
+  sapply(set_names(yrs), function(yr) {
+    dt <- ymd(paste(yr, dates_partial))
+    test_seq <- seq.Date(dt[1], dt[2])
+    any(date_seq %in% test_seq)
+  })
+}
+
+check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
+check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
+check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
 
 
 ## NA-safe summary functions ----

@@ -1,6 +1,7 @@
 #-- global.R --#
 
 suppressPackageStartupMessages({
+  # core
   library(tidyverse)
   library(janitor) # name cleaning
   library(sf) # GIS
@@ -11,6 +12,7 @@ suppressPackageStartupMessages({
   library(future) # async
   library(promises) # async
 
+  # shiny
   library(shiny)
   library(shinythemes)
   library(shinyWidgets)
@@ -19,6 +21,7 @@ suppressPackageStartupMessages({
   library(htmltools)
   library(shinycssloaders)
 
+  # components
   library(leaflet)
   library(leaflet.extras)
   library(htmlwidgets)
@@ -29,9 +32,11 @@ suppressPackageStartupMessages({
 
 # Dev settings ----
 
-# library("languageserver")
-# library("lintr")
-# library("styler")
+# library(languageserver)
+# library(lintr)
+# library(styler)
+# library(watcher)
+
 
 ## development mode
 # shiny::devmode(TRUE)
@@ -48,7 +53,7 @@ suppressPackageStartupMessages({
 ## turn warnings into errors
 # options(warn = 2)
 
-# disable NOAA forecasts for testing
+# disable forecasts for testing
 # options(forecast = FALSE)
 
 

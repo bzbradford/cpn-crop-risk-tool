@@ -1,5 +1,23 @@
 # Plot helpers ----
 
+axis_defaults <- local({
+  x <- y <- list(
+    title = "",
+    showticklabels = FALSE,
+    showgrid = FALSE,
+    showline = FALSE,
+    zeroline = FALSE,
+    fixedrange = TRUE,
+    tickfont = OPTS$plot_axis_font
+  )
+  x$showticklabels <- TRUE
+  x$hoverformat <- "<b>%b %d, %Y</b>"
+  x$fixedrange <- FALSE
+
+  list(x = x, y = y)
+})
+
+
 # expand axis range by percentage
 expand_range <- function(lo, hi, amt = .05) {
   c(lo - abs(hi - lo) * amt, hi + abs(hi - lo) * amt)
@@ -9,7 +27,7 @@ expand_range <- function(lo, hi, amt = .05) {
 
 
 # add forecast annotation
-plotly_show_forecast <- function(plt, xmax) {
+plotly_get_forecast_annot <- function(xmax) {
   if ("Date" %in% class(xmax)) {
     x <- today()
     label <- "Today"
@@ -46,30 +64,59 @@ plotly_show_forecast <- function(plt, xmax) {
     layer = "below"
   ))
 
-  plt %>% layout(shapes = c(vline, area), annotations = text)
+  list(
+    shapes = c(vline, area),
+    annotations = text
+  )
 }
 
 
-axis_defaults <- local({
-  x <- y <- list(
-    title = "",
-    showticklabels = FALSE,
-    showgrid = FALSE,
-    showline = FALSE,
-    zeroline = FALSE,
-    fixedrange = TRUE,
-    tickfont = OPTS$plot_axis_font
-  )
-  x$showticklabels <- TRUE
-  x$hoverformat <- "<b>%b %d, %Y</b>"
-  x$fixedrange <- FALSE
+plotly_get_risk_period_annot <- function(start_date, end_date, xrange) {
+  text_date_min <- max(start_date, xrange[1])
+  text_date_max <- min(end_date, xrange[2])
+  text_date <- text_date_min + (text_date_max - text_date_min) / 2
 
-  list(x = x, y = y)
-})
+  text <- list(list(
+    yref = "paper",
+    x = text_date, y = 1,
+    text = "Risk Period",
+    showarrow = FALSE,
+    opacity = .5,
+    xanchor = "center",
+    align = "center"
+  ))
+
+  vlines <- lapply(c(start_date, end_date), function(dt) {
+    list(
+      type = "line", yref = "paper",
+      x0 = dt, x1 = dt, y0 = .05, y1 = 1,
+      line = list(color = "maroon", weight = .5, dash = "dot"),
+      opacity = .25
+    )
+  })
+
+  area <- list(list(
+    type = "rect",
+    fillcolor = "red",
+    line = list(opacity = 0),
+    opacity = 0.05,
+    yref = "paper",
+    x0 = start_date, x1 = end_date,
+    y0 = .05, y1 = 1,
+    layer = "below"
+  ))
+
+  list(
+    shapes = c(vlines, area),
+    annotations = text
+  )
+}
+
+# plotly_get_risk_period_annot(ymd("2025-7-1"), ymd("2025-8-15"))
 
 
 # field crops disease plots
-plot_risk <- function(df, name, xrange = NULL) {
+plot_risk <- function(df, name, xrange = NULL, risk_period = NULL) {
   x <- axis_defaults$x
   y <- axis_defaults$y
   x$range <- xrange
@@ -79,6 +126,26 @@ plot_risk <- function(df, name, xrange = NULL) {
   if ("severity" %in% names(df)) {
     df$value <- df$severity
     y$range <- expand_range(0, 4)
+  }
+
+  # generate annotations
+  shapes <- list()
+  annot <- list()
+
+  # forecast
+  fc <- plotly_get_forecast_annot(xmax = xrange[2])
+  shapes <- append(shapes, fc$shapes)
+  annot <- append(annot, fc$annotations)
+
+  # risk period
+  yrs <- unique(year(df$date))
+  if (!is.null(risk_period)) {
+    for (yr in yrs) {
+      dates <- ymd(paste(yr, risk_period))
+      risk <- plotly_get_risk_period_annot(dates[1], dates[2], xrange)
+      shapes <- append(shapes, risk$shapes)
+      annot <- append(annot, risk$annotations)
+    }
   }
 
   df %>%
@@ -97,7 +164,7 @@ plot_risk <- function(df, name, xrange = NULL) {
       name = name,
       type = "bar",
       marker = list(
-        color = ~alpha(risk_color, .2),
+        color = ~ alpha(risk_color, .2),
         line = list(width = 0)
       ),
       hoverinfo = "none"
@@ -110,8 +177,8 @@ plot_risk <- function(df, name, xrange = NULL) {
       hovermode = "x unified",
       showlegend = FALSE
     ) %>%
-    config(displayModeBar = FALSE) %>%
-    plotly_show_forecast(xmax = xrange[2])
+    layout(shapes = shapes, annotations = annot) %>%
+    config(displayModeBar = FALSE)
 }
 
 # saved_weather %>%

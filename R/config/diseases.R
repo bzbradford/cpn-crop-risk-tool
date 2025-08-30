@@ -1,38 +1,60 @@
 # Crop and Disease definitions -------------------------------------------------
 
-Disease <- function(name, info, doc) {
-  stopifnot(doc %in% list.files(pattern = "*.md", recursive = TRUE))
-  list(name = name, info = info, doc = doc)
+#' @param name display name
+#' @param info model info
+#' @param doc markdown file for More Information
+#' @param risk_period NULL or length two character vector eg 'Jul 1'
+Disease <- function(name, info, doc, risk_period = NULL, ...) {
+  stopifnot(
+    "Invalid parameter provided" = length(list(...)) == 0,
+    "Missing doc file" = doc %in% list.files(pattern = "*.md", recursive = TRUE)
+  )
+
+  # check that all risk period dates are valid
+  if (!is.null(risk_period)) {
+    withCallingHandlers({
+      ymd(paste(year(Sys.Date()), risk_period))
+    },
+      warning = function(w) stop("Invalid date format for risk_period: ", risk_period)
+    )
+  }
+
+  list(name = name, info = info, doc = doc, risk_period = risk_period)
 }
 
 diseases <- list(
   # Corn
   tar_spot = Disease(
     name = "Tar spot",
-    info = "Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk). Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
-    doc = "docs/tar-spot.md"
+    info = HTML("<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity."),
+    doc = "docs/tar-spot.md",
+    risk_period = c("Jul 1", "Aug 15")
   ),
   gray_leaf_spot = Disease(
     name = "Gray leaf spot",
-    info = "Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk). Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
-    doc = "docs/gray-leaf-spot.md"
+    info = HTML("<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point."),
+    doc = "docs/gray-leaf-spot.md",
+    risk_period = c("Jul 1", "Aug 15")
   ),
   don = Disease(
     name = "Giberella ear rot/DON",
-    info = "Corn is susceptible to Giberella ear rot during silking. Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity.",
-    doc = "docs/don.md"
+    info = HTML("<b>Corn is susceptible to Giberella ear rot during silking.</b> Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking."),
+    doc = "docs/don.md",
+    risk_period = c("Jul 15", "Aug 7")
   ),
 
   # Soybean
   white_mold = Disease(
     name = "White mold",
-    info = "Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - early pod). Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
-    doc = "docs/white-mold.md"
+    info = HTML("<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only)."),
+    doc = "docs/white-mold.md",
+    risk_period = c("Jun 15", "Aug 7")
   ),
   frogeye = Disease(
     name = "Frogeye leaf spot",
-    info = "Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - early seed). Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
-    doc = "docs/frogeye.md"
+    info = HTML("<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity."),
+    doc = "docs/frogeye.md",
+    risk_period = c("Jun 15", "Sep 7")
   ),
 
   # Solanum
@@ -49,15 +71,15 @@ diseases <- list(
 
   # Carrot
   alternaria = Disease(
-    name = "Alternaria leaf blight",
-    info = "Carrots are susceptible to Alternaria leaf blight. Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
+    name = "Alternaria/Cercospora leaf blight",
+    info = "Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles. Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md"
   ),
 
   # Carrot + Beet
   cercospora = Disease(
     name = "Cercospora leaf spot",
-    info = "Carrots and beets are susceptible to Cercospora leaf blight. Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
+    info = "Cercospora leaf spot is a damaging fungal disease affecting beets. Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora.md"
   ),
 
@@ -106,8 +128,7 @@ crops <- list(
   carrot = Crop(
     name = "Carrot",
     diseases = list(
-      diseases$alternaria,
-      diseases$cercospora
+      diseases$alternaria
     )
   ),
   beet = Crop(
