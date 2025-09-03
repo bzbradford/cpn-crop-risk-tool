@@ -42,6 +42,7 @@ suppressPackageStartupMessages({
 # shiny::devmode(TRUE)
 
 ## RENV
+# renv::status()
 # renv::update()
 # renv::snapshot()
 # renv::clean()

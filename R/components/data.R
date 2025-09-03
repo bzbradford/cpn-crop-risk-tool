@@ -260,7 +260,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           div(
             class = "flex-across",
             div(
-              style = "flex:1;",
+              style = "flex: 1;",
               selectizeInput(
                 inputId = ns("plot_cols"),
                 label = NULL,
@@ -272,7 +272,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             ),
             div(
               class = "reset-plot",
-              actionLink(ns("reset_plot_cols"), icon("refresh"))
+              actionLink(
+                ns("reset_plot_cols"),
+                icon("refresh"),
+                title = "Reset to defaults"
+              )
             )
           )
         )
@@ -444,7 +448,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
         # indicate forecast
         if (isTruthy(input$forecast)) {
-          plt %>% plotly_show_forecast(xmax = opts$date_range[2])
+          annot <- plotly_get_forecast_annot(xmax = opts$date_range[2])
+          plt %>% layout(shapes = annot$shapes, annotations = annot$annotations)
         } else {
           plt
         }
