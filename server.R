@@ -862,15 +862,18 @@ server <- function(input, output, session) {
       ),
       list(
         label = "By location:",
-        options = c("n_s", "s_n", "w_e", "e_w", "nw_se", "ne_sw", "se_nw", "sw_ne")
+        options = c("n_s", "s_n", "w_e", "e_w", "sw_ne", "nw_se", "ne_sw", "se_nw")
       )
     )
 
     # Generate sort categories
     sort_types <- lapply(sort_categories, function(category) {
       buttons <- lapply(category$options, function(option) {
-        opts <- str_split_1(option, "_")
-        label <- paste(toupper(opts), collapse = " 🠚 ")
+        opts <- toupper(str_split_1(option, "_"))
+        label <- span(
+          style = "display: inline-flex; gap: 5px; align-items: baseline;",
+          opts[1], icon("arrow-right"), opts[2]
+        )
         actionButton(
           paste0("sort_sites_", option),
           label,
@@ -883,12 +886,17 @@ server <- function(input, output, session) {
       div(
         style = "margin-bottom: .5rem;",
         strong(category$label),
-        div(style = "display: flex; flex-wrap: wrap; gap: 10px;", buttons)
+        div(
+          style = "display: flex; flex-wrap: wrap; gap: 10px;",
+          buttons
+        )
       )
     })
 
+    # create modal
     mod <- modalDialog(
       title = "Re-order sites list?",
+      p("Click one of the options below to rearrange the list of sites."),
       div(
         style = "display: flex; flex-wrap: wrap; row-gap: 1rem; column-gap: 2rem;",
         sort_types
@@ -897,6 +905,7 @@ server <- function(input, output, session) {
       size = "s",
       easyClose = TRUE
     )
+
     showModal(mod)
   })
 
