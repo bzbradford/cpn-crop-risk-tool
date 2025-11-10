@@ -155,9 +155,9 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
   resp <- get_ibm(reqs)
 
   # handle response
-  if (nrow(resp) == 0) {
+  if (!isTruthy(resp)) {
     message("Failed to get any weather response")
-    return(tibble())
+    return(NULL)
   }
 
   # process response

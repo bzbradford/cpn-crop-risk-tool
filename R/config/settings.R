@@ -7,6 +7,7 @@ get_app_settings <- function() {
     app_title = "Crop Risk Tool",
     app_header_color = "#00693c",
     app_header_badge = "cpn-badge.png",
+    contact_email = "bbradford@wisc.edu",
 
     ## google ----
     google_geocoding_key = Sys.getenv("google_geocoding_key"),

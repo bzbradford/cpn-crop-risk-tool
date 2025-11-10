@@ -189,13 +189,13 @@ get_ibm <- function(reqs) {
   )
 
   wx <- bind_rows(resps)
-  msg <- if (nrow(wx) > 0) {
-    sprintf("OK ==> Performed %s requests in %s sec", length(reqs), round(Sys.time() - stime, 3))
+  if (nrow(wx) > 0) {
+    message(sprintf("OK ==> Performed %s requests in %s sec", length(reqs), round(Sys.time() - stime, 3)))
+    return(wx)
   } else {
-    "FAIL ==> Requests did not succeed"
+    message("FAIL ==> Requests did not succeed")
+    return(NULL)
   }
-  message(msg)
-  wx
 }
 
 # get_ibm(test_ibm_reqs)

@@ -1,6 +1,7 @@
 #--- main server ---#
 
 server <- function(input, output, session) {
+
   # Startup and cookie handling ----
 
   # cookie has .userId and .sites keys
@@ -173,6 +174,9 @@ server <- function(input, output, session) {
 
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
+
+    # error message displayed under fetch button
+    status_msg = NULL,
   )
 
   ## rv$sites_ready ----
@@ -222,7 +226,7 @@ server <- function(input, output, session) {
     req(!is.null(start) & !is.null(end))
 
     msg <- validate_dates(start, end)
-    rv$status_msg <- msg
+    set_status(msg)
     rv$dates_valid <- !isTruthy(msg)
   })
 
@@ -407,15 +411,14 @@ server <- function(input, output, session) {
   task_get_weather <- ExtendedTask$new(function(args) {
     message("Getting weather...")
     future_promise(
-      {
-        do.call(fetch_weather, args)
-      },
+      do.call(fetch_weather, args),
       seed = NULL
     )
   })
 
   ## Invoke IBM weather request ----
   invoke_get_weather <- function() {
+    set_status()
     req(task_get_weather$status() != "running")
     req(need_weather())
     args <- fetch_args()
@@ -443,8 +446,12 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
 
     if (is.null(res)) {
-      return()
+      # weather server error
+      contact_us <- sprintf("<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>", OPTS$contact_email)
+      err <- HTML("Failed to get weather data from the IBM EIS server. Please try again. If the problem persists", contact_us, "to report the issue.")
+      set_status(err)
     } else if (nrow(res) > 0) {
+      set_status()
       rv$weather <- res
     }
   })
@@ -1111,10 +1118,31 @@ server <- function(input, output, session) {
   })
 
   ## status_ui ----
+
+  set_status <- function(msg = NULL, type = c("error", "info")) {
+    rv$status <- if (is.null(msg)) {
+      NULL
+    } else {
+      list(
+        msg = msg,
+        type = match.arg(type)
+      )
+    }
+  }
+
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
-    msg <- req(rv$status_msg)
-    div(class = "shiny-output-error", style = "margin-top: 5px; padding: 10px;", msg)
+    status <- req(rv$status)
+    msg <- req(status$msg)
+    div(
+      class = ifelse(
+        status$type == "error",
+        "shiny-output-error",
+        ""
+      ),
+      style = "margin-top: 5px; padding: 10px;",
+      msg
+    )
   })
 
   ## fetch_args // reactive ----

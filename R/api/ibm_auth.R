@@ -4,7 +4,7 @@
 #' @param url IBM authentication endpoint
 #' @param keys list with org_id, tenant_id, and api_key
 refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
-  ibm_auth <<- tryCatch({
+  auth <- tryCatch({
     req <- request(url) %>%
       req_url_query(orgId = keys$org_id) %>%
       req_headers_redacted(
@@ -35,7 +35,9 @@ refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
       token = NULL
     )
   })
-  saveRDS(ibm_auth, "ibm_auth.rds")
+  saveRDS(auth, "ibm_auth.rds")
+  assign("ibm_auth", auth, envir = .GlobalEnv)
+  auth
 }
 
 # refresh_auth()
@@ -48,7 +50,9 @@ get_ibm_token <- function() {
   # look for a stored token if available
   if (!exists("ibm_auth")) {
     if (file.exists("ibm_auth.rds")) {
-      ibm_auth <<- read_rds("ibm_auth.rds")
+      auth <- read_rds("ibm_auth.rds")
+      assign("ibm_auth", auth, envir = .GlobalEnv)
+      auth
     } else {
       refresh_auth()
     }
