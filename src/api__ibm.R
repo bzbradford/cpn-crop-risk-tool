@@ -1,3 +1,79 @@
+# IBM Weather API interface
+# https://www.ibm.com/docs/en/geospatial-apis?topic=apis-weather-data
+
+# Handle IBM authentication ----
+
+#' Get the authorization token from the authentication server
+#' @param url IBM authentication endpoint
+#' @param keys list with org_id, tenant_id, and api_key
+refresh_auth <- function(url = OPTS$ibm_auth_endpoint, keys = OPTS$ibm_keys) {
+  require(httr2)
+  auth <- tryCatch(
+    {
+      req <- request(url) |>
+        req_url_query(orgId = keys$org_id) |>
+        req_headers_redacted(
+          "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
+          "x-api-key" = keys$api_key
+        ) |>
+        req_timeout(5) |>
+        req_error(is_error = \(resp) FALSE)
+      resp <- req_perform(req)
+      status <- resp_status(resp)
+
+      if (status >= 400) {
+        echo(resp)
+        stop("HTTP error ", status)
+      }
+
+      message("Authorization token refreshed at ", now("UTC"))
+      list(
+        timestamp = now("UTC"),
+        status = status,
+        token = resp_body_string(resp)
+      )
+    },
+    error = function(e) {
+      message("Failed to get authorization token: ", e$message)
+      list(
+        timestamp = 1,
+        status = 500,
+        token = NULL
+      )
+    }
+  )
+  saveRDS(auth, "ibm_auth.rds")
+  assign("ibm_auth", auth, envir = .GlobalEnv)
+  auth
+}
+
+# refresh_auth()
+
+#' Get the current IBM token or refresh if needed
+#' token is valid for 1 hour
+#' @returns auth token
+get_ibm_token <- function() {
+  # look for a stored token if available
+  if (!exists("ibm_auth")) {
+    if (file.exists("ibm_auth.rds")) {
+      auth <- read_rds("ibm_auth.rds")
+      assign("ibm_auth", auth, envir = .GlobalEnv)
+      auth
+    } else {
+      refresh_auth()
+    }
+  }
+
+  # if token is stale get a new one
+  if (ibm_auth$timestamp < now("UTC") - minutes(59)) {
+    refresh_auth()
+  }
+
+  ibm_auth$token
+}
+
+# get_ibm_token()
+
 # IBM API interface ----
 
 #' Convert vector of dates to vector of hourly datetimes
@@ -9,11 +85,20 @@ dates_to_dttm <- function(dates, tz = "UTC") {
     to = as_datetime(max(dates), tz = tz) + hours(23) + offset,
     by = as.difftime(hours(1))
   )
-  if (length(dttms) > max_len) warning("Sequence length of ", length(dttms), " longer than maximum ", max_len)
+  if (length(dttms) > max_len) {
+    warning(
+      "Sequence length of ",
+      length(dttms),
+      " longer than maximum ",
+      max_len
+    )
+  }
   dttms
 }
 
-# dates_to_dttm(seq.Date(today() - days(30), today(), 1))
+if (FALSE) {
+  dates_to_dttm(seq.Date(today() - days(30), today(), 1))
+}
 
 
 #' Breaks up longer time periods into 1000 hour chunks
@@ -49,7 +134,8 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
   if (length(dates_have) > 0) {
     date_chunks <- lapply(date_chunks, function(chunk) {
       if (all(chunk %in% dates_have)) NULL else chunk
-    }) %>% compact()
+    }) |>
+      compact()
   }
 
   dttm_chunks <- lapply(date_chunks, function(chunk) dates_to_dttm(chunk, tz))
@@ -62,22 +148,25 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
   })
 }
 
-# # should show 4 chunks
-# ibm_chunks(
-#   dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
-# )
-#
-# # should show 2 chunks (2 are covered)
-# ibm_chunks(
-#   dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1),
-#   dates_have = seq.Date(as_date("2024-4-1"), as_date("2024-7-1"), by = 1)
-# )
-#
-# # should be null (all dates covered)
-# ibm_chunks(
-#   dates_need = seq.Date(as_date("2024-5-1"), as_date("2024-7-1"), by = 1),
-#   dates_have = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
-# )
+# test ibm_chunks
+if (FALSE) {
+  # should show 4 chunks
+  ibm_chunks(
+    dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
+  )
+
+  # should show 2 chunks (2 are covered)
+  ibm_chunks(
+    dates_need = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1),
+    dates_have = seq.Date(as_date("2024-4-1"), as_date("2024-7-1"), by = 1)
+  )
+
+  # should be null (all dates covered)
+  ibm_chunks(
+    dates_need = seq.Date(as_date("2024-5-1"), as_date("2024-7-1"), by = 1),
+    dates_have = seq.Date(as_date("2024-3-1"), as_date("2024-8-1"), by = 1)
+  )
+}
 
 
 #' Create a single request for weather data, maximum length 1000 hours
@@ -88,28 +177,34 @@ ibm_chunks <- function(dates_need, dates_have = NULL, tz = "UTC") {
 #' @param url endpoint, changed only for testing failures
 #' @param token IBM authentication token
 #' @returns httr2 request
-create_ibm_request <- function(lat, lng, start_time, end_time, url = OPTS$ibm_weather_endpoint, token = get_ibm_token()) {
-  request(url) %>%
+create_ibm_request <- function(
+  lat,
+  lng,
+  start_time,
+  end_time,
+  url = OPTS$ibm_weather_endpoint,
+  token = get_ibm_token()
+) {
+  request(url) |>
     req_headers_redacted(
       "x-ibm-client-id" = sprintf("geospatial-%s", OPTS$ibm_keys$tenant_id),
       "Authorization" = sprintf("Bearer %s", token)
-    ) %>%
+    ) |>
     req_url_query(
       format = "json",
       geocode = str_glue("{lat},{lng}"),
       startDateTime = format(start_time, "%Y-%m-%dT%H:%M:%S%z"),
       endDateTime = format(end_time, "%Y-%m-%dT%H:%M:%S%z"),
       units = "m"
-    ) %>%
-    req_timeout(5) %>%
-    req_retry(max_tries = 2, failure_timeout = 5, retry_on_failure = TRUE) %>%
+    ) |>
+    req_timeout(5) |>
+    req_retry(max_tries = 2, failure_timeout = 5, retry_on_failure = TRUE) |>
     req_throttle(rate = 20)
 }
 
 # # test
-# create_ibm_request(45, -89, now() - days(10), now() - days(5)) %>%
+# create_ibm_request(45, -89, now() - days(10), now() - days(5)) |>
 #   req_perform()
-
 
 #' Create a list of necessary to send to IBM for weather data
 #' Using the date vectors it selects time chunks and creates draft requests
@@ -137,7 +232,15 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
   })
 
   duration <- now() - t
-  message(sprintf("Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f", lat, lng, start_date, end_date, length(reqs), duration))
+  message(sprintf(
+    "Built requests for %.3f,%.3f from %s to %s with %s calls in %.05f",
+    lat,
+    lng,
+    start_date,
+    end_date,
+    length(reqs),
+    duration
+  ))
 
   reqs
 }
@@ -145,8 +248,6 @@ create_ibm_reqs <- function(lat, lng, dates_need, dates_have = Date()) {
 # test_ibm_reqs <- create_ibm_reqs(43.0731, -89.4012, dates_need = seq.Date(ymd("2025-1-1"), ymd("2025-4-1"), by = 1))
 
 # str(test_ibm_reqs)
-
-
 
 #' Execute the list of IBM weather requests
 #' @param `reqs` list of IBM requests created by `create_ibm_reqs`
@@ -157,12 +258,18 @@ get_ibm <- function(reqs) {
   resps <- tryCatch(
     {
       token <- get_ibm_token()
-      if (!is.character(token)) stop("Failed to get IBM token.")
+      if (!is.character(token)) {
+        stop("Failed to get IBM token.")
+      }
 
       message(sprintf("GET ==> %s IBM requests", length(reqs)))
 
       # perform parallel requests for each time chunk
-      resps <- req_perform_parallel(reqs, on_error = "continue", progress = FALSE)
+      resps <- req_perform_parallel(
+        reqs,
+        on_error = "continue",
+        progress = FALSE
+      )
 
       # gather response data
       lapply(resps, function(resp) {
@@ -172,8 +279,15 @@ get_ibm <- function(reqs) {
               echo(resp)
               stop("Request failed")
             }
-            if (resp_status(resp) != 200) stop(paste0("Received status ", resp_status(resp), " with message ", resp_status_desc(resp)))
-            resp_body_json(resp, simplifyVector = TRUE) %>% as_tibble()
+            if (resp_status(resp) != 200) {
+              stop(paste0(
+                "Received status ",
+                resp_status(resp),
+                " with message ",
+                resp_status_desc(resp)
+              ))
+            }
+            resp_body_json(resp, simplifyVector = TRUE) |> as_tibble()
           },
           error = function(e) {
             message(e$message)
@@ -190,7 +304,11 @@ get_ibm <- function(reqs) {
 
   wx <- bind_rows(resps)
   if (nrow(wx) > 0) {
-    message(sprintf("OK ==> Performed %s requests in %s sec", length(reqs), round(Sys.time() - stime, 3)))
+    message(sprintf(
+      "OK ==> Performed %s requests in %s sec",
+      length(reqs),
+      round(Sys.time() - stime, 3)
+    ))
     return(wx)
   } else {
     message("FAIL ==> Requests did not succeed")
@@ -200,7 +318,6 @@ get_ibm <- function(reqs) {
 
 # get_ibm(test_ibm_reqs)
 
-
 #' Does some minimal processing on the IBM response to set local time and date
 #' @param ibm_response hourly weather data received from API
 #' @returns tibble
@@ -208,25 +325,31 @@ clean_ibm <- function(ibm_response) {
   if (nrow(ibm_response) == 0) {
     return(tibble())
   }
-  ibm_response %>%
-    select(-OPTS$ibm_ignore_cols) %>%
+  ibm_response |>
+    select(-OPTS$ibm_ignore_cols) |>
     select(
       grid_id = gridpointId,
       grid_lat = latitude,
       grid_lng = longitude,
       datetime_utc = validTimeUtc,
       everything()
-    ) %>%
-    clean_names() %>%
-    mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz"))) %>%
-    mutate(time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE), .after = datetime_utc) %>%
-    mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
+    ) |>
+    clean_names() |>
+    mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz"))) |>
+    mutate(
+      time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE),
+      .after = datetime_utc
+    ) |>
+    mutate(
+      datetime_local = with_tz(datetime_utc, first(time_zone)),
+      .by = time_zone,
+      .after = time_zone
+    ) |>
     mutate(date = as_date(datetime_local), .after = datetime_local)
 }
 
-# test_ibm <- test_ibm_raw %>% clean_ibm()
+# test_ibm <- test_ibm_raw |> clean_ibm()
 # ggplot(test_ibm, aes(x = datetime_local, y = temperature)) + geom_line()
-
 
 #' All possible and currently enabled weather columns
 #' some are renamed for clarity
@@ -264,23 +387,44 @@ ibm_vars <- c(
   "pressure_change"
 )
 
+#' df must have cols `date` and `datetime_local`
+add_date_cols <- function(df) {
+  df |>
+    mutate(
+      yday = yday(date),
+      year = year(date),
+      month = month(date),
+      day = day(date),
+      hour = hour(datetime_local),
+      night = !between(hour, 7, 19), # night is between 20:00 and 6:00
+      date_since_night = as_date(datetime_local + hours(4)),
+      .after = date,
+      .by = grid_id
+    )
+}
+
 
 #' Creates the working hourly weather dataset from cleaned ibm response
 #' @param ibm_hourly hourly weather data from `clean_ibm` function
 #' @returns tibble
 build_hourly <- function(ibm_hourly) {
-  ibm_hourly %>%
+  ibm_hourly |>
     select(
-      grid_id, grid_lat, grid_lng,
-      datetime_utc, time_zone, datetime_local, date,
+      grid_id,
+      grid_lat,
+      grid_lng,
+      datetime_utc,
+      time_zone,
+      datetime_local,
+      date,
       all_of(ibm_vars)
-    ) %>%
-    add_date_cols() %>%
-    arrange(grid_lat, grid_lng, datetime_local) %>%
+    ) |>
+    add_date_cols() |>
+    arrange(grid_lat, grid_lng, datetime_local) |>
     mutate(
       dew_point_depression = abs(temperature - dew_point),
       .after = dew_point
     )
 }
 
-# saved_weather %>% build_hourly()
+# test_ibm |> build_hourly()

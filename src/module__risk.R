@@ -4,8 +4,19 @@ riskUI <- function() {
   ns <- NS("risk")
   div(
     style = "margin-top: 10px;",
-    p(strong("Risk models are only valid when the crop is present and in a vulnerable growth stage."), "Risk may be mitigated in commercial production by application of a protective fungicide."),
-    uiOutput(ns("main_ui")) %>% withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Loading...")
+    p(
+      strong(
+        "Risk models are only valid when the crop is present and in a vulnerable growth stage."
+      ),
+      "Risk may be mitigated in commercial production by application of a protective fungicide."
+    ),
+    uiOutput(ns("main_ui")) |>
+      withSpinner(
+        type = 8,
+        size = .5,
+        proxy.height = 70,
+        caption = "Loading..."
+      )
   )
 }
 
@@ -25,7 +36,13 @@ riskServer <- function(rv, wx_data) {
           need(rv$weather_ready, OPTS$validation_weather_ready)
         )
 
-        uiOutput(ns("main_ui_elems")) %>% withSpinner(type = 8, size = .5, proxy.height = 70, caption = "Loading...")
+        uiOutput(ns("main_ui_elems")) |>
+          withSpinner(
+            type = 8,
+            size = .5,
+            proxy.height = 70,
+            caption = "Loading..."
+          )
       })
 
       # shown when validation passes
@@ -41,7 +58,6 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-
       ## crop_picker ----
       output$crop_picker <- renderUI({
         choices <- OPTS$crop_choices
@@ -56,13 +72,14 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-
       ## model_picker ----
       output$model_picker <- renderUI({
         crop_slug <- req(input$crop)
         crop <- crops[[crop_slug]]
         models <- crop$diseases
-        choices <- sapply(models, function(x) setNames(x[["slug"]], x[["name"]]))
+        choices <- sapply(models, function(x) {
+          setNames(x[["slug"]], x[["name"]])
+        })
 
         radioGroupButtons(
           inputId = ns("model"),
@@ -74,13 +91,11 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-
       ## selected_model() - reactive ----
       selected_model <- reactive({
         model_slug <- req(input$model)
         diseases[[model_slug]]
       })
-
 
       ## model_ui ----
       output$model_ui <- renderUI({
@@ -121,7 +136,8 @@ riskServer <- function(rv, wx_data) {
               inputId = ns("irrigation"),
               label = NULL,
               choices = irrigation_choices,
-              selected = isolate(input$irrigation) %||% first(irrigation_choices),
+              selected = isolate(input$irrigation) %||%
+                first(irrigation_choices),
               inline = TRUE
             ),
           ),
@@ -182,7 +198,6 @@ riskServer <- function(rv, wx_data) {
         sites
       })
 
-
       ## risk_period_warning ----
       # shows a warning when the entire date range is outside the risk window
       output$risk_period_warning <- renderUI({
@@ -198,10 +213,11 @@ riskServer <- function(rv, wx_data) {
 
         div(
           style = "margin-bottom: 1rem;",
-          warning_box("<b>Note:</b> The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle.")
+          warning_box(
+            "<b>Note:</b> The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+          )
         )
       })
-
 
       ## weather_missing_warning ----
       # display warning when days_missing > 0 for any site
@@ -216,7 +232,6 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-
       # Generate model data ----
 
       ## model_data - reactive ----
@@ -227,7 +242,8 @@ riskServer <- function(rv, wx_data) {
         req(nrow(wx) > 0)
         date_range <- wx_data$dates
 
-        df <- switch(model,
+        df <- switch(
+          model,
           "tar_spot" = build_tar_spot(wx),
           "gray_leaf_spot" = build_gray_leaf_spot(wx),
           "don" = build_don(wx),
@@ -251,15 +267,18 @@ riskServer <- function(rv, wx_data) {
 
       ## joined_data - reactive ----
       joined_data <- reactive({
-        selected_sites() %>%
-          st_drop_geometry() %>%
-          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) %>%
-          left_join(model_data(), join_by(grid_id), relationship = "many-to-many") %>%
+        selected_sites() |>
+          st_drop_geometry() |>
+          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) |>
+          left_join(
+            model_data(),
+            join_by(grid_id),
+            relationship = "many-to-many"
+          ) |>
           mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
       })
 
       # observe(echo(joined_data()))
-
 
       # Build risk plots ----
 
@@ -274,35 +293,44 @@ riskServer <- function(rv, wx_data) {
 
         req(nrow(model_data) > 0)
 
-        last_values <- model_data %>%
+        last_values <- model_data |>
           filter(date == min(today(), max(date)), .by = id)
 
         # write values for map
-        rv$map_risk_data <- last_values %>%
-          select(id, model_value, value_label, risk, risk_color) %>%
+        rv$map_risk_data <- last_values |>
+          select(id, model_value, value_label, risk, risk_color) |>
           mutate(model_name = model$name)
-        rv$map_title <- paste(model$name, "risk,", format(dates$end, "%b %d, %Y"))
+        rv$map_title <- paste(
+          model$name,
+          "risk,",
+          format(dates$end, "%b %d, %Y")
+        )
 
         site_labels <- unique(model_data$site_label)
 
         # generate plots
         elems <- lapply(site_labels, function(label) {
-          df <- model_data %>%
-            filter(site_label == !!label) %>%
-            rename(value = model_value) %>%
+          df <- model_data |>
+            filter(site_label == !!label) |>
+            rename(value = model_value) |>
             drop_na(grid_id, date, value)
 
           # to show in site feed
           content <- if (nrow(df) > 0) {
             date_range <- c(dates$start, max(dates$end, max(df$date)))
-            last_value <- last_values %>% filter(site_label == !!label)
+            last_value <- last_values |> filter(site_label == !!label)
 
             risk_info <- sprintf(
               "For %s: %s",
               format(last_value$date, "%b %d, %Y"),
               last_value$value_label
             )
-            plt <- plot_risk(df, name = model$name, xrange = date_range, risk_period = model$risk_period)
+            plt <- plot_risk(
+              df,
+              name = model$name,
+              xrange = date_range,
+              risk_period = model$risk_period
+            )
 
             div(
               strong(model$name),
@@ -325,11 +353,14 @@ riskServer <- function(rv, wx_data) {
           elems,
           div(
             style = "text-align: right;",
-            downloadButton(ns("download_data"), "Download dataset", class = "btn-sm")
+            downloadButton(
+              ns("download_data"),
+              "Download dataset",
+              class = "btn-sm"
+            )
           )
         )
       })
-
 
       # Download handler -------------------------------------------------------
 
@@ -338,35 +369,48 @@ riskServer <- function(rv, wx_data) {
         filename = function() {
           data <- wx_data()
           model <- selected_model()
-          fname <- sprintf("%s - %s to %s.csv", model$name, data$date$start, data$date$end)
+          fname <- sprintf(
+            "%s - %s to %s.csv",
+            model$name,
+            data$date$start,
+            data$date$end
+          )
           fname <- gsub("[^A-Za-z0-9 \\.\\-]", " ", fname)
           str_squish(fname)
         },
         content = function(file) {
           data <- wx_data()
           model <- selected_model()
-          model_data <- joined_data() %>%
-            select(-any_of(OPTS$grid_attr_cols)) %>%
-            select(-c(risk_color, value_label, site_label)) %>%
+          model_data <- joined_data() |>
+            select(-any_of(OPTS$grid_attr_cols)) |>
+            select(-c(risk_color, value_label, site_label)) |>
             rename_with_units("metric")
 
-          header <- tibble(line = c(
-            sprintf("=== Crop Risk Tool - %s model ===", model$name),
-            sprintf("Generated: %s", Sys.time()),
-            sprintf("Host: %s", session$clientData$url_hostname)
-          ))
+          header <- tibble(
+            line = c(
+              sprintf("=== Crop Risk Tool - %s model ===", model$name),
+              sprintf("Generated: %s", Sys.time()),
+              sprintf("Host: %s", session$clientData$url_hostname)
+            )
+          )
 
-          sites <- selected_sites() %>%
-            st_drop_geometry() %>%
+          sites <- selected_sites() |>
+            st_drop_geometry() |>
             select(id:days_missing)
 
           write_excel_csv(header, file, na = "", col_names = FALSE)
-          tibble(line = c("", "=== Site list ===")) %>%
+          tibble(line = c("", "=== Site list ===")) |>
             write_excel_csv(file, append = TRUE)
           write_excel_csv(sites, file, na = "", col_names = TRUE, append = TRUE)
-          tibble(line = c("", "=== Model data ===")) %>%
+          tibble(line = c("", "=== Model data ===")) |>
             write_excel_csv(file, append = TRUE)
-          write_excel_csv(model_data, file, na = "", col_names = TRUE, append = TRUE)
+          write_excel_csv(
+            model_data,
+            file,
+            na = "",
+            col_names = TRUE,
+            append = TRUE
+          )
         }
       )
     } # end module

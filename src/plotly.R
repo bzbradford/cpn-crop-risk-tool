@@ -25,7 +25,6 @@ expand_range <- function(lo, hi, amt = .05) {
 
 # expand_range(0, 1)
 
-
 # add forecast annotation
 plotly_get_forecast_annot <- function(xmax) {
   if ("Date" %in% class(xmax)) {
@@ -38,7 +37,8 @@ plotly_get_forecast_annot <- function(xmax) {
 
   text <- list(list(
     yref = "paper",
-    x = x, y = 1,
+    x = x,
+    y = 1,
     text = label,
     showarrow = FALSE,
     opacity = .5,
@@ -47,8 +47,12 @@ plotly_get_forecast_annot <- function(xmax) {
   ))
 
   vline <- list(list(
-    type = "line", yref = "paper",
-    x0 = x, x1 = x, y0 = .05, y1 = 1,
+    type = "line",
+    yref = "paper",
+    x0 = x,
+    x1 = x,
+    y0 = .05,
+    y1 = 1,
     line = list(color = "black", dash = "dash"),
     opacity = .25
   ))
@@ -59,8 +63,10 @@ plotly_get_forecast_annot <- function(xmax) {
     line = list(opacity = 0),
     opacity = 0.05,
     yref = "paper",
-    x0 = x, x1 = xmax,
-    y0 = .05, y1 = 1,
+    x0 = x,
+    x1 = xmax,
+    y0 = .05,
+    y1 = 1,
     layer = "below"
   ))
 
@@ -78,7 +84,8 @@ plotly_get_risk_period_annot <- function(start_date, end_date, xrange) {
 
   text <- list(list(
     yref = "paper",
-    x = text_date, y = 1,
+    x = text_date,
+    y = 1,
     text = "Risk Period",
     showarrow = FALSE,
     opacity = .5,
@@ -88,8 +95,12 @@ plotly_get_risk_period_annot <- function(start_date, end_date, xrange) {
 
   vlines <- lapply(c(start_date, end_date), function(dt) {
     list(
-      type = "line", yref = "paper",
-      x0 = dt, x1 = dt, y0 = .05, y1 = 1,
+      type = "line",
+      yref = "paper",
+      x0 = dt,
+      x1 = dt,
+      y0 = .05,
+      y1 = 1,
       line = list(color = "maroon", weight = .5, dash = "dot"),
       opacity = .25
     )
@@ -101,8 +112,10 @@ plotly_get_risk_period_annot <- function(start_date, end_date, xrange) {
     line = list(opacity = 0),
     opacity = 0.05,
     yref = "paper",
-    x0 = start_date, x1 = end_date,
-    y0 = .05, y1 = 1,
+    x0 = start_date,
+    x1 = end_date,
+    y0 = .05,
+    y1 = 1,
     layer = "below"
   ))
 
@@ -112,7 +125,9 @@ plotly_get_risk_period_annot <- function(start_date, end_date, xrange) {
   )
 }
 
-# plotly_get_risk_period_annot(ymd("2025-7-1"), ymd("2025-8-15"))
+if (FALSE) {
+  plotly_get_risk_period_annot(ymd("2025-7-1"), ymd("2025-8-15"))
+}
 
 
 # field crops disease plots
@@ -148,8 +163,8 @@ plot_risk <- function(df, name, xrange = NULL, risk_period = NULL) {
     }
   }
 
-  df %>%
-    plot_ly(x = ~date, y = ~value, height = 100) %>%
+  df |>
+    plot_ly(x = ~date, y = ~value, height = 100) |>
     add_trace(
       name = name,
       text = ~value_label,
@@ -159,7 +174,7 @@ plot_risk <- function(df, name, xrange = NULL, risk_period = NULL) {
       line = list(color = "black", width = 1),
       hovertemplate = "%{text}",
       hoverinfo = "text"
-    ) %>%
+    ) |>
     add_trace(
       name = name,
       type = "bar",
@@ -168,7 +183,7 @@ plot_risk <- function(df, name, xrange = NULL, risk_period = NULL) {
         line = list(width = 0)
       ),
       hoverinfo = "none"
-    ) %>%
+    ) |>
     layout(
       margin = list(l = 5, r = 5, b = 5, t = 5, pad = 5),
       xaxis = x,
@@ -176,17 +191,19 @@ plot_risk <- function(df, name, xrange = NULL, risk_period = NULL) {
       bargap = 0,
       hovermode = "x unified",
       showlegend = FALSE
-    ) %>%
-    layout(shapes = shapes, annotations = annot) %>%
+    ) |>
+    layout(shapes = shapes, annotations = annot) |>
     config(displayModeBar = FALSE)
 }
 
-# saved_weather %>%
-#   filter(grid_id == sample(grid_id, 1)) %>%
-#   build_hourly() %>%
-#   build_daily() %>%
-#   build_disease_from_ma() %>%
-#   pivot_longer(cols = -c(grid_id, date), names_to = "model") %>%
-#   filter(model == sample(model, 1)) %>%
-#   mutate(assign_risk(first(model), value)) %>%
-#   plot_risk(name = first(.$model))
+if (FALSE) {
+  saved_weather |>
+    filter(grid_id == sample(grid_id, 1)) |>
+    build_hourly() |>
+    build_daily() |>
+    build_disease_from_ma() |>
+    pivot_longer(cols = -c(grid_id, date), names_to = "model") |>
+    filter(model == sample(model, 1)) |>
+    mutate(assign_risk(first(model), value)) |>
+    plot_risk(name = first(.$model))
+}

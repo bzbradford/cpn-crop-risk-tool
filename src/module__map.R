@@ -27,18 +27,15 @@ mapServer <- function(rv, map_data) {
     function(input, output, session) {
       ns <- session$ns
 
-
       # Helper functions ----
 
       proxy_map <- leafletProxy(ns("map"))
 
-
       # wrapper for leaflet flyTo
       fly_to <- function(loc) {
-        proxy_map %>%
+        proxy_map |>
           flyTo(loc$lng, loc$lat, max(10, isolate(input$map_zoom)))
       }
-
 
       #' wrapper for leaflet fitBounds
       #' @param map leaflet proxy object
@@ -51,20 +48,23 @@ mapServer <- function(rv, map_data) {
         do.call(fitBounds, args)
       }
 
-
       # fits all sites on the map
       fit_sites <- function() {
         sites <- rv$sites
         req(nrow(sites) > 0)
 
         bounds <- list(
-          lat1 = min(sites$lat), lat2 = max(sites$lat),
-          lng1 = min(sites$lng), lng2 = max(sites$lng)
+          lat1 = min(sites$lat),
+          lat2 = max(sites$lat),
+          lng1 = min(sites$lng),
+          lng2 = max(sites$lng)
         )
 
-        fit_bounds(bounds = bounds, options = list(padding = c(100, 100), maxZoom = 10))
+        fit_bounds(
+          bounds = bounds,
+          options = list(padding = c(100, 100), maxZoom = 10)
+        )
       }
-
 
       # validates a potential new site then offers a popup to rename and finalize
       save_site <- function(site) {
@@ -77,7 +77,11 @@ mapServer <- function(rv, map_data) {
         if (!validate_ll(site$lat, site$lng)) {
           show_toast(
             "Invalid location",
-            text = sprintf("The location %s, %s is not valid or is outside of our service area.", site$lat, site$lng),
+            text = sprintf(
+              "The location %s, %s is not valid or is outside of our service area.",
+              site$lat,
+              site$lng
+            ),
             position = "center"
           )
           req(FALSE)
@@ -92,9 +96,9 @@ mapServer <- function(rv, map_data) {
           req(value)
 
           site$name <- value
-          sites <- sites %>%
-            bind_rows(as_tibble(site)) %>%
-            distinct(lat, lng, .keep_all = TRUE) %>%
+          sites <- sites |>
+            bind_rows(as_tibble(site)) |>
+            distinct(lat, lng, .keep_all = TRUE) |>
             mutate(id = row_number())
 
           rv$sites <- sites
@@ -115,24 +119,28 @@ mapServer <- function(rv, map_data) {
         )
       }
 
-
       # calls google geocoding api to get locality name
       get_loc_name <- function(lat, lng, name) {
-        cmd <- sprintf("getLocalityName(%s, %s, '%s', '%s')", lat, lng, name, OPTS$google_geocoding_key)
+        cmd <- sprintf(
+          "getLocalityName(%s, %s, '%s', '%s')",
+          lat,
+          lng,
+          name,
+          OPTS$google_geocoding_key
+        )
         runjs(cmd)
       }
-
 
       # Cross-module comms ----
       # handle commands sent from other modules as set in the reactive value
       observe({
         cmd <- req(rv$map_cmd)
-        switch(cmd,
+        switch(
+          cmd,
           "fit_sites" = fit_sites(),
           warning(sprintf("Unrecognized message '%s'", cmd))
         )
       })
-
 
       # UI components ----
 
@@ -142,18 +150,18 @@ mapServer <- function(rv, map_data) {
           JS(paste0("(btn, map) => { sendShiny('map-map_btn', '", id, "') };"))
         }
 
-        map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) %>%
-          addMapPane("extent", 501) %>%
-          # addMapPane("counties", 410) %>%
-          addMapPane("grid", 502) %>%
-          addMapPane("sites", 503) %>%
+        map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
+          addMapPane("extent", 501) |>
+          # addMapPane("counties", 410) |>
+          addMapPane("grid", 502) |>
+          addMapPane("sites", 503) |>
           addPolygons(
             data = service_bounds,
             color = "black",
             weight = 2,
             fill = FALSE,
             options = pathOptions(pane = "extent", interactive = FALSE)
-          ) %>%
+          ) |>
           fit_bounds(OPTS$map_bounds_wi)
 
         # add basemaps
@@ -163,12 +171,12 @@ mapServer <- function(rv, map_data) {
         }
 
         # finalize map
-        map %>%
+        map |>
           addLayersControl(
             baseGroups = names(basemaps),
-            overlayGroups = OPTS$map_layers %>% set_names(NULL),
+            overlayGroups = OPTS$map_layers |> set_names(NULL),
             options = layersControlOptions(collapsed = TRUE)
-          ) %>%
+          ) |>
           addEasyButtonBar(
             easyButton(
               title = "Get my location",
@@ -188,10 +196,10 @@ mapServer <- function(rv, map_data) {
               position = "topleft",
               onClick = btn_js("zoom_extent")
             )
-          ) %>%
-          addFullscreenControl() %>%
+          ) |>
+          addFullscreenControl() |>
           # assign leaflet map object to global var 'map'
-          onRender("() => { map = this.getMap(); }") %>%
+          onRender("() => { map = this.getMap(); }") |>
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
@@ -201,7 +209,6 @@ mapServer <- function(rv, map_data) {
           )
       })
 
-
       ## map_title - renderUI ----
       output$map_title <- renderUI({
         req(rv$map_risk_data)
@@ -210,29 +217,33 @@ mapServer <- function(rv, map_data) {
         div(class = "map-title", title)
       })
 
-
       ## searchbox_ui - renderUI ----
       output$searchbox_ui <- renderUI({
         div(
           title = "Search by name for a city or place",
-          HTML(paste0("<script async src='https://maps.googleapis.com/maps/api/js?key=", OPTS$google_places_key, "&loading=async&libraries=places&callback=initAutocomplete'></script>")),
+          HTML(paste0(
+            "<script async src='https://maps.googleapis.com/maps/api/js?key=",
+            OPTS$google_places_key,
+            "&loading=async&libraries=places&callback=initAutocomplete'></script>"
+          )),
           # textInput("searchbox", "Find a location by name")
           textInput(ns("searchbox"), NULL)
         )
       })
 
-
       ## coord_search_ui // renderUI ----
       # Coordinate searchbox under map
       output$coord_search_ui <- renderUI({
         # treat pressing Enter as clicking "go"
-        runjs("
+        runjs(
+          "
           $(document).keyup((event) => {
             if ($('#map-coord_search').is(':focus') && (event.key == 'Enter')) {
               $('#map-coord_search_go').click();
             }
           });
-        ")
+        "
+        )
 
         div(
           style = "display: flex; flex-direction: column;",
@@ -256,17 +267,16 @@ mapServer <- function(rv, map_data) {
         )
       })
 
-
       # Observers ----
 
       ## Add counties to map ----
       # observe({
       #   delay(100, {
-      #     leafletProxy("map") %>%
+      #     leafletProxy("map") |>
       #       addPolygons(
       #         data = counties_sf,
       #         group = OPTS$map_layers$counties,
-      #         label = ~paste0("<b>", state_name, "</b></br>", county_name, " County") %>%
+      #         label = ~paste0("<b>", state_name, "</b></br>", county_name, " County") |>
       #           lapply(HTML),
       #         color = "black", weight = .2, opacity = .2,
       #         fillColor = ~colorFactor(OPTS$state_colors, state_name)(state_name),
@@ -281,26 +291,33 @@ mapServer <- function(rv, map_data) {
         wx <- rv$weather
         sites <- rv$sites
 
-        proxy_map %>% clearGroup("sites")
+        proxy_map |> clearGroup("sites")
         req(nrow(sites) > 0)
 
         # determine site icons
         sites <- if (nrow(wx) == 0) {
-          rv$sites %>% mutate(needs_download = TRUE)
+          rv$sites |> mutate(needs_download = TRUE)
         } else {
           map_data()$sites_with_status
         }
 
         color_by_risk <- FALSE
 
-        sites <- sites %>%
+        sites <- sites |>
           mutate(
             selection_color = if_else(id == rv$selected_site, "red", "blue"),
             marker_color = selection_color,
             text_color = "#fff",
             label = paste0(
-              "<b>Site ", id, ": ", name,
-              if_else((nrow(sites) > 1) & id == rv$selected_site, " [Selected]", ""),
+              "<b>Site ",
+              id,
+              ": ",
+              name,
+              if_else(
+                (nrow(sites) > 1) & id == rv$selected_site,
+                " [Selected]",
+                ""
+              ),
               "</b><br>",
               sprintf("%.3f°N, %.3f°W", lat, lng),
               if_else(needs_download, "<br>Download required", "")
@@ -311,25 +328,27 @@ mapServer <- function(rv, map_data) {
         risk_values <- rv$map_risk_data
         try({
           if (!is.null(risk_values) && nrow(risk_values) > 0) {
-            sites <- sites %>%
-              left_join(risk_values, join_by(id)) %>%
-              rowwise() %>%
-              mutate(risk_color = coalesce(risk_color, "#aaa")) %>%
-              mutate(as_tibble(find_closest_css_color(risk_color))) %>%
-              mutate(marker_color = css_color) %>%
-              mutate(model_text = if_else(
-                is.na(model_name),
-                "No model data",
-                sprintf("%s: %s", model_name, value_label)
-              )) %>%
+            sites <- sites |>
+              left_join(risk_values, join_by(id)) |>
+              rowwise() |>
+              mutate(risk_color = coalesce(risk_color, "#aaa")) |>
+              mutate(as_tibble(find_closest_css_color(risk_color))) |>
+              mutate(marker_color = css_color) |>
+              mutate(
+                model_text = if_else(
+                  is.na(model_name),
+                  "No model data",
+                  sprintf("%s: %s", model_name, value_label)
+                )
+              ) |>
               mutate(label = paste0(label, "<br>", model_text))
             color_by_risk <- TRUE
           }
         })
 
-        # echo(sites %>% select(id, name, marker_color, any_of(c("risk_color", "css_color", "text_color"))))
+        # echo(sites |> select(id, name, marker_color, any_of(c("risk_color", "css_color", "text_color"))))
 
-        proxy_map %>%
+        proxy_map |>
           addAwesomeMarkers(
             data = sites,
             lat = ~lat,
@@ -352,20 +371,19 @@ mapServer <- function(rv, map_data) {
           )
       })
 
-
       ## Show user weather data grids ----
       # will only show grids that the user has interacted with in the session
       observe({
-        proxy_map %>%
+        proxy_map |>
           clearGroup(OPTS$map_layers$grid)
 
         # user-selected grids this session
-        grids <- map_data()$grids_with_status %>%
+        grids <- map_data()$grids_with_status |>
           filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
 
         # if any, display them
         if (nrow(grids) > 0) {
-          proxy_map %>%
+          proxy_map |>
             addPolygons(
               data = annotate_grids(grids),
               weight = 1,
@@ -381,7 +399,6 @@ mapServer <- function(rv, map_data) {
         }
       })
 
-
       ## Show all weather data grids ----
       # these are any grids in the saved weather data
       observe({
@@ -389,8 +406,8 @@ mapServer <- function(rv, map_data) {
 
         grids <- map_data()$grids
 
-        proxy_map %>%
-          clearGroup("grid") %>%
+        proxy_map |>
+          clearGroup("grid") |>
           addPolylines(
             data = grids,
             color = "black",
@@ -401,24 +418,24 @@ mapServer <- function(rv, map_data) {
           )
       })
 
-
       ## Handle EasyButton clicks ----
       observe({
         btn <- req(input$map_btn)
 
         if (btn == "user_loc") {
-          runjs("
+          runjs(
+            "
             map.locate({ setView: false }).on('locationfound', (event) => {
               sendShiny('map-user_loc', event.latlng)
             })
-          ")
+          "
+          )
         } else if (btn == "zoom_sites") {
           fit_sites()
         } else if (btn == "zoom_extent") {
           fit_bounds(bounds = OPTS$map_bounds_us)
         }
       })
-
 
       ## Handle searched from google autocomplete ----
       observe({
@@ -427,9 +444,8 @@ mapServer <- function(rv, map_data) {
         save_site(site)
         fly_to(site)
         runjs("$('#map-searchbox').val(null);")
-      }) %>%
+      }) |>
         bindEvent(input$searched_loc)
-
 
       ## Handle coord search button ----
       # try to parse coords and save if it works
@@ -442,28 +458,32 @@ mapServer <- function(rv, map_data) {
             get_loc_name(coords$lat, coords$lng, "Searched point")
           },
           error = function(e) {
-            show_toast("Invalid coordinate search", text = sprintf("'%s' could not be parsed as valid coordinates. Expected something like '45.12, -89.34'", str), position = "center")
+            show_toast(
+              "Invalid coordinate search",
+              text = sprintf(
+                "'%s' could not be parsed as valid coordinates. Expected something like '45.12, -89.34'",
+                str
+              ),
+              position = "center"
+            )
           }
         )
-      }) %>%
+      }) |>
         bindEvent(input$coord_search_go)
-
 
       ## Handle geolocation ----
       observe({
         loc <- req(input$user_loc)
         get_loc_name(loc$lat, loc$lng, "Your location")
-      }) %>%
+      }) |>
         bindEvent(input$user_loc)
-
 
       ## Handle location from click ----
       observe({
         loc <- req(input$map_click)
         get_loc_name(loc$lat, loc$lng, "Clicked point")
-      }) %>%
+      }) |>
         bindEvent(input$map_click$.nonce)
-
 
       ## Save site after getting locality name from geocoding api
       observe({
@@ -472,9 +492,8 @@ mapServer <- function(rv, map_data) {
         save_site(site)
         fly_to(site)
         runjs("sendShiny('map-locality_name', null);")
-      }) %>%
+      }) |>
         bindEvent(input$locality_name)
-
 
       ## Handle marker click ----
       observe({
@@ -482,10 +501,12 @@ mapServer <- function(rv, map_data) {
         id <- marker$id
         sites <- rv$sites
         site <- sites[id, ]
-        if (rv$selected_site != id) rv$selected_site <- id
+        if (rv$selected_site != id) {
+          rv$selected_site <- id
+        }
         rv$sites <- sites
         # fly_to(marker)
-      }) %>%
+      }) |>
         bindEvent(input$map_marker_click$.nonce)
     } # end module
   )

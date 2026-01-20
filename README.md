@@ -73,7 +73,7 @@ Selected field crops and vegetable disease model outputs are provided. These mod
     -   Frogeye leaf spot (soybean): <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
     -   Gray leaf spot (corn): <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
     -   Tarspot (corn): <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
-    -   Giberella ear rot (corn): <https://cropprotectionnetwork.org/encyclopedia/gibberella-ear-rot-of-corn>
+    -   Gibberella ear rot (corn): <https://cropprotectionnetwork.org/encyclopedia/gibberella-ear-rot-of-corn>
 -   Vegetable crop diseases
     -   Early blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
     -   Late blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
