@@ -39,7 +39,7 @@ test_that("gdd_sine works", {
 
 test_that("build_gdd_from_daily works", {
   expect_silent({
-    saved_weather |>
+    test_hourly_wx |>
       build_daily() |>
       build_gdd_from_daily()
   })

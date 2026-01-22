@@ -312,8 +312,7 @@ riskServer <- function(rv, wx_data) {
         elems <- lapply(site_labels, function(label) {
           df <- model_data |>
             filter(site_label == !!label) |>
-            rename(value = model_value) |>
-            drop_na(grid_id, date, value)
+            drop_na(grid_id, date, model_value)
 
           # to show in site feed
           content <- if (nrow(df) > 0) {

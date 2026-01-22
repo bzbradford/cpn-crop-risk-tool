@@ -527,51 +527,43 @@ weather_status <- function(
   start_date = min(wx$date),
   end_date = max(wx$date)
 ) {
-  # return simple df if no weather
-  if (nrow(wx) == 0) {
-    return(tibble(
-      grid_id = NA,
-      needs_download = TRUE
-    ))
-  }
+
+  default <- tibble(
+    grid_id = NA,
+    needs_download = TRUE
+  )
+  if (nrow(wx) == 0) return(default)
+  selected_wx <- wx |>
+    filter(between(date, start_date, end_date))
+  if (nrow(selected_wx) == 0) return(default)
 
   dates_expected <- seq.Date(start_date, end_date, 1)
 
   # summarize for each grid
-  lapply(unique(wx$grid_id), function(g) {
-    grid_wx <- wx |>
-      filter(grid_id == g, between(date, start_date, end_date))
-
-    if (nrow(grid_wx) == 0) {
-      tibble(grid_id = g, needs_download = TRUE)
-    } else {
-      grid_wx |>
-        daily_status() |>
-        summarize(
-          tz = first(tz),
-          date_min = min(date),
-          date_max = max(date),
-          time_min = min(start_hour),
-          time_max = max(end_hour),
-          days_expected = length(dates_expected),
-          days_actual = n_distinct(date),
-          days_missing = max(0, days_expected - days_actual),
-          days_missing_pct = days_missing / days_expected,
-          days_incomplete = sum(hours_missing > OPTS$ibm_stale_hours),
-          hours_expected = sum(hours_expected),
-          hours_missing = sum(hours_missing),
-          hours_missing_pct = hours_missing / hours_expected,
-          hours_stale = if_else(
-            date_max == today(tzone = tz),
-            hours_diff(time_max, now(tzone = tz)),
-            0
-          ),
-          stale = hours_stale > OPTS$ibm_stale_hours,
-          needs_download = stale | days_missing > 0 | days_incomplete > 0,
-          .by = grid_id
-        ) |>
-        select(-tz)
-    }
-  }) |>
-    bind_rows()
+  selected_wx |>
+    daily_status() |>
+    summarize(
+      tz = first(tz),
+      date_min = min(date),
+      date_max = max(date),
+      time_min = min(start_hour),
+      time_max = max(end_hour),
+      days_expected = length(dates_expected),
+      days_actual = n_distinct(date),
+      days_missing = max(0, days_expected - days_actual),
+      days_missing_pct = days_missing / days_expected,
+      days_incomplete = sum(hours_missing > OPTS$ibm_stale_hours),
+      hours_expected = sum(hours_expected),
+      hours_missing = sum(hours_missing),
+      hours_missing_pct = hours_missing / hours_expected,
+      hours_stale = if_else(
+        date_max == today(tzone = tz),
+        hours_diff(time_max, now(tzone = tz)),
+        0
+      ),
+      stale = hours_stale > OPTS$ibm_stale_hours,
+      needs_download = stale | days_missing > 0 | days_incomplete > 0,
+      .by = grid_id
+    ) |>
+    select(-tz)
 }

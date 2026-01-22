@@ -34,6 +34,7 @@ suppressPackageStartupMessages({
 
 # add to renv without loading
 if (FALSE) {
+  library(devtools)
   library(languageserver)
   library(styler)
   library(miniUI)
@@ -64,7 +65,6 @@ if (FALSE) {
 
 ## Run unit tests
 # testthat::test_dir("tests/testthat")
-
 
 # Async tasks ------------------------------------------------------------------
 
@@ -452,8 +452,8 @@ convert_measures <- function(df) {
   df
 }
 
-# saved_weather |> convert_measures()
-# saved_weather |> build_daily() |> convert_measures()
+# test_hourly_wx |> convert_measures()
+# test_hourly_wx |> build_daily() |> convert_measures()
 
 #' Returns the unit name for the given column
 #' used to append unit suffix in plotly
@@ -680,7 +680,7 @@ ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
 # ll_to_grid(45, -89)
 
 #' Creates grid polygons based on weather data grid centroid
-#' @param wx IBM weather data eg `saved_weather`
+#' @param wx hourly weather data
 #' @returns sf object of grid cell polygons
 build_grids <- function(wx) {
   wx |>
@@ -691,7 +691,7 @@ build_grids <- function(wx) {
     st_set_geometry("geometry")
 }
 
-# saved_weather |> build_grids()
+# test_hourly_wx |> build_grids()
 
 #' Add some more information for displaying on the map
 annotate_grids <- function(grids_with_status) {
