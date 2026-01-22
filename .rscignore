@@ -1,2 +1,4 @@
 .RData
+.lintr.R
+
 cache

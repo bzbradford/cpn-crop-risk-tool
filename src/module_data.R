@@ -1,11 +1,13 @@
+#--- charts and data module ---#
 
 dataUI <- function() {
   ns <- NS("data")
   div(
     # class = "tab-content",
-
     div(
-      em("Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information.")
+      em(
+        "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
+      )
     ),
     uiOutput(ns("main_ui"), fill = "container"),
   )
@@ -42,7 +44,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           # d1 <- build_disease_from_ma(wx$daily_full)
           # d2 <- build_disease_from_daily(wx$daily)
           # wx$disease <-
-          #   left_join(d1, d2, join_by(grid_id, date)) %>%
+          #   left_join(d1, d2, join_by(grid_id, date)) |>
           #   filter(date >= wx$dates$start)
           wx$gdd <- build_gdd_from_daily(wx$daily)
           rv$data <- wx
@@ -60,8 +62,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
         wx <- req(rv$data)
 
-        sites <- wx$sites %>%
-          st_drop_geometry() %>%
+        sites <- wx$sites |>
+          st_drop_geometry() |>
           select(
             site_id = id,
             site_name = name,
@@ -85,11 +87,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
         req(nrow(data) > 0)
 
-        df <- sites %>%
-          left_join(data, join_by(grid_id), relationship = "many-to-many") %>%
-          drop_na(grid_id, date) %>%
-          select(-grid_id) %>%
-          mutate(across(where(is.numeric), ~signif(.x)))
+        df <- sites |>
+          left_join(data, join_by(grid_id), relationship = "many-to-many") |>
+          drop_na(grid_id, date) |>
+          select(-grid_id) |>
+          mutate(across(where(is.numeric), ~ signif(.x)))
 
         if (isFALSE(input$forecast)) {
           df <- if (opts$data_type == "hourly") {
@@ -101,8 +103,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (input$metric) df else convert_measures(df)
       })
 
-
-
       # Interface ----
 
       ## main_ui ----
@@ -112,7 +112,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
         tagList(
           div(
-            class = "flex-across", style = "margin-top: 1rem; gap: 30px;",
+            class = "flex-across",
+            style = "margin-top: 1rem; gap: 30px;",
             uiOutput(ns("metric_switch")),
             uiOutput(ns("forecast_switch"))
           ),
@@ -127,11 +128,14 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           ),
           div(
             style = "text-align: right;",
-            downloadButton(ns("download_data"), "Download dataset", class = "btn-sm")
+            downloadButton(
+              ns("download_data"),
+              "Download dataset",
+              class = "btn-sm"
+            )
           )
         )
       })
-
 
       ## metric_switch ----
       output$metric_switch <- renderUI({
@@ -142,7 +146,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           status = "primary"
         )
       })
-
 
       ## forecast_switch ----
       output$forecast_switch <- renderUI({
@@ -156,19 +159,18 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-
       ## data_type_ui ----
       output$data_type_ui <- renderUI({
         radioGroupButtons(
           inputId = ns("data_type"),
           label = "Dataset",
           choices = OPTS$data_type_choices,
-          selected = isolate(input$data_type) %||% first(OPTS$data_type_choices),
+          selected = isolate(input$data_type) %||%
+            first(OPTS$data_type_choices),
           individual = TRUE,
           size = "sm"
         )
       })
-
 
       ## data_options ----
       output$data_options_ui <- renderUI({
@@ -190,7 +192,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
       })
 
-
       ## weather_missing_ui ----
       output$weather_missing_ui <- renderUI({
         sites <- wx_data()$sites
@@ -202,16 +203,14 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-
       ## plot_sites_ui ----
       # plot_sites_choices <- reactive({
       #   sites <- wx_data()$sites
       #   req(nrow(sites) > 1)
       #
       #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-      # }) %>%
+      # }) |>
       #   debounce(1000)
-
 
       output$plot_sites_ui <- renderUI({
         # choices <- plot_sites_choices()
@@ -219,7 +218,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
 
-        choices <- set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
+        choices <- set_names(
+          sites$id,
+          sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
+        )
         selected <- isolate(input$plot_sites) %||% selected_site()
 
         checkboxGroupInput(
@@ -230,7 +232,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           inline = TRUE
         )
       })
-
 
       ## change selection ----
       observe({
@@ -243,14 +244,12 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-
       ## plot_cols - reactive ----
       plot_cols <- reactive({
         cols <- names(selected_data())
         cols <- cols[!(cols %in% OPTS$plot_ignore_cols)]
         set_names(cols, make_clean_names(cols, "title"))
       })
-
 
       ## plot_cols_ui ----
       output$plot_cols_ui <- renderUI({
@@ -262,24 +261,31 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           div(
             class = "flex-across",
             div(
-              style = "flex:1;",
+              style = "flex: 1;",
               selectizeInput(
                 inputId = ns("plot_cols"),
                 label = NULL,
                 choices = cols,
-                selected = first_truthy(prev_selection, default_selection, cols[1]),
+                selected = first_truthy(
+                  prev_selection,
+                  default_selection,
+                  cols[1]
+                ),
                 multiple = TRUE,
                 options = list(plugins = list("remove_button"))
               )
             ),
             div(
               class = "reset-plot",
-              actionLink(ns("reset_plot_cols"), icon("refresh"))
+              actionLink(
+                ns("reset_plot_cols"),
+                icon("refresh"),
+                title = "Reset to defaults"
+              )
             )
           )
         )
       })
-
 
       ## Reset plot columns ----
       reset_plot_cols <- function() {
@@ -295,8 +301,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # observe({ if (length(input$plot_cols) == 0) reset_plot_cols() })
 
       # reset on button press
-      observe(reset_plot_cols()) %>% bindEvent(input$reset_plot_cols)
-
+      observe(reset_plot_cols()) |> bindEvent(input$reset_plot_cols)
 
       ## data_plot - renderPlotly ----
       output$data_plot <- renderPlotly({
@@ -321,7 +326,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
 
         if (opts$multi_site) {
-          opts$selected_ids = req(input$plot_sites)
+          opts$selected_ids <- req(input$plot_sites)
           df <- filter(df, site_id %in% opts$selected_ids)
         }
         req(nrow(df) > 0)
@@ -334,40 +339,52 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         # create plot title
         opts$title <- if (!opts$multi_site) {
           req(nrow(sites) == 1)
-          sprintf("%s data for %.3f°N, %.3f°W", opts$data_name, sites$lat, sites$lng)
+          sprintf(
+            "%s data for %.3f°N, %.3f°W",
+            opts$data_name,
+            sites$lat,
+            sites$lng
+          )
         } else {
           site_locs <-
             with(
               filter(sites, id %in% opts$selected_ids),
               sprintf("Site %s: %.2f,%.2f", id, lat, lng)
-            ) %>%
-            paste(collapse = " / ") %>%
-            str_wrap(120) %>%
+            ) |>
+            paste(collapse = " / ") |>
+            str_wrap(120) |>
             str_replace_all("\\\n", "<br>")
-          paste0(opts$data_name, " data<br><span style='font-size:12px;font-style:italic;'>", site_locs, "</span>")
+          paste0(
+            opts$data_name,
+            " data<br><span style='font-size:12px;font-style:italic;'>",
+            site_locs,
+            "</span>"
+          )
         }
 
-        if ("datetime_local" %in% names(df)) df$date <- df$datetime_local
+        if ("datetime_local" %in% names(df)) {
+          df$date <- df$datetime_local
+        }
 
         # try to assign the columns to axes with values in similar ranges
         # also bunches the more numerous columns on the left
-        col_ranges <- df %>%
-          summarize(across(all_of(opts$cols), ~max(.x, na.rm = T))) %>%
-          pivot_longer(everything()) %>%
-          drop_na(value) %>%
-          mutate(value = sqrt(abs(value))) %>%
-          mutate(y2 = value >= mean(value) - .5) %>%
-          mutate(y2 = if (mean(y2) > .5) !y2 else y2) %>%
+        col_ranges <- df |>
+          summarize(across(all_of(opts$cols), ~ calc_max(.x))) |>
+          pivot_longer(everything()) |>
+          drop_na(value) |>
+          mutate(value = sqrt(abs(value))) |>
+          mutate(y2 = value >= mean(value) - .5) |>
+          mutate(y2 = if (mean(y2) > .5) !y2 else y2) |>
           mutate(axis = if_else(y2, "y2", "y1"))
 
-        y1_title <- filter(col_ranges, axis == "y1")$name %>%
-          make_clean_names("title") %>%
+        y1_title <- filter(col_ranges, axis == "y1")$name |>
+          make_clean_names("title") |>
           paste(collapse = ", ")
-        y2_title <- filter(col_ranges, axis == "y2")$name %>%
-          make_clean_names("title") %>%
+        y2_title <- filter(col_ranges, axis == "y2")$name |>
+          make_clean_names("title") |>
           paste(collapse = ", ")
 
-        plt <- plot_ly() %>%
+        plt <- plot_ly() |>
           layout(
             title = list(
               text = opts$title,
@@ -399,7 +416,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
               ),
               fixedrange = TRUE
             )
-          ) %>%
+          ) |>
           config(
             displaylogo = FALSE,
             toImageButtonOptions = list(
@@ -417,50 +434,64 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
           add_trace_to_plot <- function(plt, x, y, name) {
             add_trace(
-              plt, x = x, y = y,
-              name = name, type = "scatter", mode = opts$mode,
+              plt,
+              x = x,
+              y = y,
+              name = name,
+              type = "scatter",
+              mode = opts$mode,
               yaxis = col_axis,
-              hovertemplate = paste0("%{y:.3~f}", find_unit(col, opts$unit_system)),
+              hovertemplate = paste0(
+                "%{y:.3~f}",
+                find_unit(col, opts$unit_system)
+              ),
               line = list(shape = "spline", width = opts$linewidth)
             )
           }
 
           if (opts$multi_site) {
             for (id in opts$selected_ids) {
-              site_df <- df %>% filter(site_id == id)
+              site_df <- df |> filter(site_id == id)
               name <- str_trunc(first(site_df$site_name), 15)
               plt <- add_trace_to_plot(
-                plt, x = site_df$date, y = site_df[[col]],
+                plt,
+                x = site_df$date,
+                y = site_df[[col]],
                 name = sprintf("%s: %s - %s", id, name, col_name)
               )
             }
           } else {
             plt <- add_trace_to_plot(
-              plt, x = df$date, y = df[[col]], name = col_name
+              plt,
+              x = df$date,
+              y = df[[col]],
+              name = col_name
             )
           }
         }
 
         # indicate forecast
         if (isTruthy(input$forecast)) {
-          plt %>% plotly_show_forecast(xmax = opts$date_range[2])
+          annot <- plotly_get_forecast_annot(xmax = opts$date_range[2])
+          plt |> layout(shapes = annot$shapes, annotations = annot$annotations)
         } else {
           plt
         }
       })
-
 
       # Download button ----
 
       ## download_data - reactive ----
       download_data <- reactive({
         unit_system <- if_else(input$metric, "metric", "imperial")
-        selected_data() %>%
-          rename_with_units(unit_system) %>%
-          mutate(across(any_of(c("datetime_utc", "datetime_local")), as.character)) %>%
+        selected_data() |>
+          rename_with_units(unit_system) |>
+          mutate(across(
+            any_of(c("datetime_utc", "datetime_local")),
+            as.character
+          )) |>
           clean_names("big_camel")
       })
-
 
       ## download_filename - reactive ----
       # for both the csv download and plot png export
@@ -482,18 +513,15 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       })
 
-
       ## download_data - downloadHandler ----
       output$download_data <- downloadHandler(
         filename = function() {
           paste0(download_filename()$csv, ".csv")
         },
         content = function(file) {
-          download_data() %>% write_excel_csv(file, na = "")
+          download_data() |> write_excel_csv(file, na = "")
         }
       )
-
-
     } # end module
   )
 }

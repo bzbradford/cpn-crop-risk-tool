@@ -1,46 +1,28 @@
+#--- main server ---#
 
 server <- function(input, output, session) {
-
   # Startup and cookie handling ----
 
-  set_cookie <- function(sites) {
-    sites_json <- jsonlite::toJSON(sites)
-    runjs(str_glue('updateSites({sites_json})'))
+  # cookie has .userId and .sites keys
+  read_cookie <- function() {
+    runjs("sendCookieToShiny();")
   }
 
+  # set the .sites key on the cookie
+  set_cookie <- function(sites) {
+    sites_json <- jsonlite::toJSON(sites)
+    runjs(str_glue("updateSites({sites_json})"))
+  }
+
+  # clear out the .sites key on the cookie
   clear_cookie <- function() {
     set_cookie(tibble())
   }
 
-  cookie <- reactive({
-    req(input$cookie)
-  })
-
-  # observe(echo(cookie()))
-
-  user_id <- reactive({
-    cookie()[["userId"]]
-  })
-
-  # observe(echo(user_id()))
-
-  cache_file <- reactive({
-    id <- req(user_id())
-    cache_path <- "cache"
-    if (!dir.exists(cache_path)) {
-      dir.create(cache_path)
-    }
-    fname <- paste0(id, ".fst")
-    file.path(cache_path, fname)
-  })
-
-  # observe(echo(cache_file()))
-
-
   ## Initialize cookie ----
   # on startup read cookie data then start cookie writer
   observe({
-    runjs("sendCookieToShiny();")
+    read_cookie()
 
     cookie_writer <- observe({
       sites <- rv$sites
@@ -48,70 +30,108 @@ server <- function(input, output, session) {
     })
   })
 
+  ## Parse sites from cookie ----
+  observeEvent(input$cookie, {
+    cookie <- req(input$cookie)
+
+    tryCatch(
+      {
+        cookie_sites <- cookie[["sites"]]
+
+        if (length(cookie_sites) == 0) {
+          return()
+        }
+
+        sites <- cookie_sites |>
+          bind_rows() |>
+          select(all_of(names(sites_template))) |>
+          filter(validate_ll(lat, lng)) |>
+          distinct() |>
+          head(OPTS$max_sites) |>
+          mutate(id = row_number())
+
+        req(nrow(sites) > 0)
+
+        rv$sites <- sites
+        rv$selected_site <- first(sites$id)
+        rv$map_cmd <- "fit_sites"
+
+        showNotification(paste(
+          "Loaded",
+          nrow(sites),
+          ifelse(nrow(sites) == 1, "site", "sites"),
+          "from a previous session."
+        ))
+
+        # trigger weather fetch after a second
+        delay(1000, {
+          rv$fetch <- runif(1)
+        })
+      },
+      error = function(e) {
+        message("Failed to read sites from cookie: ", e)
+        echo(cookie)
+      }
+    )
+  })
+
+  # based on user ID which is set by javascript on the client
+  cache_file <- reactive({
+    cookie <- req(input$cookie)
+
+    tryCatch(
+      {
+        id <- cookie[["userId"]]
+        req(length(id) > 0)
+
+        cache_path <- "cache"
+        if (!dir.exists(cache_path)) {
+          dir.create(cache_path)
+        }
+        fname <- paste0(id, ".fst")
+        file.path(cache_path, fname)
+      },
+      error = function(e) {
+        message("Failed to read user ID from cookie: ", e)
+        echo(cookie)
+      }
+    )
+  })
+
+  # observe(echo(cache_file()))
 
   ## Read cached weather ----
   observe({
     fname <- cache_file()
     req(file.exists(fname))
 
-    tryCatch({
-      rv$weather <- read_fst(fname) %>% as_tibble()
-    }, error = function(e) {
-      message("Failed to read cache file '", fname, "'")
-      file.remove(fname)
-    })
-  }) %>%
+    tryCatch(
+      {
+        rv$weather <- read_fst(fname) |> as_tibble()
+      },
+      error = function(e) {
+        message("Failed to read cache file '", fname, "'")
+        file.remove(fname)
+      }
+    )
+  }) |>
     bindEvent(cache_file())
-
 
   ## Write weather to cache ----
   observe({
     wx <- rv$weather
     saved_weather <<- wx
     fname <- cache_file()
-    tryCatch({
-      write_fst(wx, fname, compress = 99)
-    }, error = function(e) {
-      message("Could not write cache file '", fname, "': ", e)
-    })
-  }) %>%
+    tryCatch(
+      {
+        write_fst(wx, fname, compress = 99)
+      },
+      error = function(e) {
+        message("Could not write cache file '", fname, "': ", e)
+      }
+    )
+  }) |>
     bindEvent(rv$weather)
-
-
-  ## Parse sites from cookie ----
-  observeEvent(cookie(), {
-    cookie <- req(cookie())
-    cookie_sites <- cookie[["sites"]]
-    req(length(cookie_sites) > 0)
-
-    tryCatch({
-      sites <- cookie_sites %>%
-        bind_rows() %>%
-        select(all_of(names(sites_template))) %>%
-        filter(validate_ll(lat, lng)) %>%
-        distinct() %>%
-        head(OPTS$max_sites) %>%
-        mutate(id = row_number())
-
-      req(nrow(sites) > 0)
-
-      rv$sites <- sites
-      rv$selected_site <- first(sites$id)
-      rv$map_cmd <- "fit_sites"
-
-      showNotification(paste("Loaded", nrow(sites), ifelse(nrow(sites) == 1, "site", "sites"), "from a previous session."))
-
-      # trigger weather fetch after a second
-      # delay(1000, {
-      #   rv$fetch <- runif(1)
-      # })
-
-    }, error = function(e) {
-      message("Failed to read sites from cookie: ", e)
-      clear_cookie()
-    })
-  })
-
 
   # Reactive values ----
 
@@ -137,38 +157,39 @@ server <- function(input, output, session) {
     dates_valid = TRUE,
 
     # sidebar site upload UI
-    show_upload = FALSE, # toggle upload ui
+    show_upload = FALSE,
+    # toggle upload ui
 
     # which grids have been retrieved this session, for displaying on map
     grids = tibble(),
 
-    # forecasts for sites
-    # keyed by grid_id
-    noaa_urls = list(),
-
-    # keyed by forecast url
-    noaa_forecasts = list(),
+    # forecasts for sites, keyed by grid_id
+    forecasts = list(),
 
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
 
-    risk_last_value = tibble(),
+    # error message displayed under fetch button
+    status_msg = NULL,
   )
 
   ## rv$sites_ready ----
   # update sites_ready but only if different than existing value
   observe({
     ready <- nrow(rv$sites) > 0
-    if (rv$sites_ready != ready) rv$sites_ready <- ready
+    if (rv$sites_ready != ready) {
+      rv$sites_ready <- ready
+    }
   })
 
   ## rv$weather_ready ----
   # update weather_ready but only if different
   observe({
     ready <- nrow(rv$weather) > 0
-    if (rv$weather_ready != ready) rv$weather_ready <- ready
+    if (rv$weather_ready != ready) {
+      rv$weather_ready <- ready
+    }
   })
-
 
   ## rv$start_date ----
   observe({
@@ -177,12 +198,17 @@ server <- function(input, output, session) {
     rv$end_date <- req(input$end_date)
   })
 
-
   ## rv$dates_valid ----
   validate_dates <- function(start, end) {
-    if (length(c(start, end)) < 2) return("Must provide start and end dates.")
-    if (start > end) return("Start date must be before end date.")
-    if ((end - start) > years(1)) return("Date range must be less than 1 year")
+    if (length(c(start, end)) < 2) {
+      return("Must provide start and end dates.")
+    }
+    if (start > end) {
+      return("Start date must be before end date.")
+    }
+    if ((end - start) > years(1)) {
+      return("Date range must be less than 1 year")
+    }
     NULL
   }
 
@@ -192,11 +218,18 @@ server <- function(input, output, session) {
     req(!is.null(start) & !is.null(end))
 
     msg <- validate_dates(start, end)
-    rv$status_msg <- msg
+    set_status(msg)
     rv$dates_valid <- !isTruthy(msg)
   })
 
-
+  ## rv$map_risk_data ----
+  # used by the map to render pin colors
+  # set by the risk module
+  # cleared here when sites change
+  observe({
+    sites <- rv$sites
+    rv$map_risk_data <- NULL
+  })
 
   # Reactives ----
 
@@ -216,8 +249,6 @@ server <- function(input, output, session) {
     dates
   })
 
-
-
   ## wx_grids ----
   # create grids based on downloaded weather data
   wx_grids <- reactive({
@@ -227,25 +258,34 @@ server <- function(input, output, session) {
     build_grids(wx)
   })
 
-
   ## sites_sf ----
   sites_sf <- reactive({
     sites <- rv$sites
 
     if (nrow(sites) > 0) {
-      sf <- sites %>%
-        st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = F)
+      sf <- sites |>
+        st_as_sf(
+          coords = c("lng", "lat"),
+          crs = 4326,
+          remove = F
+        )
 
       if (rv$weather_ready) {
-        sf %>% st_join(wx_grids())
+        sf |> st_join(wx_grids())
       } else {
-        sf %>% mutate(grid_id = NA, grid_lat = NA, grid_lng = NA)
+        # create blank cols that would come from wx_grids
+        sf |>
+          mutate(
+            grid_id = NA,
+            grid_lat = NA,
+            grid_lng = NA,
+            time_zone = NA
+          )
       }
     } else {
       NULL
     }
   })
-
 
   ## wx_status ----
   # will be blocked when no weather or weather in date range
@@ -257,16 +297,16 @@ server <- function(input, output, session) {
     weather_status(wx, dates$start, dates$end)
   })
 
+  # observe(echo(wx_status() |> select(grid_id, days_missing, hours_missing, needs_download)))
 
   ## grids_with_status ----
   # will be blocked when no weather in date range
   grids_with_status <- reactive({
     status <- wx_status()
-    wx_grids() %>%
-      filter(grid_id %in% status$grid_id) %>%
+    wx_grids() |>
+      filter(grid_id %in% status$grid_id) |>
       left_join(status, join_by(grid_id))
   })
-
 
   ## sites_with_status ----
   # will be blocked when no weather in date range
@@ -275,12 +315,11 @@ server <- function(input, output, session) {
     if (is.null(sites)) {
       NULL
     } else {
-      sites %>%
-        left_join(wx_status(), join_by(grid_id)) %>%
+      sites |>
+        left_join(wx_status(), join_by(grid_id)) |>
         replace_na(list(needs_download = TRUE))
     }
   })
-
 
   ## rv$grids handler ----
   # keep record of which grid_ids are associated with sites this session
@@ -289,78 +328,78 @@ server <- function(input, output, session) {
     sites <- sites_sf()
     req(nrow(sites) > 0)
 
-    sites <- sites %>%
-      st_drop_geometry() %>%
-      drop_na(grid_id) %>%
-      distinct(grid_id, grid_lat, grid_lng)
+    sites <- sites |>
+      st_drop_geometry() |>
+      drop_na(grid_id) |>
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
 
     req(nrow(sites) > 0)
 
-    rv$grids <- rv$grids %>%
-      bind_rows(sites) %>%
-      distinct(grid_id, grid_lat, grid_lng)
+    rv$grids <- rv$grids |>
+      bind_rows(sites) |>
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
   })
 
+  # observe(echo(rv$grids))
 
+  # Forecasts Extended Task ----
 
-
-
-  # NOAA Forecast Extended Task ----
-
-  task_get_forecasts <- ExtendedTask$new(function(grids, cur_urls, cur_forecasts) {
+  task_get_forecasts <- ExtendedTask$new(function(grids, cur_forecasts) {
     message("Getting forecasts...")
     suppressWarnings({
-      future_promise({
-        urls <- cur_urls %||% list()
-        for (i in 1:nrow(grids)) {
-          grid <- grids[i,]
-          if (isTruthy(urls[[grid$grid_id]])) next # already have it
-          urls[[grid$grid_id]] <- noaa_get_forecast_url(grid$grid_lat, grid$grid_lng)
-        }
-
-        forecasts <- cur_forecasts %||% list()
-        for (url in unique(urls)) {
-          if (!isTruthy(url) || url == "404") next # bad url
-          if (isTruthy(forecasts[[url]])) next # already have it
-          forecasts[[url]] <- noaa_get_forecast(url = url)
-        }
-
-        list(urls = urls, forecasts = forecasts)
-      }, seed = NULL)
+      future_promise(
+        {
+          forecasts <- cur_forecasts %||% list()
+          for (i in seq_len(nrow(grids))) {
+            grid <- grids[i, ]
+            id <- grid$grid_id
+            if (isTruthy(forecasts[[id]])) {
+              next
+            } # already have it
+            fc <- get_openmeteo_forecast(grid$grid_lat, grid$grid_lng)
+            forecasts[[id]] <- fc
+          }
+          forecasts
+        },
+        seed = NULL
+      )
     })
   })
 
-  ## Invoke NOAA requests ----
+  ## Invoke forecast requests ----
   observe({
     req(getOption("forecast", TRUE))
 
     grids <- rv$grids
     req(nrow(grids) > 0)
-    urls <- isolate(rv$noaa_urls)
-    forecasts <- isolate(rv$noaa_forecasts)
-    task_get_forecasts$invoke(grids, urls, forecasts)
+    forecasts <- isolate(rv$forecasts)
+    task_get_forecasts$invoke(grids, forecasts)
   })
 
-  ## Collect result of NOAA requests ----
+  # observe(echo(rv$grids))
+
+  ## Collect result of forecast requests ----
   observe({
     req(task_get_forecasts$status() == "success")
     res <- req(task_get_forecasts$result())
-    rv$noaa_urls <- res$urls
-    rv$noaa_forecasts <- res$forecasts
+    rv$forecasts <- res
   })
 
+  # observe(echo(rv$forecasts))
 
   # IBM Weather Extended Task ----
 
   task_get_weather <- ExtendedTask$new(function(args) {
     message("Getting weather...")
-    future_promise({
-      do.call(fetch_weather, args)
-    }, seed = NULL)
+    future_promise(
+      do.call(fetch_weather, args),
+      seed = NULL
+    )
   })
 
   ## Invoke IBM weather request ----
   invoke_get_weather <- function() {
+    set_status()
     req(task_get_weather$status() != "running")
     req(need_weather())
     args <- fetch_args()
@@ -388,81 +427,86 @@ server <- function(input, output, session) {
     rv$action_nonce <- runif(1) # regenerates the action button
 
     if (is.null(res)) {
-      return()
+      # weather server error
+      contact_us <- sprintf(
+        "<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>",
+        OPTS$contact_email
+      )
+      err <- HTML(
+        "Failed to get weather data from the IBM EIS server. Please try again. If the problem persists",
+        contact_us,
+        "to report the issue."
+      )
+      set_status(err)
     } else if (nrow(res) > 0) {
+      set_status()
       rv$weather <- res
     }
   })
-
 
   # Weather data ----
 
   ## wx_forecasts ----
   wx_forecasts <- reactive({
-    sites <- sites_sf()
-    req(nrow(sites) > 0)
-    req_cols <- c("grid_id", "grid_lat", "grid_lng", "time_zone")
-    req(all(req_cols %in% names(sites)))
-
-    grids <- sites %>%
-      st_drop_geometry() %>%
-      as_tibble() %>%
-      distinct(grid_id, grid_lat, grid_lng, time_zone)
-
-    urls <- rv$noaa_urls
-    fcs <- rv$noaa_forecasts
+    grids <- req(rv$grids)
+    fcs <- rv$forecasts
 
     if (length(fcs) == 0) {
       # message("no forecasts")
       return(tibble())
     }
 
-    if (!(any(names(urls) %in% grids$grid_id))) {
+    if (!(any(names(fcs) %in% grids$grid_id))) {
       # message('no forecasts for selected sites')
       return(tibble())
     }
 
-    fc_data <- bind_rows(fcs, .id = "url")
-    fc <- tibble(
-      grid_id = names(urls),
-      url = unlist(urls)
-    ) %>%
-      left_join(fc_data, join_by(url)) %>%
-      select(-url)
-
-    df <- grids %>%
-      drop_na(time_zone) %>%
+    fc_data <- bind_rows(fcs, .id = "grid_id")
+    fc <- tibble(grid_id = names(fcs)) |>
+      left_join(fc_data, join_by(grid_id))
+    df <- grids |>
+      drop_na(time_zone) |>
       left_join(fc, join_by(grid_id))
 
     # make sure the forecasts actually joined
-    if (!("datetime_utc" %in% names(df))) return(tibble())
+    if (!("datetime_utc" %in% names(df))) {
+      return(tibble())
+    }
 
-    df %>%
-      mutate(datetime_local = with_tz(datetime_utc, first(time_zone)), .by = time_zone, .after = time_zone) %>%
-      mutate(date = as_date(datetime_local), .after = datetime_local) %>%
+    df |>
+      mutate(
+        datetime_local = with_tz(datetime_utc, first(time_zone)),
+        .by = time_zone,
+        .after = time_zone
+      ) |>
+      mutate(date = as_date(datetime_local), .after = datetime_local) |>
       add_date_cols()
   })
 
   # observe(echo(wx_forecasts()))
 
-
   ## wx_args ----
   # all inputs to the wx_data function
-  wx_args <- reactive(lst(
-    weather = rv$weather,
-    sites = sites_with_status(),
-    selected_dates = selected_dates(),
-    fetched_dates = expanded_dates(),
-    dates = list(
-      start = selected_dates$start,
-      end = selected_dates$end,
-      today = today()
-    ),
-    forecast = if (dates$end == today()) wx_forecasts() else tibble()
-  ))
+  wx_args <- reactive(
+    lst(
+      weather = rv$weather,
+      sites = sites_with_status(),
+      selected_dates = selected_dates(),
+      fetched_dates = expanded_dates(),
+      dates = list(
+        start = selected_dates$start,
+        end = selected_dates$end,
+        today = today()
+      ),
+      forecast = if (dates$end == today()) {
+        wx_forecasts()
+      } else {
+        tibble()
+      }
+    )
+  )
 
   # observe(echo(wx_args()))
-
 
   ## wx_data ----
   #' will be blocked when no weather
@@ -479,35 +523,36 @@ server <- function(input, output, session) {
     wx$dates <- dates
 
     # allow up to 30 days before selected start date
-    hourly_full <- weather %>%
-      filter(grid_id %in% sites$grid_id) %>%
-      filter(between(date, fetched_dates$start, fetched_dates$end)) %>%
-      bind_rows(forecast) %>%
-      distinct(grid_id, datetime_local, .keep_all = TRUE) %>%
+    hourly_full <- weather |>
+      filter(grid_id %in% sites$grid_id) |>
+      filter(between(date, fetched_dates$start, fetched_dates$end)) |>
+      bind_rows(forecast) |>
+      distinct(grid_id, datetime_local, .keep_all = TRUE) |>
       arrange(grid_id, datetime_local)
 
     # remove the earlier dates that were used for moving averages
-    wx$hourly <- hourly_full %>%
-      filter(date >= dates$start) %>%
+    wx$hourly <- hourly_full |>
+      filter(date >= dates$start) |>
       mutate(
         precip_cumulative = cumsum(precip),
         snow_cumulative = cumsum(snow),
         .by = grid_id
-      ) %>%
-      relocate(precip_cumulative, .after = precip) %>%
+      ) |>
+      relocate(precip_cumulative, .after = precip) |>
       relocate(snow_cumulative, .after = snow)
 
-    if (nrow(hourly_full) == 0 || nrow(wx$hourly) == 0) return(wx)
+    if (nrow(hourly_full) == 0 || nrow(wx$hourly) == 0) {
+      return(wx)
+    }
 
     wx$daily_full <- build_daily(hourly_full)
-    wx$daily <- wx$daily_full %>% filter(date >= dates$start)
+    wx$daily <- wx$daily_full |> filter(date >= dates$start)
 
     wx
-  }) %>%
+  }) |>
     bindCache(rlang::hash(wx_args()))
 
   # observe(echo(wx_data()))
-
 
   # Help modal --------------------------------------------------------------------
 
@@ -517,9 +562,7 @@ server <- function(input, output, session) {
     show_modal(md = mod$md, title = mod$title)
   })
 
-
-
-# Site selection ----------------------------------------------------------
+  # Site selection ----------------------------------------------------------
 
   ## site_help_ui ----
   output$site_help_ui <- renderUI({
@@ -533,7 +576,10 @@ server <- function(input, output, session) {
       "Edit or delete a site using the pen or trash icons. Click on the map or use the search boxes to add another location."
     }
     if (n > 10) {
-      str <- paste(str, "<i>Note: App may be slower when many sites are added.</i>")
+      str <- paste(
+        str,
+        "<i>Note: App may be slower when many sites are added.</i>"
+      )
     }
 
     p(style = "font-size: small", HTML(str))
@@ -542,7 +588,7 @@ server <- function(input, output, session) {
   ## sites_tbl_data ----
   # sites formatted for DT
   sites_dt_data <- reactive({
-    req(rv$sites) %>%
+    req(rv$sites) |>
       mutate(
         id = as.character(id),
         # across(c(lat, lng), ~sprintf("%.2f", .x)),
@@ -552,8 +598,9 @@ server <- function(input, output, session) {
           site_action_link("edit", id, name),
           site_action_link("trash", id),
           "</div>"
-        ) %>% lapply(HTML)
-      ) %>%
+        ) |>
+          lapply(HTML)
+      ) |>
       select(id, name, loc, btns)
   })
 
@@ -590,7 +637,7 @@ server <- function(input, output, session) {
           list(className = "dt-right", targets = 3)
         )
       )
-    ) %>%
+    ) |>
       formatStyle(0:3, lineHeight = "1rem", textWrap = "nowrap")
 
     dt_observer$resume()
@@ -599,14 +646,19 @@ server <- function(input, output, session) {
   })
 
   ## Handle DT update ----
-  dt_observer <- observe({
-    selected_id <- rv$selected_site
-    df <- sites_dt_data() %>%
-      mutate(id = if_else(id == selected_id, paste0(">", id), as.character(id)))
+  dt_observer <- observe(
+    {
+      selected_id <- rv$selected_site
+      df <- sites_dt_data() |>
+        mutate(
+          id = if_else(id == selected_id, paste0(">", id), as.character(id))
+        )
 
-    dataTableProxy("sites_dt") %>%
-      replaceData(df, rownames = FALSE, clearSelection = "none")
-  }, suspended = TRUE)
+      dataTableProxy("sites_dt") |>
+        replaceData(df, rownames = FALSE, clearSelection = "none")
+    },
+    suspended = TRUE
+  )
 
   # observe(print(paste(names(input))))
 
@@ -630,7 +682,7 @@ server <- function(input, output, session) {
   ## Handle trash_site button ----
   observeEvent(input$trash_site, {
     to_delete_id <- req(input$trash_site)
-    rv$sites <- rv$sites %>% filter(id != to_delete_id)
+    rv$sites <- rv$sites |> filter(id != to_delete_id)
   })
 
   ## Handle edit_site button ----
@@ -641,35 +693,51 @@ server <- function(input, output, session) {
     rv$sites <- sites
   })
 
-
   ## Site list buttons ----
 
   ### site_btns // renderUI ----
   output$site_btns <- renderUI({
-    # btn <- function(id, label, ...) actionButton(id, label, class = "btn-sm", ...)
     sites <- isolate(rv$sites)
+    n <- nrow(sites)
+
     div(
       style = "margin-top: 10px;",
       div(
         class = "flex-across",
         # btn("load_example", "Test sites"),
         actionButton(
-          "upload_csv", "Upload csv",
+          "upload_csv",
+          "Upload",
+          icon = icon("upload"),
           class = sprintf(
             "btn-sm btn-%s",
-            ifelse(isTruthy(rv$show_upload), "primary", "default")
+            ifelse(
+              isTruthy(rv$show_upload),
+              "primary",
+              "default"
+            )
           )
         ),
         actionButton(
-          "clear_sites", "Clear sites",
+          "sort_sites",
+          "Sort",
+          icon = icon("sort"),
           class = "btn-sm",
-          disabled = nrow(sites) == 0
+          disabled = n <= 1
         ),
-        if (nrow(sites) == 0) {
-          downloadButton("export_sites", "Export sites", class = "btn-sm", disabled = TRUE)
-        } else {
-          downloadButton("export_sites", "Export sites", class = "btn-sm")
-        }
+        actionButton(
+          "clear_sites",
+          "Clear",
+          icon = icon("trash"),
+          class = "btn-sm",
+          disabled = n == 0
+        ),
+        downloadButton(
+          "export_sites",
+          "Export",
+          class = "btn-sm",
+          disabled = n == 0
+        )
       )
     )
   })
@@ -677,22 +745,31 @@ server <- function(input, output, session) {
   # disable buttons when no sites
   observe({
     sites <- rv$sites
-    if (nrow(sites) == 0) {
-      disable("clear_sites")
-      disable("export_sites")
-    } else {
+    n <- nrow(sites)
+
+    if (n > 0) {
       enable("clear_sites")
+    } else {
+      disable("clear_sites")
+    }
+    if (n > 0) {
       enable("export_sites")
+    } else {
+      disable("export_sites")
+    }
+    if (n > 1) {
+      enable("sort_sites")
+    } else {
+      disable("sort_sites")
     }
   })
-
 
   ## Site csv upload ----
 
   observe({
     rv$show_upload <- !rv$show_upload
-  }) %>% bindEvent(input$upload_csv)
-
+  }) |>
+    bindEvent(input$upload_csv)
 
   ### file_upload_ui ----
 
@@ -701,9 +778,14 @@ server <- function(input, output, session) {
 
     div(
       style = "margin-top: 1rem;",
-      tags$label("Upload csv"), br(),
+      tags$label("Upload csv"),
+      br(),
       em(
-        paste("Upload a csv with columns: name, lat/latitude, lng/long/longitude. Latitude and longitude must be in +/- decimal degrees. Maximum of", OPTS$max_sites, "sites.")
+        paste(
+          "Upload a csv with columns: name, lat/latitude, lng/long/longitude. Latitude and longitude must be in +/- decimal degrees. Maximum of",
+          OPTS$max_sites,
+          "sites."
+        )
       ),
       div(
         style = "margin-top: 10px;",
@@ -713,30 +795,38 @@ server <- function(input, output, session) {
           accept = ".csv"
         ),
       ),
-      { if (!is.null(rv$upload_msg)) div(class = "shiny-error", rv$upload_msg) }
+      {
+        if (!is.null(rv$upload_msg)) {
+          div(class = "shiny-error", rv$upload_msg)
+        }
+      }
     )
   })
 
   observe({
     upload <- req(input$sites_csv)
-    tryCatch({
-      new_sites <- load_sites(upload$datapath)
-      rv$sites <- new_sites
-      rv$selected_site <- first(new_sites$id)
-      rv$map_cmd <- "fit_sites"
-      rv$show_upload <- FALSE
-      rv$upload_msg <- NULL
-    }, error = function(e) {
-      message("File upload error: ", e)
-      rv$upload_msg = "Failed to load sites from csv, please try again."
-    })
-  }) %>% bindEvent(input$sites_csv)
+    tryCatch(
+      {
+        new_sites <- load_sites(upload$datapath)
+        rv$sites <- new_sites
+        rv$selected_site <- first(new_sites$id)
+        rv$map_cmd <- "fit_sites"
+        rv$show_upload <- FALSE
+        rv$upload_msg <- NULL
+      },
+      error = function(e) {
+        message("File upload error: ", e)
+        rv$upload_msg <- "Failed to load sites from csv, please try again."
+      }
+    )
+  }) |>
+    bindEvent(input$sites_csv)
 
   ### Handle test site load ----
   # observe({
   #   rv$sites <- load_sites("example-sites.csv")
   #   fit_sites()
-  # }) %>% bindEvent(input$load_example)
+  # }) |> bindEvent(input$load_example)
 
   ### Handle clear_sites button ----
   observeEvent(input$clear_sites, {
@@ -758,20 +848,105 @@ server <- function(input, output, session) {
     )
   })
 
+  ### Handle sort_sites button ----
+  observeEvent(input$sort_sites, {
+    sort_categories <- list(
+      list(
+        label = "By name:",
+        options = c("a_z", "z_a")
+      ),
+      list(
+        label = "By location:",
+        options = c(
+          "n_s",
+          "s_n",
+          "w_e",
+          "e_w",
+          "sw_ne",
+          "nw_se",
+          "ne_sw",
+          "se_nw"
+        )
+      )
+    )
+
+    # Generate sort categories
+    sort_types <- lapply(sort_categories, function(category) {
+      buttons <- lapply(category$options, function(option) {
+        opts <- toupper(str_split_1(option, "_"))
+        label <- span(
+          style = "display: inline-flex; gap: 5px; align-items: baseline;",
+          opts[1],
+          icon("arrow-right"),
+          opts[2]
+        )
+        actionButton(
+          paste0("sort_sites_", option),
+          label,
+          class = "btn-sm",
+          onclick = paste0("sendShiny('sort_sites_by', '", option, "');")
+        )
+      })
+
+      # attach label and buttons
+      div(
+        style = "margin-bottom: .5rem;",
+        strong(category$label),
+        div(
+          style = "display: flex; flex-wrap: wrap; gap: 10px;",
+          buttons
+        )
+      )
+    })
+
+    # create modal
+    mod <- modalDialog(
+      title = "Re-order sites list?",
+      p("Click one of the options below to rearrange the list of sites."),
+      div(
+        style = "display: flex; flex-wrap: wrap; row-gap: 1rem; column-gap: 2rem;",
+        sort_types
+      ),
+      footer = modalButton("Cancel"),
+      size = "s",
+      easyClose = TRUE
+    )
+
+    showModal(mod)
+  })
+
+  observeEvent(input$sort_sites_by, {
+    sort_type <- req(input$sort_sites_by)
+    removeModal()
+    sites <- req(rv$sites)
+    sorted <- switch(
+      sort_type,
+      "a_z" = arrange(sites, name),
+      "z_a" = arrange(sites, desc(name)),
+      "n_s" = arrange(sites, desc(lat)),
+      "s_n" = arrange(sites, lat),
+      "w_e" = arrange(sites, lng),
+      "e_w" = arrange(sites, desc(lng)),
+      "ne_sw" = arrange(sites, desc(lat + lng)),
+      "nw_se" = arrange(sites, desc(lat - lng)),
+      "se_nw" = arrange(sites, lat - lng),
+      "sw_ne" = arrange(sites, lat + lng),
+      sites
+    )
+    rv$sites <- sorted |>
+      mutate(id = row_number())
+  })
+
   ### Handle export_sites button ----
-  output$export_sites <- downloadHandler(
-    "Sites.csv", function(file) {
-      sites <- rv$sites
-      req(nrow(sites) > 0)
-      sites %>%
-        select(id, name, lat, lng) %>%
-        write_csv(file, na = "")
-    }
-  )
+  output$export_sites <- downloadHandler("Sites.csv", function(file) {
+    sites <- rv$sites
+    req(nrow(sites) > 0)
+    sites |>
+      select(id, name, lat, lng) |>
+      write_csv(file, na = "")
+  })
 
-
-
-# Date selection ----------------------------------------------------------
+  # Date selection ----------------------------------------------------------
 
   ### date_select_ui ----
   output$date_select_ui <- renderUI({
@@ -803,7 +978,6 @@ server <- function(input, output, session) {
     )
   })
 
-
   ## date_presets // reactive ----
   # creates the named set of dates for the date preset buttons
   date_presets <- reactive({
@@ -828,7 +1002,11 @@ server <- function(input, output, session) {
   # create a date button element
   date_btn <- function(value, label, btn_class = c("default", "primary")) {
     btn_class <- match.arg(btn_class)
-    HTML(str_glue("<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"))
+    HTML(
+      str_glue(
+        "<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"
+      )
+    )
   }
 
   # create the date buttons component
@@ -842,7 +1020,11 @@ server <- function(input, output, session) {
         value <- presets[[name]]
         label <- snakecase::to_sentence_case(name)
         selected <- setequal(cur_dates, value)
-        date_btn(name, label, btn_class = ifelse(selected, "primary", "default"))
+        date_btn(
+          name,
+          label,
+          btn_class = ifelse(selected, "primary", "default")
+        )
       })
     )
   })
@@ -860,33 +1042,52 @@ server <- function(input, output, session) {
     }
   })
 
-
-
-# Fetch weather button ----------------------------------------------------
+  # Fetch weather button ----------------------------------------------------
 
   ## need_weather // reactive ----
   need_weather <- reactive({
     wx <- rv$weather
-    if (is.null(wx)) return(TRUE)
-    if (nrow(wx) == 0) return(TRUE)
-    if (nrow(rv$sites) == 0) return(FALSE)
+    if (is.null(wx)) {
+      return(TRUE)
+    }
+    if (nrow(wx) == 0) {
+      return(TRUE)
+    }
+    if (nrow(rv$sites) == 0) {
+      return(FALSE)
+    }
     sites <- sites_with_status()
-    if (anyNA(sites$grid_id)) return(TRUE)
-    if (any(sites$needs_download)) return(TRUE)
+    if (anyNA(sites$grid_id)) {
+      return(TRUE)
+    }
+    if (any(sites$needs_download)) {
+      return(TRUE)
+    }
     FALSE
   })
 
-  # force a weather fetch if it's needed and hasn't been triggered in 10 seconds
+  ## Auto-fetch timer ----
+
+  # set a timestamp of the last inputs if weather is needed
   observe({
     req(wx_args())
     req(need_weather())
-
     # message('Auto-fetching weather data in 15 seconds...')
-    delay(15000, {
+    rv$fetch_timer <- now()
+  })
+
+  # force a weather fetch if it's needed and hasn't been triggered in 15 seconds
+  observe({
+    req(wx_args())
+    req(need_weather())
+    timestamp <- rv$fetch_timer
+    elapsed <- now() - timestamp
+    invalidateLater(15000)
+    req(elapsed >= 15)
+    if (need_weather()) {
       # message("Auto-fetching weather data...")
-      req(need_weather())
       rv$fetch <- runif(1)
-    })
+    }
   })
 
   ## action_ui ----
@@ -899,18 +1100,41 @@ server <- function(input, output, session) {
     rv$action_nonce
 
     # control button appearance
-    if (nrow(rv$sites) == 0) return(btn("No sites selected", disabled = TRUE))
-    if (!rv$dates_valid) return(btn("Invalid date selection", disabled = TRUE))
-    if (need_weather()) return(btn("Fetch weather"))
+    if (nrow(rv$sites) == 0) {
+      return(btn("No sites selected", disabled = TRUE))
+    }
+    if (!rv$dates_valid) {
+      return(btn("Invalid date selection", disabled = TRUE))
+    }
+    if (need_weather()) {
+      return(btn("Fetch weather"))
+    }
     btn("Everything up to date", class = "btn-primary", disabled = TRUE)
   })
 
   ## status_ui ----
+
+  set_status <- function(msg = NULL, type = c("error", "info")) {
+    rv$status <- if (is.null(msg)) {
+      NULL
+    } else {
+      list(
+        msg = msg,
+        type = match.arg(type)
+      )
+    }
+  }
+
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
-    msg <- req(rv$status_msg)
+    status <- req(rv$status)
+    msg <- req(status$msg)
     div(
-      class = "shiny-output-error",
+      class = ifelse(
+        status$type == "error",
+        "shiny-output-error",
+        ""
+      ),
       style = "margin-top: 5px; padding: 10px;",
       msg
     )
@@ -921,12 +1145,12 @@ server <- function(input, output, session) {
   # uses the grid lat/lng instead of site lat/lng if available
   fetch_args <- reactive({
     sites <- req(sites_sf())
-    sites <- sites %>%
-      st_drop_geometry() %>%
+    sites <- sites |>
+      st_drop_geometry() |>
       mutate(
         lat = coalesce(grid_lat, lat),
         lng = coalesce(grid_lng, lng)
-      ) %>%
+      ) |>
       distinct(lat, lng)
 
     date_range <- expanded_dates()
@@ -941,29 +1165,26 @@ server <- function(input, output, session) {
 
   # observe(echo(fetch_args()))
 
-
   ## already_fetched // reactive ----
   # already_fetched <- reactive({
   #   args <- fetch_args()
   #   rlang::hash(args) %in% rv$fetch_hashes
   # })
 
-
-
-
-# Module servers ----------------------------------------------------------
+  # Module servers ----------------------------------------------------------
 
   ## Map server ----
 
   mapServer(
     rv = rv,
-    map_data = reactive(list(
-      grids = wx_grids(),
-      grids_with_status = grids_with_status(),
-      sites_with_status = sites_with_status()
-    ))
+    map_data = reactive(
+      list(
+        grids = wx_grids(),
+        grids_with_status = grids_with_status(),
+        sites_with_status = sites_with_status()
+      )
+    )
   )
-
 
   ## Data tab ----
 
@@ -973,20 +1194,13 @@ server <- function(input, output, session) {
     sites_ready = reactive(rv$sites_ready)
   )
 
-
   ## Disease models tab ----
 
-  riskServer(
-    rv = rv,
-    wx_data = reactive(wx_data())
-  )
+  riskServer(rv = rv, wx_data = reactive(wx_data()))
 
-
-
-# Cleanup -----------------------------------------------------------------
+  # Cleanup -----------------------------------------------------------------
 
   session$onSessionEnded(function() {
     clean_old_caches()
   })
-
 }

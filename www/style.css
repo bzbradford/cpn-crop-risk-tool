@@ -373,7 +373,7 @@ td.tbl-coords {
   border-radius: 5px;
 }
 
-.missing-weather-notice {
+.warning-box-container {
   width: 100%;
   display: inline-flex;
   align-items: center;
