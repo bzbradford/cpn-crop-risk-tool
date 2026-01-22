@@ -7,11 +7,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - uses: r-lib/actions/setup-r@v2
-      - uses: r-lib/actions/setup-r-dependencies@v2
         with:
-          extra-packages: |
-            any::testthat
-            any::shiny
+          use-public-rspm: true
+
+      - name: Restore renv package cache
+        uses: r-lib/actions/setup-renv@v2
+        # This will run renv::restore() automatically 
+        # and bypass any auto-dependency discovery.
+
       - name: Run tests
         run: Rscript -e 'testthat::test_dir("tests/testthat")'
