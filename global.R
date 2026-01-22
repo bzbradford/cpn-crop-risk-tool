@@ -38,8 +38,9 @@ if (FALSE) {
   library(styler)
   library(miniUI)
   library(watcher)
+  library(testthat)
+  library(covr)
 }
-
 
 ## development mode
 # shiny::devmode(TRUE)
@@ -58,14 +59,19 @@ if (FALSE) {
 ## turn warnings into errors
 # options(warn = 2)
 
-# disable forecasts for testing
+## disable forecasts for testing
 # options(forecast = FALSE)
+
+## Run unit tests
+# testthat::test_dir("tests/testthat")
 
 
 # Async tasks ------------------------------------------------------------------
 
 # set up a second session for asynchronous tasks
-plan(multisession, workers = 2)
+if (!identical(Sys.getenv("TESTTHAT"), "true")) {
+  plan(multisession, workers = 2)
+}
 
 
 # Settings ---------------------------------------------------------------------
@@ -210,14 +216,6 @@ OPTS <- lst(
 
 # Utility functions ------------------------------------------------------------
 
-source_dir <- function(path) {
-  files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
-  for (file in files) {
-    source(file)
-  }
-}
-
-
 # message and print an object to the console for testing
 echo <- function(x) {
   message(deparse(substitute(x)), " <", paste(class(x), collapse = ", "), ">")
@@ -252,7 +250,7 @@ build_choices <- function(obj, name, value) {
 }
 
 
-# return the first truthy argument
+# return the first non-empty argument
 first_truthy <- function(...) {
   for (arg in list(...)) {
     if (shiny::isTruthy(arg)) {
@@ -269,6 +267,8 @@ clamp <- function(x, min, max) {
 }
 
 
+# Date/time functions ----------------------------------------------------------
+
 # calculate the difference in hours between two timestamps
 hours_diff <- function(start, end) {
   as.integer(ceiling(difftime(end, start, units = "hours")))
@@ -277,7 +277,6 @@ hours_diff <- function(start, end) {
 # hours_diff(now(), now())
 # hours_diff(now() - hours(6), now())
 # hours_diff(now() - days(1), now())
-
 
 #' @param ... partial dates like 'aug 1' to convert to yday using current year
 get_yday <- function(...) {
@@ -290,7 +289,6 @@ get_yday <- function(...) {
 }
 
 # get_yday("jun 1", "aug 2")
-
 
 check_date_overlap <- function(dates_actual, dates_partial) {
   dates_actual <- as_date(dates_actual)
@@ -307,9 +305,7 @@ check_date_overlap <- function(dates_actual, dates_partial) {
 # check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
 # check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
 
-
-
-## NA-safe summary functions ----
+# Summary functions ------------------------------------------------------------
 
 calc_sum <- function(x) {
   if (all(is.na(x))) {
@@ -339,9 +335,6 @@ calc_max <- function(x) {
   max(x, na.rm = TRUE)
 }
 
-
-## Rolling functions ----
-
 roll_mean <- function(vec, width) {
   zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = TRUE)
 }
@@ -349,9 +342,6 @@ roll_mean <- function(vec, width) {
 roll_sum <- function(vec, width) {
   zoo::rollapplyr(vec, width, \(x) calc_sum(x), partial = TRUE)
 }
-
-
-## Sliding window functions ----
 
 # counts number consecutive runs of values above a threshold
 # count_runs <- function(vec, threshold, min_run) {
@@ -363,8 +353,7 @@ roll_sum <- function(vec, width) {
 #   runs
 # }
 
-
-## Unit conversions ----
+# Unit conversions -------------------------------------------------------------
 
 f_to_c <- function(x) {
   (x - 32) / 1.8
@@ -402,10 +391,11 @@ mbar_to_inHg <- function(x) {
   x / 33.864
 }
 
-# Wind directions
-compass_directions <- setNames(
-  seq(0, 337.5, 22.5),
-  c(
+#' Convert wind direction to degrees
+#' @param dirs vector of wind direction strings
+#' @returns vector of wind direction angles in degrees (unnamed)
+wind_dir_to_deg <- function(dirs) {
+  compass_dirs <- c(
     "N",
     "NNE",
     "NE",
@@ -423,20 +413,14 @@ compass_directions <- setNames(
     "NW",
     "NNW"
   )
-)
+  degrees <- seq(0, 337.5, 22.5)
 
-#' Convert wind direction to degrees
-#' @param dirs vector of wind direction strings
-#' @returns vector of wind direction angles in degrees
-wind_dir_to_deg <- function(dirs) {
-  sapply(dirs, function(dir) {
-    if (dir %in% names(compass_directions)) compass_directions[[dir]] else NA
-  })
+  degrees[match(dirs, compass_dirs)]
 }
 
-# lapply(names(compass_directions), wind_dir_to_deg)
+# wind_dir_to_deg(c("N", "ENE", "NNW", "foo"))
 
-
+# Unit lookup functions --------------------------------------------------------
 
 #' List of weather variables, unit suffixes, and conversion functions
 #' all derivative columns of each of these will start with the same text
@@ -471,8 +455,6 @@ convert_measures <- function(df) {
 # saved_weather |> convert_measures()
 # saved_weather |> build_daily() |> convert_measures()
 
-
-
 #' Returns the unit name for the given column
 #' used to append unit suffix in plotly
 #' @param col_name data column name that needs a unit suffix
@@ -486,7 +468,6 @@ find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
 }
 
 # find_unit("temperature", "metric")
-
 
 #' Adds the unit suffix to each column name where appropriate
 #' for exporting as CSV so unit is documented
@@ -509,27 +490,410 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 # tibble(temperature = 1) |> rename_with_units("metric")
 # tibble(temperature = 1) |> rename_with_units("imperial")
 
+# Color helpers ----------------------------------------------------------------
 
-## Cache ----
+# Define CSS named colors with their hex values
+css_colors <- list(
+  "red" = "#FF0000",
+  "darkred" = "#8B0000",
+  "lightred" = "#FFB6C1", # Using light pink as proxy
+  "orange" = "#FFA500",
+  "beige" = "#F5F5DC",
+  "green" = "#008000",
+  "darkgreen" = "#006400",
+  "lightgreen" = "#90EE90",
+  "blue" = "#0000FF",
+  "darkblue" = "#00008B",
+  "lightblue" = "#ADD8E6",
+  "purple" = "#800080",
+  "darkpurple" = "#483D8B", # Using dark slate blue as proxy
+  "pink" = "#FFC0CB",
+  "cadetblue" = "#5F9EA0",
+  "white" = "#FFFFFF",
+  "gray" = "#808080",
+  "lightgray" = "#D3D3D3",
+  "black" = "#000000"
+)
 
-clean_old_caches <- function(max_age_days = 30) {
-  cache_files <- list.files(
-    path = "cache",
-    pattern = ".*\\.fst",
-    full.names = TRUE
-  )
-  old_files <- cache_files[file.mtime(cache_files) < Sys.Date() - max_age_days]
-  if (length(old_files) > 0) {
-    file.remove(old_files)
-    message("Cleaned ", length(old_files), " old cache files")
+# Function to convert hex to RGB
+hex_to_rgb <- function(hex) {
+  hex <- gsub("#", "", hex)
+  if (nchar(hex) == 3) {
+    hex <- paste0(
+      substr(hex, 1, 1),
+      substr(hex, 1, 1),
+      substr(hex, 2, 2),
+      substr(hex, 2, 2),
+      substr(hex, 3, 3),
+      substr(hex, 3, 3)
+    )
   }
+  r <- as.numeric(paste0("0x", substr(hex, 1, 2)))
+  g <- as.numeric(paste0("0x", substr(hex, 3, 4)))
+  b <- as.numeric(paste0("0x", substr(hex, 5, 6)))
+  c(r, g, b)
 }
 
-# clean_old_caches()
+# Function to calculate Euclidean distance in RGB space
+color_distance <- function(rgb1, rgb2) {
+  sqrt(sum((rgb1 - rgb2)^2))
+}
+
+# Function to calculate luminance for contrast ratio
+get_luminance <- function(rgb) {
+  # Convert RGB to relative luminance
+  rgb_norm <- rgb / 255
+  rgb_linear <- ifelse(
+    rgb_norm <= 0.03928,
+    rgb_norm / 12.92,
+    ((rgb_norm + 0.055) / 1.055)^2.4
+  )
+  luminance <- 0.2126 *
+    rgb_linear[1] +
+    0.7152 * rgb_linear[2] +
+    0.0722 * rgb_linear[3]
+  luminance
+}
+
+# Function to determine text color based on contrast
+get_text_color <- function(bg_luminance) {
+  # Use a luminance threshold of 0.5 for better visual results
+  # Colors darker than this threshold get white text, lighter colors get black text
+  if (bg_luminance < 0.5) "#fff" else "#000"
+}
+
+#' Find the closest CSS color name for a given hex color
+#' @param hex_color A hex color string (e.g., "#FF5733")
+#' @returns A list containing the closest CSS color name, hex value, and contrast text color
+find_closest_css_color <- function(hex_color) {
+  # Validate and clean input hex color
+  hex_color <- toupper(gsub("#", "", hex_color))
+  if (!grepl("^[0-9A-F]{3}$|^[0-9A-F]{6}$", hex_color)) {
+    warning(sprintf(
+      "Invalid hex color format '%s'. Use format like '#FF0000' or '#F00'",
+      hex_color
+    ))
+    return(list())
+  }
+
+  # Convert input hex to RGB
+  input_rgb <- hex_to_rgb(paste0("#", hex_color))
+
+  # Find closest color
+  min_distance <- Inf
+  closest_color <- NULL
+
+  for (color_name in names(css_colors)) {
+    css_rgb <- hex_to_rgb(css_colors[[color_name]])
+    distance <- color_distance(input_rgb, css_rgb)
+
+    if (distance < min_distance) {
+      min_distance <- distance
+      closest_color <- color_name
+    }
+  }
+
+  # Calculate luminance of the input color for text contrast
+  input_luminance <- get_luminance(input_rgb)
+  text_color <- get_text_color(input_luminance)
+
+  # Return results
+  list(
+    input_hex = paste0("#", hex_color),
+    css_color = closest_color,
+    css_hex_value = css_colors[[closest_color]],
+    distance = round(min_distance, 2),
+    text_color = text_color
+  )
+}
 
 
+# Location helpers -------------------------------------------------------------
 
-# Crop and Disease definitions -------------------------------------------------
+# EPSG 4326 for use in Leaflet
+service_bounds <- read_rds("data/us_ca_clip.rds")
+
+# transform to EPSG 3857 web mercator for intersecting points
+service_bounds_3857 <- st_transform(service_bounds, 3857)
+
+#' returns TRUE if location is within service boundary shapefile
+#' @param lat latitude of point
+#' @param lng longitude of point
+#' @returns boolean
+validate_ll <- function(lat, lng) {
+  mapply(
+    function(lat, lng) {
+      if (!is.numeric(lat) | !is.numeric(lng)) {
+        return(FALSE)
+      }
+      pt <- st_point(c(lng, lat)) |>
+        st_sfc(crs = 4326) |>
+        st_transform(st_crs(service_bounds_3857))
+      length(st_intersection(pt, service_bounds_3857)) == 1
+    },
+    lat,
+    lng
+  )
+}
+
+# validate_ll(45, -89)
+# validate_ll(0, 0)
+
+#' parse lat/lng coordinates from string
+#' @param str input string containing coordinates to parse in form "lat, lng"
+#' @returns named list { lat: numeric, lng: numeric }
+parse_coords <- function(str) {
+  str <- gsub("[ ,\t°NW]", " ", str)
+  parts <- str_split_1(str_squish(str), " ")
+  if (length(parts) != 2) {
+    stop("Invalid coordinate format.")
+  }
+  coords <- suppressWarnings(list(
+    lat = as.numeric(parts[1]),
+    lng = as.numeric(parts[2])
+  ))
+  if (any(sapply(coords, is.na))) {
+    stop("Failed to parse coordinates.")
+  }
+  coords
+}
+
+# parse_coords("45, -89")
+# parse_coords("foo")
+
+#' Creates an appropriately sized grid polygon based on centroid coordinates
+#' @param lat latitude of point
+#' @param lng longitude of point
+#' @param d decimal degree distance from center to edge of grid
+#' @returns sf object
+ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
+  m <- list(rbind(
+    c(lon - d, lat + d),
+    c(lon + d, lat + d),
+    c(lon + d, lat - d),
+    c(lon - d, lat - d),
+    c(lon - d, lat + d)
+  ))
+  st_sfc(st_polygon(m), crs = 4326)
+}
+
+# ll_to_grid(45, -89)
+
+#' Creates grid polygons based on weather data grid centroid
+#' @param wx IBM weather data eg `saved_weather`
+#' @returns sf object of grid cell polygons
+build_grids <- function(wx) {
+  wx |>
+    distinct(grid_id, grid_lat, grid_lng, time_zone) |>
+    rowwise() |>
+    mutate(geometry = ll_to_grid(grid_lat, grid_lng)) |>
+    ungroup() |>
+    st_set_geometry("geometry")
+}
+
+# saved_weather |> build_grids()
+
+#' Add some more information for displaying on the map
+annotate_grids <- function(grids_with_status) {
+  grids_with_status |>
+    mutate(
+      title = if_else(
+        needs_download,
+        "Weather grid (download required)",
+        "Weather grid"
+      ),
+      color = if_else(needs_download, "orange", "darkgreen"),
+      label = paste0(
+        "<b>",
+        title,
+        "</b><br>",
+        "Earliest date: ",
+        date_min,
+        "<br>",
+        "Latest date: ",
+        date_max,
+        "<br>",
+        if_else(
+          date_max == today(),
+          paste0("Most recent data: ", hours_stale, " hours ago<br>"),
+          ""
+        ),
+        "Total days: ",
+        days_expected,
+        "<br>",
+        "Missing days: ",
+        days_missing,
+        sprintf(" (%.1f%%)", 100 * days_missing_pct),
+        "<br>",
+        "Missing hours: ",
+        hours_missing,
+        sprintf(" (%.1f%%)", 100 * hours_missing_pct),
+        "<br>"
+      ) |>
+        lapply(HTML)
+    )
+}
+
+
+# UI builders ------------------------------------------------------------------
+
+warning_box <- function(html) {
+  div(
+    class = "warning-box-container",
+    div(
+      style = "color: orange; padding: 10px; font-size: 1.5em;",
+      icon("warning")
+    ),
+    div(HTML(html))
+  )
+}
+
+#' Create the missing data element based on number of sites missing
+missing_weather_ui <- function(n = 1) {
+  str <- ifelse(n == 1, "This site is ", "One or more sites are")
+  html <- paste0(
+    "<i>",
+    str,
+    " missing data based on your date selections. Press <b>Fetch weather</b> on the sidebar to download any missing data.</i>"
+  )
+  warning_box(html)
+}
+
+# missing_weather_ui(1)
+# missing_weather_ui(2)
+
+site_action_link <- function(
+  action = c("edit", "save", "trash"),
+  site_id,
+  site_name = ""
+) {
+  action <- match.arg(action)
+  hovertext <- switch(
+    action,
+    edit = "Rename this site",
+    save = "Pin this site to list",
+    trash = "Delete this site"
+  )
+  onclick <- switch(
+    action,
+    edit = sprintf("editSite(%s, \"%s\")", site_id, site_name),
+    save = sprintf("saveSite(%s)", site_id),
+    trash = sprintf("trashSite(%s)", site_id)
+  )
+  content <- as.character(switch(
+    action,
+    edit = icon("pen"),
+    save = icon("thumbtack"),
+    trash = icon("trash")
+  ))
+  sprintf(
+    "<a style='cursor:pointer' title='%s' onclick='%s'>%s</a>",
+    hovertext,
+    onclick,
+    content
+  )
+}
+
+# site_action_link("edit", 1, "foo")
+# site_action_link("save", 1, "foo")
+# site_action_link("trash", 1, "foo")
+
+disease_modal_link <- function(disease) {
+  md <- disease$doc
+  name <- disease$name
+  title <- paste(name, "information")
+  onclick <- sprintf(
+    "sendShiny('show_modal', {md: '%s', title: '%s'})",
+    md,
+    title
+  )
+  shiny::HTML(sprintf(
+    "<a style='cursor:pointer' title='%s' onclick=\"%s\">More information</a>.",
+    title,
+    onclick
+  ))
+}
+
+# disease_modal_link(diseases$white_mold)
+
+show_modal <- function(md, title = NULL) {
+  if (!file.exists(md)) {
+    warning(md, " does not exist")
+  }
+  modalDialog(
+    includeMarkdown(md),
+    title = title,
+    footer = modalButton("Close"),
+    easyClose = TRUE
+  ) |>
+    showModal()
+}
+
+
+# Site constructor -------------------------------------------------------------
+
+sites_template <- tibble(
+  id = integer(),
+  name = character(),
+  lat = numeric(),
+  lng = numeric()
+)
+
+# Site constructor
+Site <- function(name, lat, lng, id = 999) {
+  as.list(environment())
+}
+
+# Site("foo", 1, 2)
+
+#' Make sure names read from csv are valid and safe to display
+#' adds a counter after any duplicate names
+#' @param str character vector of names
+sanitize_loc_names <- function(str) {
+  str <- trimws(gsub("<[^>]+>", "", str))
+  str <- str_trunc(str, 30)
+  Encoding(str) <- "UTF-8"
+  tibble(name = str) |>
+    mutate(count = row_number(), .by = name) |>
+    mutate(name = if_else(count > 1, paste0(name, " (", count, ")"), name)) |>
+    pull(name)
+}
+
+# should include "foo (2)"
+# sanitize_loc_names(c("foo", "foo", "bar"))
+# should strip html
+# sanitize_loc_names(c("foo", "bar", "<a href='bad'>baz</a>"))
+
+#' Try read sites list from csv
+#' @param fpath location of csv to read
+load_sites <- function(fpath) {
+  df <- read_csv(fpath, col_types = "c", show_col_types = FALSE)
+  if (nrow(df) == 0) {
+    stop("File was empty")
+  }
+  df <- df |>
+    clean_names() |>
+    select(any_of(OPTS$site_cols)) |>
+    drop_na()
+  if (!(all(c("name", "lat", "lng") %in% names(df)))) {
+    stop("File did not contain [name] [lat] [lng] columns.")
+  }
+  df <- df |>
+    mutate(name = sanitize_loc_names(name)) |>
+    distinct(name, lat, lng) |>
+    filter(validate_ll(lat, lng))
+  if (nrow(df) == 0) {
+    stop("No valid locations within service area.")
+  }
+  df |>
+    mutate(id = row_number(), .before = 1) |>
+    head(OPTS$max_sites)
+}
+
+# load_sites("data/example-sites.csv")
+# load_sites("data/wisconet stns.csv")
+
+# Disease definitions ----------------------------------------------------------
 
 #' @param name display name
 #' @param info model info
@@ -642,6 +1006,8 @@ diseases <- imap(diseases, function(disease, slug) {
 })
 
 
+# Crop definitions -------------------------------------------------------------
+
 Crop <- function(name, diseases) {
   list(name = name, diseases = diseases)
 }
@@ -698,309 +1064,30 @@ crops <- imap(crops, function(crop, slug) {
 OPTS$crop_choices <- build_choices(crops, "name", "slug")
 
 
+# Cache cleaner ----------------------------------------------------------------
 
-# Location helpers -------------------------------------------------------------
-
-# EPSG 4326 for use in Leaflet
-service_bounds <- read_rds("data/us_ca_clip.rds")
-
-# transform to EPSG 3857 web mercator for intersecting points
-service_bounds_3857 <- st_transform(service_bounds, 3857)
-
-#' returns TRUE if location is within service boundary shapefile
-#' @param lat latitude of point
-#' @param lng longitude of point
-#' @returns boolean
-validate_ll <- function(lat, lng) {
-  mapply(
-    function(lat, lng) {
-      if (!is.numeric(lat) | !is.numeric(lng)) {
-        return(FALSE)
-      }
-      pt <- st_point(c(lng, lat)) |>
-        st_sfc(crs = 4326) |>
-        st_transform(st_crs(service_bounds_3857))
-      length(st_intersection(pt, service_bounds_3857)) == 1
-    },
-    lat,
-    lng
+clean_old_caches <- function(max_age_days = 30) {
+  cache_files <- list.files(
+    path = "cache",
+    pattern = ".*\\.fst",
+    full.names = TRUE
   )
-}
-
-# validate_ll(45, -89)
-# validate_ll(0, 0)
-
-
-#' Creates an appropriately sized grid polygon based on centroid coordinates
-#' @param lat latitude of point
-#' @param lng longitude of point
-#' @param d decimal degree distance from center to edge of grid
-#' @returns sf object
-ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
-  m <- list(rbind(
-    c(lon - d, lat + d),
-    c(lon + d, lat + d),
-    c(lon + d, lat - d),
-    c(lon - d, lat - d),
-    c(lon - d, lat + d)
-  ))
-  st_sfc(st_polygon(m), crs = 4326)
-}
-
-# ll_to_grid(45, -89)
-
-
-#' Creates grid polygons based on weather data grid centroid
-#' @param wx IBM weather data eg `saved_weather`
-#' @returns sf object of grid cell polygons
-build_grids <- function(wx) {
-  wx |>
-    distinct(grid_id, grid_lat, grid_lng, time_zone) |>
-    rowwise() |>
-    mutate(geometry = ll_to_grid(grid_lat, grid_lng)) |>
-    ungroup() |>
-    st_set_geometry("geometry")
-}
-
-# saved_weather |> build_grids()
-
-
-#' Add some more information for displaying on the map
-annotate_grids <- function(grids_with_status) {
-  grids_with_status |>
-    mutate(
-      title = if_else(
-        needs_download,
-        "Weather grid (download required)",
-        "Weather grid"
-      ),
-      color = if_else(needs_download, "orange", "darkgreen"),
-      label = paste0(
-        "<b>",
-        title,
-        "</b><br>",
-        "Earliest date: ",
-        date_min,
-        "<br>",
-        "Latest date: ",
-        date_max,
-        "<br>",
-        if_else(
-          date_max == today(),
-          paste0("Most recent data: ", hours_stale, " hours ago<br>"),
-          ""
-        ),
-        "Total days: ",
-        days_expected,
-        "<br>",
-        "Missing days: ",
-        days_missing,
-        sprintf(" (%.1f%%)", 100 * days_missing_pct),
-        "<br>",
-        "Missing hours: ",
-        hours_missing,
-        sprintf(" (%.1f%%)", 100 * hours_missing_pct),
-        "<br>"
-      ) |>
-        lapply(HTML)
-    )
-}
-
-# test_grids <- saved_weather |> build_grids()
-# test_status <- saved_weather |> weather_status(today() - days(30), today())
-# left_join(test_grids, test_status) |>
-#   annotate_grids()
-
-
-# Sites ------------------------------------------------------------------------
-
-sites_template <- tibble(
-  id = integer(),
-  name = character(),
-  lat = numeric(),
-  lng = numeric()
-)
-
-
-# Site builder
-Site <- function(name, lat, lng, id = 999) {
-  as.list(environment())
-}
-
-# Site("foo", 1, 2)
-
-
-#' parse lat/lng coordinates from string
-#' @param str input string containing coordinates to parse in form "lat, lng"
-#' @returns named list { lat: numeric, lng: numeric }
-parse_coords <- function(str) {
-  str <- gsub("[ ,\t°NW]", " ", str)
-  parts <- str_split_1(str_squish(str), " ")
-  if (length(parts) != 2) {
-    stop("Invalid coordinate format.")
+  old_files <- cache_files[file.mtime(cache_files) < Sys.Date() - max_age_days]
+  if (length(old_files) > 0) {
+    file.remove(old_files)
+    message("Cleaned ", length(old_files), " old cache files")
   }
-  coords <- suppressWarnings(list(
-    lat = as.numeric(parts[1]),
-    lng = as.numeric(parts[2])
-  ))
-  if (any(sapply(coords, is.na))) {
-    stop("Failed to parse coordinates.")
+}
+
+# clean_old_caches()
+
+# Load remaining code ----------------------------------------------------------
+
+source_dir <- function(path) {
+  files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
+  for (file in files) {
+    source(file)
   }
-  coords
 }
-
-# parse_coords("45, -89")
-# parse_coords("foo")
-
-
-#' Make sure names read from csv are valid and safe to display
-#' adds a counter after any duplicate names
-#' @param str character vector of names
-sanitize_loc_names <- function(str) {
-  str <- trimws(gsub("<[^>]+>", "", str))
-  str <- str_trunc(str, 30)
-  Encoding(str) <- "UTF-8"
-  tibble(name = str) |>
-    mutate(count = row_number(), .by = name) |>
-    mutate(name = if_else(count > 1, paste0(name, " (", count, ")"), name)) |>
-    pull(name)
-}
-
-# should include "foo (2)"
-# sanitize_loc_names(c("foo", "foo", "bar"))
-# should strip html
-# sanitize_loc_names(c("foo", "bar", "<a href='bad'>baz</a>"))
-
-
-#' Try read sites list from csv
-#' @param fpath location of csv to read
-load_sites <- function(fpath) {
-  df <- read_csv(fpath, col_types = "c", show_col_types = FALSE)
-  if (nrow(df) == 0) {
-    stop("File was empty")
-  }
-  df <- df |>
-    clean_names() |>
-    select(any_of(OPTS$site_cols)) |>
-    drop_na()
-  if (!(all(c("name", "lat", "lng") %in% names(df)))) {
-    stop("File did not contain [name] [lat] [lng] columns.")
-  }
-  df <- df |>
-    mutate(name = sanitize_loc_names(name)) |>
-    distinct(name, lat, lng) |>
-    filter(validate_ll(lat, lng))
-  if (nrow(df) == 0) {
-    stop("No valid locations within service area.")
-  }
-  df |>
-    mutate(id = row_number(), .before = 1) |>
-    head(OPTS$max_sites)
-}
-
-# load_sites("data/example-sites.csv")
-# load_sites("data/wisconet stns.csv")
-
-
-
-# UI builders ------------------------------------------------------------------
-
-warning_box <- function(html) {
-  div(
-    class = "warning-box-container",
-    div(
-      style = "color: orange; padding: 10px; font-size: 1.5em;",
-      icon("warning")
-    ),
-    div(HTML(html))
-  )
-}
-
-#' Create the missing data element based on number of sites missing
-missing_weather_ui <- function(n = 1) {
-  str <- ifelse(n == 1, "This site is ", "One or more sites are")
-  html <- paste0(
-    "<i>",
-    str,
-    " missing data based on your date selections. Press <b>Fetch weather</b> on the sidebar to download any missing data.</i>"
-  )
-  warning_box(html)
-}
-
-# missing_weather_ui(1)
-# missing_weather_ui(2)
-
-site_action_link <- function(
-    action = c("edit", "save", "trash"),
-  site_id,
-  site_name = ""
-) {
-  action <- match.arg(action)
-  hovertext <- switch(
-    action,
-    edit = "Rename this site",
-    save = "Pin this site to list",
-    trash = "Delete this site"
-  )
-  onclick <- switch(
-    action,
-    edit = sprintf("editSite(%s, \"%s\")", site_id, site_name),
-    save = sprintf("saveSite(%s)", site_id),
-    trash = sprintf("trashSite(%s)", site_id)
-  )
-  content <- as.character(switch(
-    action,
-    edit = icon("pen"),
-    save = icon("thumbtack"),
-    trash = icon("trash")
-  ))
-  sprintf(
-    "<a style='cursor:pointer' title='%s' onclick='%s'>%s</a>",
-    hovertext,
-    onclick,
-    content
-  )
-}
-
-# site_action_link("edit", 1, "foo")
-# site_action_link("save", 1, "foo")
-# site_action_link("trash", 1, "foo")
-
-
-disease_modal_link <- function(disease) {
-  md <- disease$doc
-  name <- disease$name
-  title <- paste(name, "information")
-  onclick <- sprintf(
-    "sendShiny('show_modal', {md: '%s', title: '%s'})",
-    md,
-    title
-  )
-  shiny::HTML(sprintf(
-    "<a style='cursor:pointer' title='%s' onclick=\"%s\">More information</a>.",
-    title,
-    onclick
-  ))
-}
-
-# disease_modal_link(diseases$white_mold)
-
-
-show_modal <- function(md, title = NULL) {
-  if (!file.exists(md)) {
-    warning(md, " does not exist")
-  }
-  modalDialog(
-    includeMarkdown(md),
-    title = title,
-    footer = modalButton("Close"),
-    easyClose = TRUE
-  ) |>
-    showModal()
-}
-
-
-
-# Load remaining code ----
 
 source_dir("src")

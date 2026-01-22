@@ -1,4 +1,5 @@
 # NOAA forecast api ----
+# Superseded by OpenMeteo forecast
 
 # urls for valid lat/lng points
 noaa_point_url <- function(lat, lng) {
