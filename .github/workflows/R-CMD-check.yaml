@@ -8,14 +8,17 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libproj-dev libpng-dev libudunits2-dev libx11-dev pandoc
+
       - uses: r-lib/actions/setup-r@v2
         with:
           use-public-rspm: true
 
       - name: Restore renv package cache
         uses: r-lib/actions/setup-renv@v2
-        # This will run renv::restore() automatically 
-        # and bypass any auto-dependency discovery.
 
       - name: Run tests
         run: Rscript -e 'testthat::test_dir("tests/testthat")'
