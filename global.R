@@ -36,9 +36,6 @@ suppressPackageStartupMessages({
 if (FALSE) {
   library(devtools)
   library(languageserver)
-  library(styler)
-  library(miniUI)
-  library(watcher)
   library(testthat)
   library(covr)
 }
@@ -47,6 +44,7 @@ if (FALSE) {
 # shiny::devmode(TRUE)
 
 ## RENV
+# renv::init()
 # renv::status()
 # renv::restore()
 # renv::update()
@@ -65,6 +63,7 @@ if (FALSE) {
 
 ## Run unit tests
 # testthat::test_dir("tests/testthat")
+# test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
 # Async tasks ------------------------------------------------------------------
 
@@ -965,6 +964,15 @@ diseases <- list(
     risk_period = c("Jun 15", "Sep 7")
   ),
 
+  # Wheat
+  wheat_scab = Disease(
+    name = "Wheat scab",
+    info = HTML(
+      "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity."
+    ),
+    doc = "docs/wheat-scab.md"
+  ),
+
   # Solanum
   early_blight = Disease(
     name = "Early blight",
@@ -1028,6 +1036,12 @@ crops <- list(
       diseases$frogeye
     )
   ),
+  wheat = Crop(
+    name = "Wheat",
+    diseases = list(
+      diseases$wheat_scab
+    )
+  ),
   potato = Crop(
     name = "Potato/tomato",
     diseases = list(
@@ -1083,11 +1097,14 @@ clean_old_caches <- function(max_age_days = 30) {
 
 # Load remaining code ----------------------------------------------------------
 
-source_dir <- function(path) {
-  files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
-  for (file in files) {
-    source(file)
-  }
-}
+# source_dir <- function(path) {
+#   files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
+#   for (file in files) {
+#     source(file)
+#   }
+# }
 
-source_dir("src")
+# source_dir("src")
+
+list.files("src", pattern = "\\.[Rr]$", full.names = TRUE) |>
+  lapply(source)

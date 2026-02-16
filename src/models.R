@@ -346,6 +346,25 @@ predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
 }
 
 
+#' Wheat scab model - fusarium head blight
+#' Relevant during wheat flowering
+#' Risk criteria: High >= .32, Medium >= .24, Low > 0
+#' @param mean_rh_14ma mean daily relative humidity 0-100, 14 day rolling mean
+#' @returns matrix of disease probabilities by scab resistance rating
+predict_wheat_scab <- function(mean_rh_14ma) {
+  res <- c(
+    "VS" = 0, # very susceptible
+    "S" = -0.82795556, # susceptible
+    "MS" = -1.4812696, # moderately susceptible
+    "MR" = -1.8484537 # moderately resistant
+  )
+  sapply(res, function(r) {
+    mu <- -3.6432643 + r + 0.051459669 * mean_rh_14ma
+    logistic(mu)
+  })
+}
+
+
 # Vegetable Disease Models -----------------------------------------------------
 
 ## Early blight ----
@@ -528,6 +547,7 @@ assign_risk <- function(model, value) {
     "white_mold_dry_prob" = risk_from_prob(value, .01, 20, 35),
     "white_mold_irrig_prob" = risk_from_prob(value, .01, 5, 10),
     "frogeye_leaf_spot_prob" = risk_from_prob(value, 1, 40, 50),
+    "wheat_scab_prob" = risk_from_prob(value, 1, 24, 32),
     "early_blight_pdays" = risk_for_early_blight(value),
     "late_blight_dsv" = risk_for_late_blight(value),
     "alternaria_dsv" = risk_for_alternaria(value),
@@ -883,6 +903,24 @@ build_frogeye_leaf_spot <- function(daily) {
 }
 
 # test_hourly_wx |> build_daily() |> build_frogeye_leaf_spot() |> test_plot()
+
+# build wheat scab risk probability from daily weather
+build_wheat_scab <- function(daily, resistance) {
+  attr <- daily |> select(grid_id, date)
+  disease <- daily |>
+    mutate(
+      rh_mean_14day = roll_mean(relative_humidity_mean, 14),
+      model_value = predict_wheat_scab(rh_mean_14day)[, resistance],
+      assign_risk("wheat_scab_prob", model_value),
+      .by = grid_id,
+      .keep = "used"
+    ) |>
+    select(-grid_id)
+  bind_cols(attr, disease)
+}
+
+# test_hourly_wx |> build_daily() |> build_wheat_scab("VS") |> test_plot()
+# test_hourly_wx |> build_daily() |> build_wheat_scab("MR") |> test_plot()
 
 # build early blight potato physiological days and risk scores from daily weather
 build_early_blight <- function(daily) {

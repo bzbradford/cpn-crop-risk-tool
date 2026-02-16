@@ -107,22 +107,16 @@ riskServer <- function(rv, wx_data) {
             model$info,
             disease_modal_link(model)
           ),
-
-          # model-specific additional ui elements
-          uiOutput(ns("white_mold_ui"))
+          uiOutput(ns("white_mold_opts")),
+          uiOutput(ns("wheat_scab_opts"))
         )
       })
 
-      ## white_mold_ui ----
+      ## white_mold_opts ----
       # irrigation and crop spacing picker for white mold model
-      output$white_mold_ui <- renderUI({
-        model <- req(input$model)
-        req(model == "white_mold")
-
-        uiOutput(ns("white_mold_opts"))
-      })
-
       output$white_mold_opts <- renderUI({
+        req(identical(input$model, "white_mold"))
+
         irrigation_choices <- list("Dry" = FALSE, "Irrigated" = TRUE)
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
@@ -142,7 +136,8 @@ riskServer <- function(rv, wx_data) {
             ),
           ),
           conditionalPanel(
-            "input['risk-irrigation'] == 'TRUE'",
+            "input['irrigation'] == 'TRUE'",
+            ns = ns,
             div(
               class = "flex-across",
               tags$label("Row spacing:"),
@@ -155,6 +150,27 @@ riskServer <- function(rv, wx_data) {
               )
             )
           )
+        )
+      })
+
+      ## wheat_scab_opts ----
+      output$wheat_scab_opts <- renderUI({
+        req(identical(input$model, "wheat_scab"))
+
+        choices <- list(
+          "Very susceptible" = "VS",
+          "Susceptible" = "S",
+          "Moderately susceptible" = "MS",
+          "Moderately resistant" = "MR"
+        )
+
+        radioButtons(
+          inputId = ns("wheat_scab_resistance"),
+          label = "FHB susceptibility:",
+          choices = choices,
+          selected = isolate(input$wheat_scab_resistance) %||%
+            first(choices),
+          inline = TRUE
         )
       })
 
@@ -253,6 +269,7 @@ riskServer <- function(rv, wx_data) {
             build_white_mold_dry(wx)
           },
           "frogeye" = build_frogeye_leaf_spot(wx),
+          "wheat_scab" = build_wheat_scab(wx, req(input$wheat_scab_resistance)),
           "early_blight" = build_early_blight(wx),
           "late_blight" = build_late_blight(wx),
           "alternaria" = build_alternaria(wx),
