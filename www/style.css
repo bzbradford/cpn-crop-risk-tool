@@ -1,14 +1,11 @@
-
 :root {
   --headingFont: Redhat Display;
   --textFont: Redhat Text;
   --headerHeight: 50px;
   --footerHeight: 70px;
   --minHeight: calc(max(100vw, 100vh) * .4);
-  --maxHeight: max(
-    calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
-    var(--minHeight)
-  );
+  --maxHeight: max(calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
+      var(--minHeight));
   --wide: 1200px;
   --narrow: 700px;
 
@@ -28,23 +25,80 @@
   src: url('redhat-text-latin.v13.woff2') format('woff2');
 }
 
-html, body, div, span, applet, object, iframe,
-h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-a, abbr, acronym, address, big, cite, code,
-del, dfn, em, font, ins, kbd, q, s, samp,
-small, strike, strong, sub, sup, tt, var,
-dl, dt, dd, ol, ul, li,
-fieldset, form, label, legend, button,
-table, caption, tbody, tfoot, thead, tr, th, td {
+html,
+body,
+div,
+span,
+applet,
+object,
+iframe,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+p,
+blockquote,
+pre,
+a,
+abbr,
+acronym,
+address,
+big,
+cite,
+code,
+del,
+dfn,
+em,
+font,
+ins,
+kbd,
+q,
+s,
+samp,
+small,
+strike,
+strong,
+sub,
+sup,
+tt,
+var,
+dl,
+dt,
+dd,
+ol,
+ul,
+li,
+fieldset,
+form,
+label,
+legend,
+button,
+table,
+caption,
+tbody,
+tfoot,
+thead,
+tr,
+th,
+td {
   font-family: inherit;
   overflow-wrap: break-word;
 }
 
-html, body, header {
+html,
+body,
+header {
   font-family: var(--headingFont);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--textFont);
 }
 
@@ -88,11 +142,11 @@ header {
   color: #fff;
 }
 
-.modal-body > h2 {
+.modal-body>h2 {
   margin: 0 0 20px 0;
 }
 
-.modal-body > * > img {
+.modal-body>*>img {
   float: right;
   max-width: 50%;
   margin-left: 10px;
@@ -151,7 +205,8 @@ footer {
 
 .main {
   display: grid;
-  grid-template-columns: 1fr 2fr 2fr; /* 20% 40% 40% equivalent */
+  grid-template-columns: 1fr 2fr 2fr;
+  /* 20% 40% 40% equivalent */
   grid-template-rows: auto;
   gap: 1rem;
   padding: 1rem;
@@ -202,22 +257,24 @@ footer {
 /* intermediate width layout */
 @media (max-width: 1200px) {
   .main {
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    grid-template-columns: 1fr 1fr;
+    /* Two equal columns */
     height: unset;
   }
-  
+
   .sidebar-col {
     grid-column: 1;
     grid-row: 1;
   }
-  
+
   .map-col {
     grid-column: 2;
     grid-row: 1;
   }
-  
+
   .data-col {
-    grid-column: 1 / -1; /* Span full width */
+    grid-column: 1 / -1;
+    /* Span full width */
     grid-row: 2;
   }
 }
@@ -225,9 +282,10 @@ footer {
 /* narrow width layout */
 @media (max-width: 700px) {
   .main {
-    grid-template-columns: 1fr; /* Single column */
+    grid-template-columns: 1fr;
+    /* Single column */
   }
-  
+
   .sidebar-col,
   .map-col,
   .data-col {
@@ -261,7 +319,7 @@ footer {
   gap: 10px;
 }
 
-.flex-across > .btn {
+.flex-across>.btn {
   flex: 1;
 }
 
@@ -278,7 +336,7 @@ footer {
   gap: 10px;
 }
 
-.date-btns > .btn {
+.date-btns>.btn {
   padding: 2px 5px;
   line-height: 1;
   white-space: break-spaces;
@@ -309,6 +367,21 @@ td.tbl-coords {
   width: unset;
 }
 
+.form-group {
+  margin-bottom: 0;
+}
+
+.label-inline {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 1rem;
+  align-items: center;
+}
+
+.label-inline>label {
+  margin-bottom: 0;
+}
+
 .site-tbl-container {
   max-width: 100%;
   max-height: 400px;
@@ -319,12 +392,12 @@ td.tbl-coords {
   margin-top: 1rem;
 }
 
-.submit-btn > button {
+.submit-btn>button {
   width: 100%;
   font-weight: bold;
 }
 
-.submit-btn > button:enabled {
+.submit-btn>button:enabled {
   background-color: #218cb9;
   border: 1px solid #00a8dc;
   color: white;
@@ -380,12 +453,18 @@ td.tbl-coords {
   border: 1px solid orange;
   border-radius: 5px;
   background-color: white;
-  padding: 5px;
+  padding: 5px 10px;
+  gap: 10px;
 }
 
 
 
 /*--- LEAFLET ---*/
+
+/* draw above leaflet control */
+.datepicker {
+  z-index: 1001 !important;
+}
 
 .search-overlay {
   position: absolute;
@@ -396,7 +475,7 @@ td.tbl-coords {
   gap: 1rem;
 }
 
-.search-overlay > div {
+.search-overlay>div {
   flex: 1;
 }
 

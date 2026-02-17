@@ -54,7 +54,11 @@ ui <- fluidPage(
 
       div(
         style = "margin-top: 1rem;",
-        uiOutput("date_select_ui"),
+        uiOutput("date_select_ui")
+      ),
+
+      div(
+        style = "margin-top: 1rem;",
         uiOutput("date_btns_ui")
       ),
 

@@ -951,8 +951,7 @@ server <- function(input, output, session) {
   ### date_select_ui ----
   output$date_select_ui <- renderUI({
     div(
-      class = "flex-across",
-      style = "row-gap: 0px; padding-top: 1rem;",
+      style = "display: flex; column-gap: 10px; margin: 10px 0;",
       div(
         style = "flex: 1 0; min-width: 120px",
         dateInput(
