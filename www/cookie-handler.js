@@ -11,6 +11,47 @@ function generateUserId() {
   );
 }
 
+// get data from cookie
+function getCookie(name = COOKIE_NAME) {
+  let nameEQ = name + "=";
+  let ca = document.cookie.split(";");
+  for (let i = 0; i < ca.length; i++) {
+    let c = ca[i];
+    while (c.charAt(0) == " ") c = c.substring(1, c.length);
+    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
+  }
+  return null;
+}
+
+// saves data to the cookie
+function setCookie(data, name = COOKIE_NAME, days = 30) {
+  let expires = "";
+  if (days) {
+    let date = new Date();
+    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
+    expires = "; expires=" + date.toUTCString();
+  }
+  if (typeof data === "object") {
+    data = JSON.stringify(data);
+  }
+  document.cookie = name + "=" + data + expires + "; path=/";
+  return name;
+}
+
+// Update cookie with a partial data object (merges into existing userData)
+function updateCookie(updates) {
+  const userData = getUserData();
+  Object.assign(userData, updates);
+  setCookie(userData);
+  return userData;
+}
+
+// clears cookie by setting expiration to a past date
+function deleteCookie(name = COOKIE_NAME) {
+  document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  return name;
+}
+
 // Get or create user data object
 function getUserData() {
   let cookieValue = getCookie();
@@ -30,58 +71,15 @@ function getUserData() {
       userId: generateUserId(),
       sites: [],
     };
-    saveUserData(userData);
+    setCookie(userData);
   }
 
   return userData;
 }
 
-// Save user data to cookie
-function saveUserData(userData) {
-  setCookie(userData);
-  return userData;
-}
-
-// Update sites and save
-function updateSites(newSites) {
-  const userData = getUserData();
-  userData.sites = newSites;
-  saveUserData(userData);
-  return userData;
-}
-
-function setCookie(value, name = COOKIE_NAME, days = 30) {
-  let expires = "";
-  if (days) {
-    let date = new Date();
-    date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
-    expires = "; expires=" + date.toUTCString();
-  }
-  if (typeof value === "object") {
-    value = JSON.stringify(value);
-  }
-  document.cookie = name + "=" + value + expires + "; path=/";
-  return name;
-}
-
-function getCookie(name = COOKIE_NAME) {
-  let nameEQ = name + "=";
-  let ca = document.cookie.split(";");
-  for (let i = 0; i < ca.length; i++) {
-    let c = ca[i];
-    while (c.charAt(0) == " ") c = c.substring(1, c.length);
-    if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
-  }
-  return null;
-}
-
-function sendCookieToShiny(name = COOKIE_NAME) {
+// send data to Shiny input$cookie
+function sendCookieToShiny() {
   let userData = getUserData();
   sendShiny("cookie", userData);
   return userData;
-}
-
-function deleteCookie(name = COOKIE_NAME) {
-  document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
-  return name;
 }

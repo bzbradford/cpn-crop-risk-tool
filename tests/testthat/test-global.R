@@ -551,6 +551,58 @@ test_that("load_sites loads valid CSV", {
 })
 
 
+# Cookie helpers ---------------------------------------------------------------
+
+test_that("parse_cookie_sites returns NULL for empty/missing input", {
+  expect_null(parse_cookie_sites(list()))
+  expect_null(parse_cookie_sites(NULL))
+})
+
+test_that("parse_cookie_sites parses valid sites", {
+  cookie_sites <- list(
+    list(id = 1, name = "Site A", lat = 45, lng = -89),
+    list(id = 2, name = "Site B", lat = 44, lng = -88)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 2)
+  expect_true(all(c("id", "name", "lat", "lng") %in% names(result)))
+})
+
+test_that("parse_cookie_sites filters out invalid coordinates", {
+  cookie_sites <- list(
+    list(id = 1, name = "Valid", lat = 45, lng = -89),
+    list(id = 2, name = "Invalid", lat = 0, lng = 0)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_equal(nrow(result), 1)
+  expect_equal(result$name, "Valid")
+})
+
+test_that("parse_cookie_sites reassigns sequential IDs", {
+  cookie_sites <- list(
+    list(id = 5, name = "A", lat = 45, lng = -89),
+    list(id = 10, name = "B", lat = 44, lng = -88)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_equal(result$id, 1:2)
+})
+
+test_that("parse_cookie_sites returns NULL when columns are missing", {
+  expect_null(parse_cookie_sites(list(list(bad_col = "data"))))
+})
+
+test_that("get_cache_file returns correct path", {
+  path <- get_cache_file("abc123")
+  expect_equal(path, file.path("cache", "abc123.fst"))
+})
+
+test_that("get_cache_file returns NULL for empty/missing user_id", {
+  expect_null(get_cache_file(NULL))
+  expect_null(get_cache_file(""))
+})
+
+
 # Model definitions ----------------------------------------------------------
 
 example_doc <- "example.md"

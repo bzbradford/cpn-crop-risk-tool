@@ -11,7 +11,7 @@ server <- function(input, output, session) {
   # set the .sites key on the cookie
   set_cookie <- function(sites) {
     sites_json <- jsonlite::toJSON(sites)
-    runjs(str_glue("updateSites({sites_json})"))
+    runjs(str_glue("updateCookie({{sites: {sites_json}}})"))
   }
 
   # clear out the .sites key on the cookie
@@ -36,21 +36,8 @@ server <- function(input, output, session) {
 
     tryCatch(
       {
-        cookie_sites <- cookie[["sites"]]
-
-        if (length(cookie_sites) == 0) {
-          return()
-        }
-
-        sites <- cookie_sites |>
-          bind_rows() |>
-          select(all_of(names(sites_template))) |>
-          filter(validate_ll(lat, lng)) |>
-          distinct() |>
-          head(OPTS$max_sites) |>
-          mutate(id = row_number())
-
-        req(nrow(sites) > 0)
+        sites <- parse_cookie_sites(cookie[["sites"]])
+        req(!is.null(sites))
 
         rv$sites <- sites
         rv$selected_site <- first(sites$id)
@@ -81,15 +68,9 @@ server <- function(input, output, session) {
 
     tryCatch(
       {
-        id <- cookie[["userId"]]
-        req(length(id) > 0)
-
-        cache_path <- "cache"
-        if (!dir.exists(cache_path)) {
-          dir.create(cache_path)
-        }
-        fname <- paste0(id, ".fst")
-        file.path(cache_path, fname)
+        user_id <- cookie[["userId"]]
+        req(length(user_id) > 0)
+        get_cache_file(user_id)
       },
       error = function(e) {
         message("Failed to read user ID from cookie: ", e)

@@ -1050,6 +1050,42 @@ model_list <- imap(model_list, function(m, slug) {
 })
 
 
+# Cookie helpers ---------------------------------------------------------------
+
+#' Parse and validate sites from browser cookie data
+#' @param cookie_sites the $sites value from the parsed cookie (list of site records)
+#' @returns tibble of valid sites with sequential IDs, or NULL if none
+parse_cookie_sites <- function(cookie_sites) {
+  if (length(cookie_sites) == 0) return(NULL)
+
+  sites <- tryCatch(
+    {
+      cookie_sites |>
+        bind_rows() |>
+        select(all_of(names(sites_template))) |>
+        filter(validate_ll(lat, lng)) |>
+        distinct() |>
+        head(OPTS$max_sites) |>
+        mutate(id = row_number())
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(sites) || nrow(sites) == 0) return(NULL)
+  sites
+}
+
+#' Get the cache file path for a user ID, creating the cache directory if needed
+#' @param user_id character user ID from the browser cookie
+#' @returns file path string, or NULL if user_id is empty/invalid
+get_cache_file <- function(user_id) {
+  if (!isTruthy(user_id)) return(NULL)
+  cache_path <- "cache"
+  if (!dir.exists(cache_path)) dir.create(cache_path)
+  file.path(cache_path, paste0(user_id, ".fst"))
+}
+
+
 # Cache cleaner ----------------------------------------------------------------
 
 clean_old_caches <- function(max_age_days = 30) {
