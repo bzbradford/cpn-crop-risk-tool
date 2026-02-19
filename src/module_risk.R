@@ -160,12 +160,7 @@ riskServer <- function(rv, wx_data) {
         warnings <- list()
 
         # warning for missing weather
-        if (nrow(sites) > 0 && any(sites$needs_download)) {
-          warnings$wx <- HTML(paste(
-            ifelse(nrow(sites) == 1, "This site is", "One or more sites are"),
-            "missing data based on your date selections. Press <b>Fetch weather</b> on the sidebar to download any missing data."
-          ))
-        }
+        warnings$wx <- weather_warning_for_sites(sites)
 
         # warning when outside of risk period
         if (!is.null(model$risk_period)) {
@@ -179,30 +174,22 @@ riskServer <- function(rv, wx_data) {
 
         req(length(warnings) > 0)
 
-        div(
-          class = "warning-box-container",
-          div(
-            style = "color: orange; font-size: 1.5em;",
-            icon("warning")
-          ),
-          div(
-            style = "font-size: small;",
-            if (length(warnings) > 1) {
-              tagList(
-                strong("Warnings:"),
-                br(),
-                tags$ul(
-                  lapply(warnings, tags$li)
-                )
-              )
-            } else {
-              tagList(
-                strong("Warning:"),
-                warnings
-              )
-            }
+        content <- if (length(warnings) > 1) {
+          tagList(
+            strong("Warnings:"),
+            br(),
+            tags$ul(
+              lapply(warnings, tags$li)
+            )
           )
-        )
+        } else {
+          tagList(
+            strong("Warning:"),
+            warnings
+          )
+        }
+
+        build_warning_box(content)
       })
 
       # results_ui ----

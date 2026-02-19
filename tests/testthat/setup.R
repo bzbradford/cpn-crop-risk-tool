@@ -31,7 +31,7 @@ if (FALSE) {
         45 ,  -89 ,
         30 ,  -95 ,
     ),
-    start_date = ymd("2025-1-1"),
+    start_date = ymd("2024-1-1"),
     end_date = ymd("2025-12-31")
   )
   saveRDS(test_hourly_wx, "tests/testthat/test_hourly_wx.rds")

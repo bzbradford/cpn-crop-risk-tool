@@ -94,8 +94,9 @@ OPTS <- lst(
   ),
   ibm_auth_endpoint = "https://api.ibm.com/saascore/run/authentication-retrieve/api-key",
   ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
-  # max hours per api call
-  ibm_chunk_size = 1000,
+  ibm_auth_timeout = 5,
+  ibm_req_timeout = 10,
+  ibm_chunk_size = 1000, # max hours per api call
   ibm_ignore_cols = c(
     "requestedLatitude",
     "requestedLongitude",
@@ -812,6 +813,36 @@ show_modal <- function(md, title = NULL) {
     easyClose = TRUE
   )
   showModal(m)
+}
+
+#' @param content text or tags to display in the warning box
+build_warning_box <- function(content) {
+  if (is.null(content)) {
+    return()
+  }
+  div(
+    class = "warning-box-container",
+    div(
+      style = "color: orange; font-size: 1.5em;",
+      icon("warning")
+    ),
+    div(
+      style = "font-size: small;",
+      content
+    )
+  )
+}
+
+#' @param sites sites df with needs_download column
+weather_warning_for_sites <- function(sites) {
+  if (nrow(sites) > 0 & any(sites[["needs_download"]])) {
+    span(
+      ifelse(nrow(sites) == 1, "This site is", "One or more sites are"),
+      "missing data based on your date selections. Press",
+      strong("Fetch weather"),
+      "on the sidebar to download any missing data."
+    )
+  }
 }
 
 
