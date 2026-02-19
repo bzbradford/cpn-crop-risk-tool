@@ -179,7 +179,11 @@ ibm_create_request <- function(
       units = "m"
     ) |>
     req_timeout(OPTS$ibm_req_timeout) |>
-    req_retry(max_tries = 2, failure_timeout = OPTS$ibm_req_timeout, retry_on_failure = TRUE) |>
+    req_retry(
+      max_tries = 2,
+      failure_timeout = OPTS$ibm_req_timeout,
+      retry_on_failure = TRUE
+    ) |>
     req_throttle(rate = 20)
 }
 
@@ -527,15 +531,18 @@ weather_status <- function(
   start_date = min(wx$date),
   end_date = max(wx$date)
 ) {
-
   default <- tibble(
     grid_id = NA,
     needs_download = TRUE
   )
-  if (nrow(wx) == 0) return(default)
+  if (nrow(wx) == 0) {
+    return(default)
+  }
   selected_wx <- wx |>
     filter(between(date, start_date, end_date))
-  if (nrow(selected_wx) == 0) return(default)
+  if (nrow(selected_wx) == 0) {
+    return(default)
+  }
 
   dates_expected <- seq.Date(start_date, end_date, 1)
 

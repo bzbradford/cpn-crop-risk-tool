@@ -3,15 +3,16 @@
   --textFont: Redhat Text;
   --headerHeight: 50px;
   --footerHeight: 70px;
-  --minHeight: calc(max(100vw, 100vh) * .4);
-  --maxHeight: max(calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
-      var(--minHeight));
+  --minHeight: calc(max(100vw, 100vh) * 0.4);
+  --maxHeight: max(
+    calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
+    var(--minHeight)
+  );
   --wide: 1200px;
   --narrow: 700px;
 
   /*--dt-row-selected: 237, 242, 247 !important;*/
 }
-
 
 /*--- UW STYLE ---*/
 
@@ -23,68 +24,6 @@
 @font-face {
   font-family: 'Redhat Text';
   src: url('redhat-text-latin.v13.woff2') format('woff2');
-}
-
-html,
-body,
-div,
-span,
-applet,
-object,
-iframe,
-h1,
-h2,
-h3,
-h4,
-h5,
-h6,
-p,
-blockquote,
-pre,
-a,
-abbr,
-acronym,
-address,
-big,
-cite,
-code,
-del,
-dfn,
-em,
-font,
-ins,
-kbd,
-q,
-s,
-samp,
-small,
-strike,
-strong,
-sub,
-sup,
-tt,
-var,
-dl,
-dt,
-dd,
-ol,
-ul,
-li,
-fieldset,
-form,
-label,
-legend,
-button,
-table,
-caption,
-tbody,
-tfoot,
-thead,
-tr,
-th,
-td {
-  font-family: inherit;
-  overflow-wrap: break-word;
 }
 
 html,
@@ -101,7 +40,6 @@ h5,
 h6 {
   font-family: var(--textFont);
 }
-
 
 /*--- HEADER ---*/
 
@@ -142,16 +80,15 @@ header {
   color: #fff;
 }
 
-.modal-body>h2 {
+.modal-body > h2 {
   margin: 0 0 20px 0;
 }
 
-.modal-body>*>img {
+.modal-body > * > img {
   float: right;
   max-width: 50%;
   margin-left: 10px;
 }
-
 
 /*--- FOOTER ---*/
 
@@ -194,7 +131,6 @@ footer {
     text-align: center;
   }
 }
-
 
 /*--- LAYOUT ---*/
 
@@ -298,7 +234,6 @@ footer {
   }
 }
 
-
 /* --- UTILITY --- */
 
 .inline-flex {
@@ -319,7 +254,7 @@ footer {
   gap: 10px;
 }
 
-.flex-across>.btn {
+.flex-across > .btn {
   flex: 1;
 }
 
@@ -336,12 +271,11 @@ footer {
   gap: 10px;
 }
 
-.date-btns>.btn {
+.date-btns > .btn {
   padding: 2px 5px;
   line-height: 1;
   white-space: break-spaces;
 }
-
 
 /*--- DATA TABLES ---*/
 
@@ -360,7 +294,6 @@ td.tbl-coords {
   overflow: auto;
 }
 
-
 /*--- STYLES ---*/
 
 .shiny-input-container:not(.shiny-input-container-inline) {
@@ -378,7 +311,7 @@ td.tbl-coords {
   align-items: center;
 }
 
-.label-inline>label {
+.label-inline > label {
   margin-bottom: 0;
 }
 
@@ -392,12 +325,12 @@ td.tbl-coords {
   margin-top: 1rem;
 }
 
-.submit-btn>button {
+.submit-btn > button {
   width: 100%;
   font-weight: bold;
 }
 
-.submit-btn>button:enabled {
+.submit-btn > button:enabled {
   background-color: #218cb9;
   border: 1px solid #00a8dc;
   color: white;
@@ -457,8 +390,6 @@ td.tbl-coords {
   gap: 10px;
 }
 
-
-
 /*--- LEAFLET ---*/
 
 /* draw above leaflet control */
@@ -470,17 +401,18 @@ td.tbl-coords {
   position: absolute;
   bottom: 0;
   width: 100%;
-  display: inline-flex;
   padding: 0 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
 
-.search-overlay>div {
-  flex: 1;
-}
-
-#coord_search input {
-  flex: 1;
+gmp-place-autocomplete {
+  background-color: #ffffff;
+  color-scheme: light;
+  z-index: 1000;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .leaflet-control-attribution {
@@ -512,14 +444,13 @@ td.tbl-coords {
 }
 
 .map-title {
-  border: 1px solid rgba(0, 0, 0, .25);
+  border: 1px solid rgba(0, 0, 0, 0.25);
   border-radius: 5px;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, .8);
+  background: rgba(255, 255, 255, 0.8);
   font-size: 16px;
   font-weight: bold;
 }
-
 
 /*--- PLOTLY ---*/
 

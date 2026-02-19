@@ -170,6 +170,20 @@ mapServer <- function(rv, map_data) {
           map <- addProviderTiles(map, basemaps[[name]], group = name)
         }
 
+        # set up the js callback for CDL layers
+        # assume CDL is available from prev year 60 days into the year
+        # assigns leaflet map object to global var 'map' so it can be accessed
+        yr <- year(Sys.Date()) - ifelse(yday(Sys.Date()) > 60, 1, 2)
+        cdl_years <- seq(yr, yr - 3, by = -1)
+        callback <- sprintf(
+          "() => {
+            map = this.getMap();
+            const years = [%s];
+            createCDLLayers(map, years);
+          }",
+          paste(cdl_years, collapse = ", ")
+        )
+
         # finalize map
         map |>
           addLayersControl(
@@ -198,8 +212,7 @@ mapServer <- function(rv, map_data) {
             )
           ) |>
           addFullscreenControl() |>
-          # assign leaflet map object to global var 'map'
-          onRender("() => { map = this.getMap(); }") |>
+          onRender(callback) |>
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
@@ -218,36 +231,42 @@ mapServer <- function(rv, map_data) {
       })
 
       ## searchbox_ui - renderUI ----
+      # google places autocomplete will be attached to this
       output$searchbox_ui <- renderUI({
         div(
           title = "Search by name for a city or place",
-          HTML(paste0(
-            "<script async src='https://maps.googleapis.com/maps/api/js?key=",
-            OPTS$google_places_key,
-            "&loading=async&libraries=places&callback=initAutocomplete'></script>"
-          )),
-          # textInput("searchbox", "Find a location by name")
-          textInput(ns("searchbox"), NULL)
+          textInput(
+            ns("searchbox"),
+            label = NULL,
+            placeholder = "Find a location"
+          )
         )
       })
+
+      # initialize google places autocomplete
+      session$sendCustomMessage(
+        "google-places-init",
+        list(
+          apiKey = OPTS$google_places_key,
+          inputId = ns("searchbox"),
+          outputId = ns("searched_loc")
+        )
+      )
 
       ## coord_search_ui // renderUI ----
       # Coordinate searchbox under map
       output$coord_search_ui <- renderUI({
         # treat pressing Enter as clicking "go"
         runjs(
-          "
-          $(document).keyup((event) => {
+          "$(document).keyup((event) => {
             if ($('#map-coord_search').is(':focus') && (event.key == 'Enter')) {
               $('#map-coord_search_go').click();
             }
-          });
-        "
+          });"
         )
 
         div(
           style = "display: flex; flex-direction: column;",
-          # div(tags$label("Find a location by coordinates")),
           div(
             style = "display: inline-flex; gap: 5px;",
             div(

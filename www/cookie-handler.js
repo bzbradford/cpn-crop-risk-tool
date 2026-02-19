@@ -1,6 +1,6 @@
 //--- Cookie handling with User ID ---//
 
-const COOKIE_NAME = "ibm_weather_tool";
+const COOKIE_NAME = 'ibm_weather_tool';
 
 // Generate a unique user ID
 function generateUserId() {
@@ -13,11 +13,11 @@ function generateUserId() {
 
 // get data from cookie
 function getCookie(name = COOKIE_NAME) {
-  let nameEQ = name + "=";
-  let ca = document.cookie.split(";");
+  let nameEQ = name + '=';
+  let ca = document.cookie.split(';');
   for (let i = 0; i < ca.length; i++) {
     let c = ca[i];
-    while (c.charAt(0) == " ") c = c.substring(1, c.length);
+    while (c.charAt(0) == ' ') c = c.substring(1, c.length);
     if (c.indexOf(nameEQ) == 0) return c.substring(nameEQ.length, c.length);
   }
   return null;
@@ -25,16 +25,16 @@ function getCookie(name = COOKIE_NAME) {
 
 // saves data to the cookie
 function setCookie(data, name = COOKIE_NAME, days = 30) {
-  let expires = "";
+  let expires = '';
   if (days) {
     let date = new Date();
     date.setTime(date.getTime() + days * 24 * 60 * 60 * 1000);
-    expires = "; expires=" + date.toUTCString();
+    expires = '; expires=' + date.toUTCString();
   }
-  if (typeof data === "object") {
+  if (typeof data === 'object') {
     data = JSON.stringify(data);
   }
-  document.cookie = name + "=" + data + expires + "; path=/";
+  document.cookie = name + '=' + data + expires + '; path=/';
   return name;
 }
 
@@ -48,7 +48,7 @@ function updateCookie(updates) {
 
 // clears cookie by setting expiration to a past date
 function deleteCookie(name = COOKIE_NAME) {
-  document.cookie = name + "=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;";
+  document.cookie = name + '=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT;';
   return name;
 }
 
@@ -60,13 +60,13 @@ function getUserData() {
   try {
     userData = cookieValue ? JSON.parse(cookieValue) : {};
   } catch (e) {
-    console.warn("Invalid cookie data, resetting:", e);
+    console.warn('Invalid cookie data, resetting:', e);
     userData = {};
   }
 
   // Check if required keys exist, if not reset the cookie
   if (!userData.userId || !userData.sites) {
-    console.warn("Missing required cookie keys, resetting user data");
+    console.warn('Missing required cookie keys, resetting user data');
     userData = {
       userId: generateUserId(),
       sites: [],
@@ -80,6 +80,6 @@ function getUserData() {
 // send data to Shiny input$cookie
 function sendCookieToShiny() {
   let userData = getUserData();
-  sendShiny("cookie", userData);
+  sendShiny('cookie', userData);
   return userData;
 }
