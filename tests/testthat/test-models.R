@@ -2,7 +2,7 @@
 
 # Weather data ------------------------------------------------------------
 
-test_that("build_daily works", {
+test_that("build_daily", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -14,7 +14,7 @@ test_that("build_daily works", {
   })
 })
 
-test_that("build_ma_from_daily works", {
+test_that("build_ma_from_daily", {
   expect_silent({
     test_hourly_wx |>
       filter(grid_id == sample(grid_id, 1)) |>
@@ -25,7 +25,7 @@ test_that("build_ma_from_daily works", {
   })
 })
 
-test_that("gdd_sine works", {
+test_that("gdd_sine", {
   expect_silent({
     expand_grid(tmin = 0:30, tmax = 0:30) |>
       filter(tmax >= tmin) |>
@@ -37,7 +37,7 @@ test_that("gdd_sine works", {
   })
 })
 
-test_that("build_gdd_from_daily works", {
+test_that("build_gdd_from_daily", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -48,7 +48,8 @@ test_that("build_gdd_from_daily works", {
 
 # Model functions --------------------------------------------------------------
 
-test_that("predict_tarspot works", {
+## Field crops ----
+test_that("predict_tarspot", {
   expect_silent({
     expand_grid(temp = 10:40, rh = seq(0, 100, 5), hours = 0:24) |>
       mutate(prob = predict_tarspot(temp, rh, hours)) |>
@@ -60,7 +61,7 @@ test_that("predict_tarspot works", {
   })
 })
 
-test_that("predict_gls works", {
+test_that("predict_gls", {
   expect_silent({
     expand_grid(temp = 0:30, dp = 0:30) |>
       mutate(prob = predict_gls(temp, dp)) |>
@@ -71,7 +72,7 @@ test_that("predict_gls works", {
   })
 })
 
-test_that("predict_don works", {
+test_that("predict_don", {
   expect_silent({
     test <- expand_grid(
       w7_max_temp = 10:30,
@@ -107,7 +108,7 @@ test_that("predict_don works", {
   })
 })
 
-test_that("predict_white_mold_dry works", {
+test_that("predict_white_mold_dry", {
   expect_silent({
     expand_grid(temp = 0:40, wind = 0:20, rh = (0:10) * 10) |>
       mutate(prob = predict_white_mold_dry(temp, wind, rh)) |>
@@ -119,7 +120,7 @@ test_that("predict_white_mold_dry works", {
   })
 })
 
-test_that("predict_white_mold_irrig works", {
+test_that("predict_white_mold_irrig", {
   expect_silent({
     expand_grid(temp = 15:40, rh = seq(50, 100, 5), spacing = c("15", "30")) |>
       rowwise() |>
@@ -132,7 +133,7 @@ test_that("predict_white_mold_irrig works", {
   })
 })
 
-test_that("predict_fls works", {
+test_that("predict_fls", {
   expect_silent({
     expand_grid(temp = 0:40, hours = 0:24) |>
       mutate(prob = predict_fls(temp, hours)) |>
@@ -143,7 +144,22 @@ test_that("predict_fls works", {
   })
 })
 
-test_that("calc_pdays works", {
+test_that("predict_wheat_scab", {
+  expect_silent({
+    expand_grid(rh = 0:100) |>
+      mutate(predict_wheat_scab(rh) |> as_tibble()) |>
+      pivot_longer(-rh, names_to = "resistance", values_to = "prob") |>
+      ggplot(aes(x = resistance, y = rh, fill = prob)) +
+      geom_tile() +
+      scale_fill_distiller(palette = "Spectral") +
+      coord_cartesian(expand = F)
+  })
+})
+
+
+## Vegetable crops ----
+
+test_that("calc_pdays", {
   expect_silent({
     expand_grid(tmin = 0:35, tmax = 0:35) |>
       mutate(pdays = calc_pdays(tmin, tmax)) |>
@@ -154,7 +170,7 @@ test_that("calc_pdays works", {
   })
 })
 
-test_that("calc_late_blight_dsv works", {
+test_that("calc_late_blight_dsv", {
   expect_silent({
     expand_grid(temp = 0:30, hours = 0:24) |>
       mutate(dsv = calc_late_blight_dsv(temp, hours)) |>
@@ -165,7 +181,7 @@ test_that("calc_late_blight_dsv works", {
   })
 })
 
-test_that("calc_alternaria_dsv works", {
+test_that("calc_alternaria_dsv", {
   expect_silent({
     expand_grid(temp = 0:30, hours = 0:24) |>
       mutate(dsv = calc_alternaria_dsv(temp, hours)) |>
@@ -176,7 +192,7 @@ test_that("calc_alternaria_dsv works", {
   })
 })
 
-test_that("calc_cercospora_div works", {
+test_that("calc_cercospora_div", {
   expect_silent({
     expand_grid(temp = 15:30, hours = 0:24) |>
       mutate(dsv = calc_cercospora_div(temp, hours), temp = c_to_f(temp)) |>
@@ -187,7 +203,7 @@ test_that("calc_cercospora_div works", {
   })
 })
 
-test_that("botcast_dinov works", {
+test_that("botcast_dinov", {
   expect_silent({
     expand_grid(
       hot = c(F, T),
@@ -199,7 +215,7 @@ test_that("botcast_dinov works", {
   })
 })
 
-test_that("botcast_dinfv works", {
+test_that("botcast_dinfv", {
   expect_silent({
     expand_grid(temp = (60:280) / 10, hours = 0:24) |>
       mutate(dinfv = botcast_dinfv(temp, hours)) |>
@@ -210,7 +226,7 @@ test_that("botcast_dinfv works", {
   })
 })
 
-test_that("calc_botrytis_dsi works", {
+test_that("calc_botrytis_dsi", {
   expect_silent({
     expand_grid(
       hot = c(T, F),
@@ -226,13 +242,13 @@ test_that("calc_botrytis_dsi works", {
 
 # Risk calculators -------------------------------------------------------------
 
-test_that("assign_risk works", {
+test_that("assign_risk", {
   expect_s3_class(assign_risk("tar_spot_prob", .2), "data.frame")
   expect_warning(assign_risk("don_prob", 10))
   expect_error(assign_risk("foo", 1))
 })
 
-test_that("risk_from_prob works", {
+test_that("risk_from_prob", {
   expect_silent({
     tibble(
       value = runif(20),
@@ -241,14 +257,14 @@ test_that("risk_from_prob works", {
   })
 })
 
-test_that("attenuate_prob works", {
+test_that("attenuate_prob", {
   expect_silent({
     tibble(value = c(10:1, 2:10), temp = c(1:10, 9:1) * 3) |>
       mutate(new_value = attenuate_prob(value, temp))
   })
 })
 
-test_that("risk_from_severity works", {
+test_that("risk_from_severity", {
   expect_silent({
     tibble(
       value = round(runif(10, 0, 4)),
@@ -257,7 +273,7 @@ test_that("risk_from_severity works", {
   })
 })
 
-test_that("risk_for_early_blight works", {
+test_that("risk_for_early_blight", {
   expect_silent({
     tibble(
       value = runif(100, 5, 10),
@@ -270,7 +286,7 @@ test_that("risk_for_early_blight works", {
   })
 })
 
-test_that("risk_for_late_blight works", {
+test_that("risk_for_late_blight", {
   expect_silent({
     tibble(
       value = runif(100, 0, 3),
@@ -284,7 +300,7 @@ test_that("risk_for_late_blight works", {
   })
 })
 
-test_that("risk_for_alternaria works", {
+test_that("risk_for_alternaria", {
   expect_silent({
     tibble(
       value = runif(100, 0, 5),
@@ -297,7 +313,7 @@ test_that("risk_for_alternaria works", {
   })
 })
 
-test_that("risk_for_cercospora works", {
+test_that("risk_for_cercospora", {
   expect_silent({
     tibble(
       value = runif(100, 0, 4),
@@ -311,7 +327,7 @@ test_that("risk_for_cercospora works", {
   })
 })
 
-test_that("risk_for_botrytis works", {
+test_that("risk_for_botrytis", {
   expect_silent({
     tibble(
       value = round(runif(100, 0, 4), 0),
@@ -328,7 +344,7 @@ test_that("risk_for_botrytis works", {
 
 # Model runners -----------------------------------------------------------
 
-test_that("build_tar_spot works", {
+test_that("build_tar_spot", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -337,7 +353,7 @@ test_that("build_tar_spot works", {
   })
 })
 
-test_that("build_gls works", {
+test_that("build_gls", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -346,7 +362,7 @@ test_that("build_gls works", {
   })
 })
 
-test_that("build_don works", {
+test_that("build_don", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -355,7 +371,7 @@ test_that("build_don works", {
   })
 })
 
-test_that("build_white_mold_dry works", {
+test_that("build_white_mold_dry", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -364,7 +380,7 @@ test_that("build_white_mold_dry works", {
   })
 })
 
-test_that("build_white_mold_irrig works", {
+test_that("build_white_mold_irrig", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -380,7 +396,7 @@ test_that("build_white_mold_irrig works", {
   })
 })
 
-test_that("build_frogeye_leaf_spot works", {
+test_that("build_frogeye_leaf_spot", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -389,7 +405,16 @@ test_that("build_frogeye_leaf_spot works", {
   })
 })
 
-test_that("build_early_blight works", {
+test_that("build_wheat_scab", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_wheat_scab(resistance = "VS") |>
+      test_plot()
+  })
+})
+
+test_that("build_early_blight", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -398,7 +423,7 @@ test_that("build_early_blight works", {
   })
 })
 
-test_that("build_late_blight works", {
+test_that("build_late_blight", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -407,7 +432,7 @@ test_that("build_late_blight works", {
   })
 })
 
-test_that("build_alternaria works", {
+test_that("build_alternaria", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -416,7 +441,7 @@ test_that("build_alternaria works", {
   })
 })
 
-test_that("build_cercospora works", {
+test_that("build_cercospora", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>
@@ -425,7 +450,7 @@ test_that("build_cercospora works", {
   })
 })
 
-test_that("build_botrytis works", {
+test_that("build_botrytis", {
   expect_silent({
     test_hourly_wx |>
       build_daily() |>

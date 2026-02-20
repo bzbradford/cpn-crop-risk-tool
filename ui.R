@@ -17,6 +17,9 @@ ui <- fluidPage(
     ),
     tags$link(rel = "stylesheet", type = "text/css", href = "style.css"),
     tags$script(src = "script.js"),
+    tags$script(src = "cookie-handler.js"),
+    tags$script(src = "google-places.js"),
+    tags$script(src = "leaflet-cdl.js"),
     includeHTML("www/google-analytics.html"),
     useShinyjs(),
   ),
@@ -54,7 +57,11 @@ ui <- fluidPage(
 
       div(
         style = "margin-top: 1rem;",
-        uiOutput("date_select_ui"),
+        uiOutput("date_select_ui")
+      ),
+
+      div(
+        style = "margin-top: 1rem;",
         uiOutput("date_btns_ui")
       ),
 

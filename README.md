@@ -1,6 +1,6 @@
-# Crop Risk and Weather Forecasting Tool
+## Crop Risk and Weather Forecasting Tool
 
-This app is designed to provide an easy interface to view and download hourly weather data for any point in the United States and Canada below the 60°N latitude. Data is derived from a subscription to [IBM's Environmental Intelligence Suite](https://www.ibm.com/products/environmental-intelligence), with a spatial resolution of 1/24th decimal degree (approximately 3 km). 7-day hourly forecasts are sourced from [NOAA](https://www.weather.gov/documentation/services-web-api).
+This app is designed to provide an easy interface to view and download hourly weather data for any point in the United States, and Canada below the 60°N latitude. Data is derived from a subscription to [IBM's Environmental Intelligence Suite](https://www.ibm.com/products/environmental-intelligence), with a spatial resolution of ~0.044 decimal degree (approximately 5 km E/W). 14-day hourly forecasts are sourced from [OpenMeteo](https://open-meteo.com).
 
 ### How to use the app
 
@@ -13,19 +13,19 @@ This app is designed to provide an easy interface to view and download hourly we
 
 Hourly weather parameters include:
 
--   Air temperature
--   Dew point
--   Relative humidity
--   Precipitation and snow accumulation
--   Wind speed and direction
--   Atmospheric pressure
+- Air temperature
+- Dew point
+- Relative humidity
+- Precipitation and snow accumulation
+- Wind speed and direction
+- Atmospheric pressure
 
 In addition to hourly weather, derived datasets are generated including:
 
--   Daily minimum, maximum, and average values for each parameter
--   Moving averages on a 7, 14, 21, and 30-day basis
--   Daily and cumulative growing degree day calculations for common models
--   Model predictions for certain field and vegetable crop diseases
+- Daily minimum, maximum, and average values for each parameter
+- Moving averages on a 7, 14, 21, and 30-day basis
+- Daily and cumulative growing degree day calculations for common models
+- Model predictions for certain field and vegetable crop diseases
 
 These data can be retrieved for individual locations, or multiple locations can be specified for batch downloading and comparison.
 
@@ -55,31 +55,32 @@ The single sine method is used to calculate growing degree days from daily minim
 
 Most values can be shown in either imperial or metric units.
 
--   Temperature and dew point: °C or °F
--   Relative humidity: %
--   Precipitation (rain/melted snow): mm or in
--   Snow accumulation: cm or in
--   Atmospheric pressure: mbar or inHg
--   Wind speed: km/h or mph
--   Wind direction: compass degrees (N=0°, E=90°, etc.)
--   Growing degree day base/upper thresholds and accumulations always in Fahrenheit
+- Temperature and dew point: °C or °F
+- Relative humidity: %
+- Precipitation (rain/melted snow): mm or in
+- Snow accumulation: cm or in
+- Atmospheric pressure: mbar or inHg
+- Wind speed: km/h or mph
+- Wind direction: compass degrees (N=0°, E=90°, etc.)
+- Growing degree day base/upper thresholds and accumulations are always in Fahrenheit Degree Days. Conversion to Celsius Degree Days may be accomplished by dividing by 1.8.
 
 ### Crop risk models
 
 Selected field crops and vegetable disease model outputs are provided. These models are subject to change. The calculations used to generate each model prediction can be viewed in the source code.
 
--   Field crops diseases
-    -   White mold (soybean): <https://cropprotectionnetwork.org/encyclopedia/white-mold-of-soybean>
-    -   Frogeye leaf spot (soybean): <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
-    -   Gray leaf spot (corn): <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
-    -   Tarspot (corn): <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
-    -   Gibberella ear rot (corn): <https://cropprotectionnetwork.org/encyclopedia/gibberella-ear-rot-of-corn>
--   Vegetable crop diseases
-    -   Early blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
-    -   Late blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
-    -   Alternaria and Cercospora leaf blights (carrot): <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
-    -   Cercospora leaf spot (beet): <https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/>
-    -   Botrytis leaf blight (onion): <https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/>
+- Field crops diseases
+  - White mold (soybean): <https://cropprotectionnetwork.org/encyclopedia/white-mold-of-soybean>
+  - Frogeye leaf spot (soybean): <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
+  - Gray leaf spot (corn): <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
+  - Tarspot (corn): <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
+  - Gibberella ear rot/DON contamination (corn): <https://cropprotectionnetwork.org/encyclopedia/gibberella-ear-rot-of-corn>
+  - Wheat scab/Fusarium head blight (wheat): <https://cropprotectionnetwork.org/publications/an-overview-of-fusarium-head-blight>
+- Vegetable crop diseases
+  - Early blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
+  - Late blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
+  - Alternaria and Cercospora leaf blights (carrot): <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
+  - Cercospora leaf spot (beet): <https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/>
+  - Botrytis leaf blight (onion): <https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/>
 
 ### Cropland data layer
 
@@ -87,10 +88,10 @@ Optionally, the [Cropland Data Layer](https://www.nass.usda.gov/Research_and_Sci
 
 ### Credits and Contacts
 
--   Ben Bradford (Developer, Data Scientist, Entomologist): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
--   Damon Smith (Extension Field Crops Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
--   Amanda Gevens (Extension Vegetable Crops Pathologist): [gevens\@wisc.edu](mailto:gevens@wisc.edu)
--   Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
+- Ben Bradford (Developer, Data Scientist, Entomologist): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
+- Damon Smith (Extension Field Crops Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
+- Amanda Gevens (Extension Vegetable Crops Pathologist): [gevens\@wisc.edu](mailto:gevens@wisc.edu)
+- Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
 
 ### Funding Sources
 

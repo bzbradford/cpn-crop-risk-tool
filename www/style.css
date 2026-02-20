@@ -1,10 +1,9 @@
-
 :root {
   --headingFont: Redhat Display;
   --textFont: Redhat Text;
   --headerHeight: 50px;
   --footerHeight: 70px;
-  --minHeight: calc(max(100vw, 100vh) * .4);
+  --minHeight: calc(max(100vw, 100vh) * 0.4);
   --maxHeight: max(
     calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
     var(--minHeight)
@@ -14,7 +13,6 @@
 
   /*--dt-row-selected: 237, 242, 247 !important;*/
 }
-
 
 /*--- UW STYLE ---*/
 
@@ -28,26 +26,20 @@
   src: url('redhat-text-latin.v13.woff2') format('woff2');
 }
 
-html, body, div, span, applet, object, iframe,
-h1, h2, h3, h4, h5, h6, p, blockquote, pre,
-a, abbr, acronym, address, big, cite, code,
-del, dfn, em, font, ins, kbd, q, s, samp,
-small, strike, strong, sub, sup, tt, var,
-dl, dt, dd, ol, ul, li,
-fieldset, form, label, legend, button,
-table, caption, tbody, tfoot, thead, tr, th, td {
-  font-family: inherit;
-  overflow-wrap: break-word;
-}
-
-html, body, header {
+html,
+body,
+header {
   font-family: var(--headingFont);
 }
 
-h1, h2, h3, h4, h5, h6 {
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
   font-family: var(--textFont);
 }
-
 
 /*--- HEADER ---*/
 
@@ -98,7 +90,6 @@ header {
   margin-left: 10px;
 }
 
-
 /*--- FOOTER ---*/
 
 footer {
@@ -141,7 +132,6 @@ footer {
   }
 }
 
-
 /*--- LAYOUT ---*/
 
 .container-fluid {
@@ -151,7 +141,8 @@ footer {
 
 .main {
   display: grid;
-  grid-template-columns: 1fr 2fr 2fr; /* 20% 40% 40% equivalent */
+  grid-template-columns: 1fr 2fr 2fr;
+  /* 20% 40% 40% equivalent */
   grid-template-rows: auto;
   gap: 1rem;
   padding: 1rem;
@@ -202,22 +193,24 @@ footer {
 /* intermediate width layout */
 @media (max-width: 1200px) {
   .main {
-    grid-template-columns: 1fr 1fr; /* Two equal columns */
+    grid-template-columns: 1fr 1fr;
+    /* Two equal columns */
     height: unset;
   }
-  
+
   .sidebar-col {
     grid-column: 1;
     grid-row: 1;
   }
-  
+
   .map-col {
     grid-column: 2;
     grid-row: 1;
   }
-  
+
   .data-col {
-    grid-column: 1 / -1; /* Span full width */
+    grid-column: 1 / -1;
+    /* Span full width */
     grid-row: 2;
   }
 }
@@ -225,9 +218,10 @@ footer {
 /* narrow width layout */
 @media (max-width: 700px) {
   .main {
-    grid-template-columns: 1fr; /* Single column */
+    grid-template-columns: 1fr;
+    /* Single column */
   }
-  
+
   .sidebar-col,
   .map-col,
   .data-col {
@@ -239,7 +233,6 @@ footer {
     font-size: 2rem;
   }
 }
-
 
 /* --- UTILITY --- */
 
@@ -284,7 +277,6 @@ footer {
   white-space: break-spaces;
 }
 
-
 /*--- DATA TABLES ---*/
 
 /* fix for DTOutput and server=TRUE */
@@ -302,11 +294,25 @@ td.tbl-coords {
   overflow: auto;
 }
 
-
 /*--- STYLES ---*/
 
 .shiny-input-container:not(.shiny-input-container-inline) {
   width: unset;
+}
+
+.form-group {
+  margin-bottom: 0;
+}
+
+.label-inline {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 1rem;
+  align-items: center;
+}
+
+.label-inline > label {
+  margin-bottom: 0;
 }
 
 .site-tbl-container {
@@ -380,28 +386,33 @@ td.tbl-coords {
   border: 1px solid orange;
   border-radius: 5px;
   background-color: white;
-  padding: 5px;
+  padding: 5px 10px;
+  gap: 10px;
 }
 
-
-
 /*--- LEAFLET ---*/
+
+/* draw above leaflet control */
+.datepicker {
+  z-index: 1001 !important;
+}
 
 .search-overlay {
   position: absolute;
   bottom: 0;
   width: 100%;
-  display: inline-flex;
   padding: 0 1rem;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 1rem;
 }
 
-.search-overlay > div {
-  flex: 1;
-}
-
-#coord_search input {
-  flex: 1;
+gmp-place-autocomplete {
+  background-color: #ffffff;
+  color-scheme: light;
+  z-index: 1000;
+  border-radius: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
 }
 
 .leaflet-control-attribution {
@@ -433,14 +444,13 @@ td.tbl-coords {
 }
 
 .map-title {
-  border: 1px solid rgba(0, 0, 0, .25);
+  border: 1px solid rgba(0, 0, 0, 0.25);
   border-radius: 5px;
   padding: 4px 8px;
-  background: rgba(255, 255, 255, .8);
+  background: rgba(255, 255, 255, 0.8);
   font-size: 16px;
   font-weight: bold;
 }
-
 
 /*--- PLOTLY ---*/
 

@@ -19,7 +19,7 @@ ibm_refresh_auth <- function(
           "x-ibm-client-id" = sprintf("saascore-%s", keys$tenant_id),
           "x-api-key" = keys$api_key
         ) |>
-        req_timeout(5) |>
+        req_timeout(OPTS$ibm_auth_timeout) |>
         req_error(is_error = \(resp) FALSE)
       resp <- req_perform(req)
       status <- resp_status(resp)
@@ -178,8 +178,12 @@ ibm_create_request <- function(
       endDateTime = format(end_time, "%Y-%m-%dT%H:%M:%S%z"),
       units = "m"
     ) |>
-    req_timeout(5) |>
-    req_retry(max_tries = 2, failure_timeout = 5, retry_on_failure = TRUE) |>
+    req_timeout(OPTS$ibm_req_timeout) |>
+    req_retry(
+      max_tries = 2,
+      failure_timeout = OPTS$ibm_req_timeout,
+      retry_on_failure = TRUE
+    ) |>
     req_throttle(rate = 20)
 }
 
@@ -527,15 +531,18 @@ weather_status <- function(
   start_date = min(wx$date),
   end_date = max(wx$date)
 ) {
-
   default <- tibble(
     grid_id = NA,
     needs_download = TRUE
   )
-  if (nrow(wx) == 0) return(default)
+  if (nrow(wx) == 0) {
+    return(default)
+  }
   selected_wx <- wx |>
     filter(between(date, start_date, end_date))
-  if (nrow(selected_wx) == 0) return(default)
+  if (nrow(selected_wx) == 0) {
+    return(default)
+  }
 
   dates_expected <- seq.Date(start_date, end_date, 1)
 

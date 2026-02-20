@@ -36,9 +36,6 @@ suppressPackageStartupMessages({
 if (FALSE) {
   library(devtools)
   library(languageserver)
-  library(styler)
-  library(miniUI)
-  library(watcher)
   library(testthat)
   library(covr)
 }
@@ -47,15 +44,12 @@ if (FALSE) {
 # shiny::devmode(TRUE)
 
 ## RENV
+# renv::init()
 # renv::status()
 # renv::restore()
 # renv::update()
 # renv::snapshot()
 # renv::clean()
-
-# renv::install("httr2@1.1.0")
-# renv::install("ragg@1.4.0") # -> 1.5.0
-# renv::install("terra@1.8-60") # -> 1.8-80
 
 ## turn warnings into errors
 # options(warn = 2)
@@ -65,6 +59,7 @@ if (FALSE) {
 
 ## Run unit tests
 # testthat::test_dir("tests/testthat")
+# test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
 # Async tasks ------------------------------------------------------------------
 
@@ -95,8 +90,9 @@ OPTS <- lst(
   ),
   ibm_auth_endpoint = "https://api.ibm.com/saascore/run/authentication-retrieve/api-key",
   ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
-  # max hours per api call
-  ibm_chunk_size = 1000,
+  ibm_auth_timeout = 5,
+  ibm_req_timeout = 10,
+  ibm_chunk_size = 1000, # max hours per api call
   ibm_ignore_cols = c(
     "requestedLatitude",
     "requestedLongitude",
@@ -163,10 +159,10 @@ OPTS <- lst(
     "Daily" = "daily",
     "Moving averages" = "ma",
     "Growing degree days" = "gdd"
-    # "Disease models" = "disease"
+    # "Model models" = "Model"
   ),
 
-  ## disease risk tab ----
+  ## Model risk tab ----
   # crop_choices = setNames(names(crops), sapply(crops, \(x) x$name)),
 
   ## plotting ----
@@ -737,31 +733,6 @@ annotate_grids <- function(grids_with_status) {
 
 # UI builders ------------------------------------------------------------------
 
-warning_box <- function(html) {
-  div(
-    class = "warning-box-container",
-    div(
-      style = "color: orange; padding: 10px; font-size: 1.5em;",
-      icon("warning")
-    ),
-    div(HTML(html))
-  )
-}
-
-#' Create the missing data element based on number of sites missing
-missing_weather_ui <- function(n = 1) {
-  str <- ifelse(n == 1, "This site is ", "One or more sites are")
-  html <- paste0(
-    "<i>",
-    str,
-    " missing data based on your date selections. Press <b>Fetch weather</b> on the sidebar to download any missing data.</i>"
-  )
-  warning_box(html)
-}
-
-# missing_weather_ui(1)
-# missing_weather_ui(2)
-
 site_action_link <- function(
   action = c("edit", "save", "trash"),
   site_id,
@@ -798,35 +769,76 @@ site_action_link <- function(
 # site_action_link("save", 1, "foo")
 # site_action_link("trash", 1, "foo")
 
-disease_modal_link <- function(disease) {
-  md <- disease$doc
-  name <- disease$name
+#' @param model object created by Model() call
+#' @returns HTML
+build_modal_link <- function(model) {
+  doc <- model$doc
+  if (is.null(doc)) {
+    return()
+  }
+  name <- model$name
   title <- paste(name, "information")
   onclick <- sprintf(
     "sendShiny('show_modal', {md: '%s', title: '%s'})",
-    md,
+    doc,
     title
   )
-  shiny::HTML(sprintf(
-    "<a style='cursor:pointer' title='%s' onclick=\"%s\">More information</a>.",
-    title,
-    onclick
-  ))
+  shiny::HTML(
+    sprintf(
+      "<b><a style='cursor:pointer' title='%s' onclick=\"%s\">More&nbsp;information.</a></b>",
+      title,
+      onclick
+    )
+  )
 }
 
-# disease_modal_link(diseases$white_mold)
+# build_modal_link(model_list$whitemold)
 
+#' @param md markdown file to display
+#' @param title optional modal title
 show_modal <- function(md, title = NULL) {
   if (!file.exists(md)) {
     warning(md, " does not exist")
+    return()
   }
-  modalDialog(
+
+  m <- modalDialog(
     includeMarkdown(md),
     title = title,
     footer = modalButton("Close"),
     easyClose = TRUE
-  ) |>
-    showModal()
+  )
+  showModal(m)
+}
+
+#' @param content text or tags to display in the warning box
+build_warning_box <- function(content) {
+  if (is.null(content)) {
+    return()
+  }
+  div(
+    class = "warning-box-container",
+    div(
+      style = "color: orange; font-size: 1.5em;",
+      icon("warning")
+    ),
+    div(
+      style = "font-size: small;",
+      content
+    )
+  )
+}
+
+#' @param sites sites df with needs_download column
+weather_warning_for_sites <- function(sites) {
+  if (nrow(sites) > 0 & any(sites[["needs_download"]])) {
+    span(
+      ifelse(nrow(sites) == 1, "This site is", "One or more sites are"),
+      "missing data based on your date selections. Press",
+      strong("Fetch weather"),
+      "on the sidebar to download any missing data."
+    )
+  }
 }
 
 
@@ -893,17 +905,33 @@ load_sites <- function(fpath) {
 # load_sites("data/example-sites.csv")
 # load_sites("data/wisconet stns.csv")
 
-# Disease definitions ----------------------------------------------------------
+# Model definitions ----------------------------------------------------------
 
 #' @param name display name
+#' @param crop relevant crop or crop group
 #' @param info model info
 #' @param doc markdown file for More Information
 #' @param risk_period NULL or length two character vector eg 'Jul 1'
-Disease <- function(name, info, doc, risk_period = NULL, ...) {
-  stopifnot(
-    "Invalid parameter provided" = length(list(...)) == 0,
-    "Missing doc file" = doc %in% list.files(pattern = "*.md", recursive = TRUE)
-  )
+Model <- function(
+  ...,
+  name,
+  info,
+  crop = NULL,
+  doc = NULL,
+  risk_period = NULL
+) {
+  if (length(list(...)) > 0) {
+    stop("Invalid model config: ", names(list(...)))
+  }
+  if (!is.null(doc)) {
+    all_docs <- list.files(
+      pattern = "*.md",
+      recursive = TRUE
+    )
+    if (!(doc %in% all_docs)) {
+      stop("Missing doc file ", doc)
+    }
+  }
 
   # check that all risk period dates are valid
   if (!is.null(risk_period)) {
@@ -917,151 +945,149 @@ Disease <- function(name, info, doc, risk_period = NULL, ...) {
     )
   }
 
-  list(name = name, info = info, doc = doc, risk_period = risk_period)
+  list(
+    name = name,
+    crop = crop,
+    model_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop)),
+    info = info,
+    doc = doc,
+    risk_period = risk_period
+  )
 }
 
-diseases <- list(
-  # Corn
-  tar_spot = Disease(
+model_list <- list(
+  tarspot = Model(
     name = "Tar spot",
-    info = HTML(
-      "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity."
-    ),
+    crop = "Corn",
+    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
     doc = "docs/tar-spot.md",
     risk_period = c("Jul 1", "Aug 15")
   ),
-  gray_leaf_spot = Disease(
+
+  gls = Model(
     name = "Gray leaf spot",
-    info = HTML(
-      "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point."
-    ),
+    crop = "Corn",
+    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
     doc = "docs/gray-leaf-spot.md",
     risk_period = c("Jul 1", "Aug 15")
   ),
-  don = Disease(
+
+  don = Model(
     name = "Gibberella ear rot/DON",
-    info = HTML(
-      "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking."
-    ),
+    crop = "Corn",
+    info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this Model may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking.",
     doc = "docs/don.md",
     risk_period = c("Jul 15", "Aug 7")
   ),
 
-  # Soybean
-  white_mold = Disease(
+  whitemold = Model(
     name = "White mold",
-    info = HTML(
-      "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only)."
-    ),
+    crop = "Soybean",
+    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
     doc = "docs/white-mold.md",
     risk_period = c("Jun 15", "Aug 7")
   ),
-  frogeye = Disease(
+
+  frogeye = Model(
     name = "Frogeye leaf spot",
-    info = HTML(
-      "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity."
-    ),
+    crop = "Soybean",
+    info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
     doc = "docs/frogeye.md",
     risk_period = c("Jun 15", "Sep 7")
   ),
 
-  # Solanum
-  early_blight = Disease(
+  wheatscab = Model(
+    name = "Wheat scab FHB",
+    crop = "Wheat",
+    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on Model probability. Model depends on 14-day moving average relative humidity.",
+    doc = "docs/wheat-scab.md"
+  ),
+
+  earlyblight = Model(
     name = "Early blight",
-    info = "Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants. Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
+    crop = "Solanum",
+    info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
     doc = "docs/early-blight.md"
   ),
-  late_blight = Disease(
+
+  lateblight = Model(
     name = "Late blight",
-    info = "Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants. Risk depends on the number of disease severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
+    crop = "Solanum",
+    info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of Model severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md"
   ),
 
-  # Carrot
-  alternaria = Disease(
+  alternaria = Model(
     name = "Alternaria/Cercospora leaf blight",
-    info = "Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles. Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
+    crop = "Carrot",
+    info = "<b>Alternaria and Cercospora leaf blights are a common fungal Model of carrot leaves and petioles.</b> Risk depends on the number of Model severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md"
   ),
 
-  # Carrot + Beet
-  cercospora = Disease(
+  cercospora = Model(
     name = "Cercospora leaf spot",
-    info = "Cercospora leaf spot is a damaging fungal disease affecting beets. Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
+    crop = "Beet",
+    info = "<b>Cercospora leaf spot is a damaging fungal Model affecting beets.</b> Risk depends on the average Model severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora.md"
   ),
 
-  # Onion
-  botrytis = Disease(
+  botrytis = Model(
     name = "Botrytis leaf blight",
-    info = "Onions are susceptible to Botrytis leaf blight. Risk depends on cumulative disease severity values since crop emergence. Model depends on temperature, hours of high humidity, and precipitation.",
+    crop = "Onion",
+    info = "<b>Onions are susceptible to Botrytis leaf blight.</b> Risk depends on cumulative Model severity values since crop emergence. Model depends on temperature, hours of high humidity, and precipitation.",
     doc = "docs/botrytis.md"
   )
 )
 
 # set names as $slug
-diseases <- imap(diseases, function(disease, slug) {
-  disease$slug <- slug
-  disease
+model_list <- imap(model_list, function(m, slug) {
+  m$slug <- slug
+  m
 })
 
 
-# Crop definitions -------------------------------------------------------------
+# Cookie helpers ---------------------------------------------------------------
 
-Crop <- function(name, diseases) {
-  list(name = name, diseases = diseases)
+#' Parse and validate sites from browser cookie data
+#' @param cookie_sites the $sites value from the parsed cookie (list of site records)
+#' @returns tibble of valid sites with sequential IDs, or NULL if none
+parse_cookie_sites <- function(cookie_sites) {
+  if (length(cookie_sites) == 0) {
+    return(NULL)
+  }
+
+  sites <- tryCatch(
+    {
+      cookie_sites |>
+        bind_rows() |>
+        select(all_of(names(sites_template))) |>
+        filter(validate_ll(lat, lng)) |>
+        distinct() |>
+        head(OPTS$max_sites) |>
+        mutate(id = row_number())
+    },
+    error = function(e) NULL
+  )
+
+  if (is.null(sites) || nrow(sites) == 0) {
+    return(NULL)
+  }
+  sites
 }
 
-crops <- list(
-  corn = Crop(
-    name = "Corn",
-    diseases = list(
-      diseases$tar_spot,
-      diseases$gray_leaf_spot,
-      diseases$don
-    )
-  ),
-  soybean = Crop(
-    name = "Soybean",
-    diseases = list(
-      diseases$white_mold,
-      diseases$frogeye
-    )
-  ),
-  potato = Crop(
-    name = "Potato/tomato",
-    diseases = list(
-      diseases$early_blight,
-      diseases$late_blight
-    )
-  ),
-  carrot = Crop(
-    name = "Carrot",
-    diseases = list(
-      diseases$alternaria
-    )
-  ),
-  beet = Crop(
-    name = "Beet",
-    diseases = list(
-      diseases$cercospora
-    )
-  ),
-  onion = Crop(
-    name = "Onion",
-    diseases = list(
-      diseases$botrytis
-    )
-  )
-)
-
-# set names as $slug
-crops <- imap(crops, function(crop, slug) {
-  crop$slug <- slug
-  crop
-})
-
-OPTS$crop_choices <- build_choices(crops, "name", "slug")
+#' Get the cache file path for a user ID, creating the cache directory if needed
+#' @param user_id character user ID from the browser cookie
+#' @returns file path string, or NULL if user_id is empty/invalid
+get_cache_file <- function(user_id) {
+  if (!isTruthy(user_id)) {
+    return(NULL)
+  }
+  cache_path <- "cache"
+  if (!dir.exists(cache_path)) {
+    dir.create(cache_path)
+  }
+  file.path(cache_path, paste0(user_id, ".fst"))
+}
 
 
 # Cache cleaner ----------------------------------------------------------------
@@ -1083,11 +1109,14 @@ clean_old_caches <- function(max_age_days = 30) {
 
 # Load remaining code ----------------------------------------------------------
 
-source_dir <- function(path) {
-  files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
-  for (file in files) {
-    source(file)
-  }
-}
+# source_dir <- function(path) {
+#   files <- list.files(path, pattern = "\\.[Rr]$", full.names = TRUE)
+#   for (file in files) {
+#     source(file)
+#   }
+# }
 
-source_dir("src")
+# source_dir("src")
+
+list.files("src", pattern = "\\.[Rr]$", full.names = TRUE) |>
+  lapply(source)

@@ -3,18 +3,12 @@
 riskUI <- function() {
   ns <- NS("risk")
   div(
-    style = "margin-top: 10px;",
-    p(
-      strong(
-        "Risk models are only valid when the crop is present and in a vulnerable growth stage."
-      ),
-      "Risk may be mitigated in commercial production by application of a protective fungicide."
-    ),
+    style = "margin-top: 10px; min-height: 300px;",
     uiOutput(ns("main_ui")) |>
       withSpinner(
         type = 8,
-        size = .5,
-        proxy.height = 70,
+        size = 0.5,
+        proxy.height = 300,
         caption = "Loading..."
       )
   )
@@ -36,102 +30,73 @@ riskServer <- function(rv, wx_data) {
           need(rv$weather_ready, OPTS$validation_weather_ready)
         )
 
-        uiOutput(ns("main_ui_elems")) |>
-          withSpinner(
-            type = 8,
-            size = .5,
-            proxy.height = 70,
-            caption = "Loading..."
-          )
-      })
-
-      # shown when validation passes
-      output$main_ui_elems <- renderUI({
         tagList(
-          uiOutput(ns("crop_picker")),
-          uiOutput(ns("model_picker")),
-          uiOutput(ns("model_ui")),
-          uiOutput(ns("selected_site_ui")),
-          uiOutput(ns("risk_period_warning")),
-          uiOutput(ns("weather_missing_warning")),
-          uiOutput(ns("plots_ui"))
-        )
-      })
-
-      ## crop_picker ----
-      output$crop_picker <- renderUI({
-        choices <- OPTS$crop_choices
-
-        radioGroupButtons(
-          inputId = ns("crop"),
-          label = "Crop type:",
-          choices = choices,
-          selected = first_truthy(input$crops, first(choices)),
-          individual = TRUE,
-          size = "sm"
+          uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
+          uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
+          uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
+          uiOutput(ns("results_ui"), style = "margin-top: 1rem;"),
         )
       })
 
       ## model_picker ----
       output$model_picker <- renderUI({
-        crop_slug <- req(input$crop)
-        crop <- crops[[crop_slug]]
-        models <- crop$diseases
-        choices <- sapply(models, function(x) {
-          setNames(x[["slug"]], x[["name"]])
-        })
+        choices <- build_choices(model_list, "model_name", "slug")
 
-        radioGroupButtons(
-          inputId = ns("model"),
-          label = "Risk model:",
-          choices = choices,
-          selected = first_truthy(input$model, first(choices)),
-          individual = TRUE,
-          size = "sm"
+        tags$div(
+          style = "display: flex; align-items: center; gap: 10px;",
+          tags$label(
+            "Select model:",
+            `for` = ns("model"),
+            class = "form-group",
+          ),
+          tags$div(
+            style = "flex: 1;",
+            selectInput(
+              inputId = ns("model"),
+              label = NULL,
+              choices = choices,
+              selected = first_truthy(input$model, first(choices))
+            )
+          )
         )
       })
 
       ## selected_model() - reactive ----
       selected_model <- reactive({
         model_slug <- req(input$model)
-        diseases[[model_slug]]
+        model_list[[model_slug]]
       })
 
       ## model_ui ----
       output$model_ui <- renderUI({
         model <- selected_model()
 
-        tagList(
+        div(
+          style = "padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;",
           div(
-            style = "margin: 10px 0; font-style: italic;",
-            model$info,
-            disease_modal_link(model)
+            HTML(model$info),
+            "Risk models are only valid when the crop is present and in a vulnerable growth stage. Risk may be mitigated in commercial production by application of a protective fungicide.",
+            build_modal_link(model)
           ),
-
-          # model-specific additional ui elements
-          uiOutput(ns("white_mold_ui"))
+          uiOutput(ns("whitemold_opts")),
+          uiOutput(ns("wheatscab_opts")),
         )
       })
 
-      ## white_mold_ui ----
+      ## white_mold_opts ----
       # irrigation and crop spacing picker for white mold model
-      output$white_mold_ui <- renderUI({
-        model <- req(input$model)
-        req(model == "white_mold")
+      output$whitemold_opts <- renderUI({
+        req(identical(input$model, model_list$whitemold$slug))
 
-        uiOutput(ns("white_mold_opts"))
-      })
-
-      output$white_mold_opts <- renderUI({
         irrigation_choices <- list("Dry" = FALSE, "Irrigated" = TRUE)
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
 
         div(
           class = "flex-across",
-          style = "row-gap: 0px; column-gap: 30px;",
+          style = "margin-top: 1rem; column-gap: 2rem;",
           div(
-            class = "flex-across",
-            tags$label("Irrigation:"),
+            class = "label-inline",
+            tags$label("Irrigation:", `for` = ns("irrigation")),
             radioButtons(
               inputId = ns("irrigation"),
               label = NULL,
@@ -142,10 +107,11 @@ riskServer <- function(rv, wx_data) {
             ),
           ),
           conditionalPanel(
-            "input['risk-irrigation'] == 'TRUE'",
+            "input['irrigation'] == 'TRUE'",
+            ns = ns,
             div(
-              class = "flex-across",
-              tags$label("Row spacing:"),
+              class = "label-inline",
+              tags$label("Row spacing:", `for` = ns("spacing")),
               radioButtons(
                 inputId = ns("spacing"),
                 label = NULL,
@@ -158,19 +124,99 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
-      ## show_all_sites_ui ----
+      ## wheat_scab_opts ----
+      output$wheatscab_opts <- renderUI({
+        req(identical(input$model, model_list$wheatscab$slug))
+
+        choices <- list(
+          "Very susceptible" = "VS",
+          "Susceptible" = "S",
+          "Moderately susceptible" = "MS",
+          "Moderately resistant" = "MR"
+        )
+
+        div(
+          style = "margin-top: 1rem;",
+          class = "label-inline",
+          tags$label("FHB resistance:", `for` = ns("resistance")),
+          radioButtons(
+            inputId = ns("resistance"),
+            label = NULL,
+            choices = choices,
+            selected = isolate(input$resistance) %||%
+              first(choices),
+            inline = TRUE
+          )
+        )
+      })
+
+      ## model_warning_ui ----
+      # Display warnings for various conditions
+      output$model_warnings <- renderUI({
+        req(rv$weather_ready)
+        model <- selected_model()
+        sites <- selected_sites()
+        selected_dates <- req(wx_data()$dates)
+        warnings <- list()
+
+        # warning for missing weather
+        warnings$wx <- weather_warning_for_sites(sites)
+
+        # warning when outside of risk period
+        if (!is.null(model$risk_period)) {
+          dates <- c(selected_dates$start, selected_dates$end)
+          risk_dates <- model$risk_period
+          does_overlap <- check_date_overlap(dates, risk_dates)
+          if (!any(does_overlap)) {
+            warnings$risk_period <- "The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+          }
+        }
+
+        req(length(warnings) > 0)
+
+        content <- if (length(warnings) > 1) {
+          tagList(
+            strong("Warnings:"),
+            br(),
+            tags$ul(
+              lapply(warnings, tags$li)
+            )
+          )
+        } else {
+          tagList(
+            strong("Warning:"),
+            warnings
+          )
+        }
+
+        build_warning_box(content)
+      })
+
+      # results_ui ----
+      output$results_ui <- renderUI({
+        validate(
+          need(
+            rv$weather_ready,
+            "No weather data downloaded yet for selected dates."
+          )
+        )
+
+        tagList(
+          uiOutput(ns("plot_feed_opts")),
+          uiOutput(ns("plots_ui"))
+        )
+      })
+
+      ## plot_feed_opts ----
       # shown when more than one site
-      output$selected_site_ui <- renderUI({
+      output$plot_feed_opts <- renderUI({
         sites <- wx_data()$sites
         req(nrow(sites) > 1)
 
-        uiOutput(ns("selected_site_opts"))
-      })
-
-      output$selected_site_opts <- renderUI({
         div(
-          class = "flex-across",
-          tags$label("Show results for:"),
+          style = "padding: 0 1rem;",
+          class = "label-inline",
+          tags$label("Show results for:", `for` = ns("show_all_sites")),
           radioButtons(
             inputId = ns("show_all_sites"),
             label = NULL,
@@ -198,40 +244,6 @@ riskServer <- function(rv, wx_data) {
         sites
       })
 
-      ## risk_period_warning ----
-      # shows a warning when the entire date range is outside the risk window
-      output$risk_period_warning <- renderUI({
-        req(rv$weather_ready)
-        model <- selected_model()
-        selected_dates <- req(wx_data()$dates)
-        risk_dates <- req(model$risk_period)
-
-        dates <- c(selected_dates$start, selected_dates$end)
-        does_overlap <- check_date_overlap(dates, risk_dates)
-
-        req(!any(does_overlap))
-
-        div(
-          style = "margin-bottom: 1rem;",
-          warning_box(
-            "<b>Note:</b> The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
-          )
-        )
-      })
-
-      ## weather_missing_warning ----
-      # display warning when days_missing > 0 for any site
-      output$weather_missing_warning <- renderUI({
-        req(rv$weather_ready)
-        sites <- selected_sites()
-        req(nrow(sites) > 0 && any(sites$needs_download))
-
-        div(
-          style = "margin-bottom: 1rem;",
-          missing_weather_ui(n = nrow(sites))
-        )
-      })
-
       # Generate model data ----
 
       ## model_data - reactive ----
@@ -244,20 +256,25 @@ riskServer <- function(rv, wx_data) {
 
         df <- switch(
           model,
-          "tar_spot" = build_tar_spot(wx),
-          "gray_leaf_spot" = build_gray_leaf_spot(wx),
+          "tarspot" = build_tar_spot(wx),
+          "gls" = build_gray_leaf_spot(wx),
           "don" = build_don(wx),
-          "white_mold" = if (req(input$irrigation)) {
+          "whitemold" = if (req(input$irrigation)) {
             build_white_mold_irrig(wx, req(input$spacing))
           } else {
             build_white_mold_dry(wx)
           },
           "frogeye" = build_frogeye_leaf_spot(wx),
-          "early_blight" = build_early_blight(wx),
-          "late_blight" = build_late_blight(wx),
+          "wheatscab" = build_wheat_scab(
+            wx,
+            resistance = req(input$resistance)
+          ),
+          "earlyblight" = build_early_blight(wx),
+          "lateblight" = build_late_blight(wx),
           "alternaria" = build_alternaria(wx),
           "cercospora" = build_cercospora(wx),
-          "botrytis" = build_botrytis(wx)
+          "botrytis" = build_botrytis(wx),
+          warning("Don't know how to build data for model '", model, "'")
         )
 
         filter(df, date >= date_range$start)

@@ -551,82 +551,111 @@ test_that("load_sites loads valid CSV", {
 })
 
 
-# Disease definitions ----------------------------------------------------------
+# Cookie helpers ---------------------------------------------------------------
+
+test_that("parse_cookie_sites returns NULL for empty/missing input", {
+  expect_null(parse_cookie_sites(list()))
+  expect_null(parse_cookie_sites(NULL))
+})
+
+test_that("parse_cookie_sites parses valid sites", {
+  cookie_sites <- list(
+    list(id = 1, name = "Site A", lat = 45, lng = -89),
+    list(id = 2, name = "Site B", lat = 44, lng = -88)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_s3_class(result, "data.frame")
+  expect_equal(nrow(result), 2)
+  expect_true(all(c("id", "name", "lat", "lng") %in% names(result)))
+})
+
+test_that("parse_cookie_sites filters out invalid coordinates", {
+  cookie_sites <- list(
+    list(id = 1, name = "Valid", lat = 45, lng = -89),
+    list(id = 2, name = "Invalid", lat = 0, lng = 0)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_equal(nrow(result), 1)
+  expect_equal(result$name, "Valid")
+})
+
+test_that("parse_cookie_sites reassigns sequential IDs", {
+  cookie_sites <- list(
+    list(id = 5, name = "A", lat = 45, lng = -89),
+    list(id = 10, name = "B", lat = 44, lng = -88)
+  )
+  result <- parse_cookie_sites(cookie_sites)
+  expect_equal(result$id, 1:2)
+})
+
+test_that("parse_cookie_sites returns NULL when columns are missing", {
+  expect_null(parse_cookie_sites(list(list(bad_col = "data"))))
+})
+
+test_that("get_cache_file returns correct path", {
+  path <- get_cache_file("abc123")
+  expect_equal(path, file.path("cache", "abc123.fst"))
+})
+
+test_that("get_cache_file returns NULL for empty/missing user_id", {
+  expect_null(get_cache_file(NULL))
+  expect_null(get_cache_file(""))
+})
+
+
+# Model definitions ----------------------------------------------------------
 
 example_doc <- "example.md"
 
-test_that("diseases list is properly structured", {
-  expect_true(length(diseases) > 0)
-  for (disease in diseases) {
-    expect_true("name" %in% names(disease))
-    expect_true("info" %in% names(disease))
-    expect_true("doc" %in% names(disease))
-    expect_true("slug" %in% names(disease))
+test_that("model_list list is properly structured", {
+  expect_true(length(model_list) > 0)
+  for (model in model_list) {
+    expect_named(
+      model,
+      c("name", "crop", "model_name", "info", "doc", "risk_period", "slug")
+    )
   }
 })
 
-test_that("crops list is properly structured", {
-  expect_true(length(crops) > 0)
-  for (crop in crops) {
-    expect_true("name" %in% names(crop))
-    expect_true("diseases" %in% names(crop))
-    expect_true("slug" %in% names(crop))
-    expect_true(length(crop$diseases) > 0)
-  }
-})
-
-test_that("Disease creates valid disease object", {
-  disease <- Disease(
-    name = "Test Disease",
+test_that("Model creates valid model config object", {
+  m <- Model(
+    name = "Test Model",
+    crop = "Any",
     info = "Test info",
     doc = example_doc
   )
-  expect_equal(disease$name, "Test Disease")
-  expect_equal(disease$info, "Test info")
-  expect_equal(disease$doc, example_doc)
-  expect_null(disease$risk_period)
+  expect_equal(m$name, "Test Model")
+  expect_equal(m$crop, "Any")
+  expect_equal(m$info, "Test info")
+  expect_equal(m$doc, example_doc)
+  expect_null(m$risk_period)
 })
 
-test_that("Disease validates risk_period dates", {
-  disease <- Disease(
+test_that("Model validates risk_period dates", {
+  m <- Model(
     name = "Test",
     info = "Test",
     doc = example_doc,
     risk_period = c("Jul 1", "Aug 15")
   )
-  expect_equal(disease$risk_period, c("Jul 1", "Aug 15"))
+  expect_equal(m$risk_period, c("Jul 1", "Aug 15"))
 })
 
-test_that("Disease errors on missing doc file", {
+test_that("Model errors on invalid doc file", {
   expect_error(
-    Disease(name = "Test", info = "Test", doc = "nonexistent.md"),
+    Model(name = "Test", info = "Test", doc = "nonexistent.md"),
     "Missing doc file"
   )
 })
 
-test_that("Disease errors on invalid parameters", {
+test_that("Model errors on invalid parameters", {
   expect_error(
-    Disease(
+    Model(
       name = "Test",
       info = "Test",
       doc = example_doc,
       invalid_param = TRUE
     ),
-    "Invalid parameter"
+    "Invalid model config: invalid_param"
   )
-})
-
-
-# Crop definitions -------------------------------------------------------------
-
-test_that("Crop creates valid crop object", {
-  disease <- Disease(
-    name = "Test Disease",
-    info = "Test info",
-    doc = example_doc
-  )
-  crop <- Crop(name = "Test Crop", diseases = list(disease))
-  expect_equal(crop$name, "Test Crop")
-  expect_equal(length(crop$diseases), 1)
-  expect_equal(crop$diseases[[1]]$name, "Test Disease")
 })

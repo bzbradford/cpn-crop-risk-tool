@@ -346,6 +346,25 @@ predict_fls <- function(MaxAT_30ma, HrsRH80_30ma) {
 }
 
 
+#' Wheat scab model - fusarium head blight
+#' Relevant during wheat flowering
+#' Risk criteria: High >= .32, Medium >= .24, Low > 0
+#' @param mean_rh_14ma mean daily relative humidity 0-100, 14 day rolling mean
+#' @returns matrix of disease probabilities by scab resistance rating
+predict_wheat_scab <- function(mean_rh_14ma) {
+  res <- c(
+    "VS" = 0, # very susceptible
+    "S" = -0.82795556, # susceptible
+    "MS" = -1.4812696, # moderately susceptible
+    "MR" = -1.8484537 # moderately resistant
+  )
+  sapply(res, function(r) {
+    mu <- -3.6432643 + r + 0.051459669 * mean_rh_14ma
+    logistic(mu)
+  })
+}
+
+
 # Vegetable Disease Models -----------------------------------------------------
 
 ## Early blight ----
@@ -528,6 +547,7 @@ assign_risk <- function(model, value) {
     "white_mold_dry_prob" = risk_from_prob(value, .01, 20, 35),
     "white_mold_irrig_prob" = risk_from_prob(value, .01, 5, 10),
     "frogeye_leaf_spot_prob" = risk_from_prob(value, 1, 40, 50),
+    "wheat_scab_prob" = risk_from_prob(value, 1, 24, 32),
     "early_blight_pdays" = risk_for_early_blight(value),
     "late_blight_dsv" = risk_for_late_blight(value),
     "alternaria_dsv" = risk_for_alternaria(value),
@@ -739,9 +759,9 @@ test_plot <- function(df) {
 # build tar spot risk probability from daily weather
 # this model overwinters at 100% risk so use an attenuation function
 build_tar_spot <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       temperature_mean_30day = roll_mean(temperature_mean, 30),
       temperature_min_21day = roll_mean(temperature_min, 21),
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
@@ -755,37 +775,33 @@ build_tar_spot <- function(daily) {
       assign_risk("tar_spot_prob", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_tar_spot() |> test_plot()
 
 # build gray leaf spot risk probability from daily weather
 build_gray_leaf_spot <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       temperature_min_21day = roll_mean(temperature_min, 21),
       dew_point_min_30day = roll_mean(dew_point_min, 30),
       model_value = predict_gls(temperature_min_21day, dew_point_min_30day),
       assign_risk("gray_leaf_spot_prob", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_gray_leaf_spot() |> test_plot()
 
 # build don risk probability from daily weather
 build_don <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     replace_na(list(precip_daily = 0)) |>
     mutate(
+      date = date,
       temp_max_14day = roll_mean(temperature_max, 14),
       temp_min_14day = roll_mean(temperature_min, 14),
       days_temp_over_25_14day = roll_sum(temperature_mean >= 25, 14),
@@ -804,8 +820,6 @@ build_don <- function(daily) {
       .by = grid_id,
       .keep = "used"
     ) |>
-    select(-grid_id)
-  bind_cols(attr, disease) |>
     drop_na(model_value)
 }
 
@@ -813,9 +827,9 @@ build_don <- function(daily) {
 
 # build white mold non-irrigated risk probability from daily weather
 build_white_mold_dry <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
       temperature_min_21day = roll_mean(temperature_min, 21),
       wind_speed_max_30day = roll_mean(wind_speed_max, 30),
@@ -829,9 +843,7 @@ build_white_mold_dry <- function(daily) {
       assign_risk("white_mold_dry_prob", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_white_mold_dry() |> test_plot()
@@ -839,9 +851,9 @@ build_white_mold_dry <- function(daily) {
 # build white mold irrigated risk probability from daily weather
 build_white_mold_irrig <- function(daily, spacing = c("30", "15")) {
   spacing <- match.arg(spacing)
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
       model_value = predict_white_mold_irrig(
@@ -852,9 +864,7 @@ build_white_mold_irrig <- function(daily, spacing = c("30", "15")) {
       assign_risk("white_mold_irrig_prob", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_white_mold_irrig("30") |> test_plot()
@@ -862,9 +872,9 @@ build_white_mold_irrig <- function(daily, spacing = c("30", "15")) {
 
 # build frogeye leaf spot risk probability from daily weather
 build_frogeye_leaf_spot <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
       temperature_mean_30day = roll_mean(temperature_mean, 30),
       temperature_min_21day = roll_mean(temperature_min, 21),
@@ -877,18 +887,32 @@ build_frogeye_leaf_spot <- function(daily) {
       assign_risk("frogeye_leaf_spot_prob", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_frogeye_leaf_spot() |> test_plot()
 
+# build wheat scab risk probability from daily weather
+build_wheat_scab <- function(daily, resistance) {
+  daily |>
+    mutate(
+      date = date,
+      rh_mean_14day = roll_mean(relative_humidity_mean, 14),
+      model_value = predict_wheat_scab(rh_mean_14day)[, resistance],
+      assign_risk("wheat_scab_prob", model_value),
+      .by = grid_id,
+      .keep = "used"
+    )
+}
+
+# test_hourly_wx |> build_daily() |> build_wheat_scab("VS") |> test_plot()
+# test_hourly_wx |> build_daily() |> build_wheat_scab("MR") |> test_plot()
+
 # build early blight potato physiological days and risk scores from daily weather
 build_early_blight <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       model_value = calc_pdays(
         temperature_min,
         temperature_max
@@ -896,18 +920,16 @@ build_early_blight <- function(daily) {
       assign_risk("early_blight_pdays", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_early_blight() |> test_plot()
 
 # build late blight disease severity values and risk scores from daily weather
 build_late_blight <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       model_value = calc_late_blight_dsv(
         temperature_mean_rh_over_90,
         hours_rh_over_90
@@ -915,18 +937,16 @@ build_late_blight <- function(daily) {
       assign_risk("late_blight_dsv", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_late_blight() |> test_plot()
 
 # build alternaria disease severity values and risk scores from daily weather
 build_alternaria <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       model_value = calc_alternaria_dsv(
         temperature_mean_rh_over_90,
         hours_rh_over_90
@@ -934,18 +954,16 @@ build_alternaria <- function(daily) {
       assign_risk("alternaria_dsv", model_value),
       .by = grid_id,
       .keep = "used"
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_alternaria() |> test_plot()
 
 # build cercospora daily infection values and risk scores from daily weather
 build_cercospora <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       model_value = calc_cercospora_div(
         temperature_mean_rh_over_90,
         hours_rh_over_90
@@ -953,18 +971,16 @@ build_cercospora <- function(daily) {
       assign_risk("cercospora_div", model_value),
       .by = grid_id,
       .keep = "used",
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_cercospora() |> test_plot()
 
 # build botrytis disease severity index and risk scores from daily weather
 build_botrytis <- function(daily) {
-  attr <- daily |> select(grid_id, date)
-  disease <- daily |>
+  daily |>
     mutate(
+      date = date,
       model_value = calc_botrytis_dsi(
         hot_past_5_days,
         dry,
@@ -974,9 +990,7 @@ build_botrytis <- function(daily) {
       assign_risk("botrytis_dsi", model_value),
       .by = grid_id,
       .keep = "used",
-    ) |>
-    select(-grid_id)
-  bind_cols(attr, disease)
+    )
 }
 
 # test_hourly_wx |> build_daily() |> build_botrytis() |> test_plot()

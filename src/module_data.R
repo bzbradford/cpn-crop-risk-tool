@@ -111,21 +111,25 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         validate(need(rv$ready, OPTS$validation_weather_ready))
 
         tagList(
-          div(
-            class = "flex-across",
-            style = "margin-top: 1rem; gap: 30px;",
-            uiOutput(ns("metric_switch")),
-            uiOutput(ns("forecast_switch"))
-          ),
-          uiOutput(ns("data_type_ui")),
+          # metric/forecast switches
+          uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
+          # dataset selector
+          uiOutput(ns("data_type_ui"), style = "margin-top: 1rem;"),
+          # dataset options like rolling mean, may be blank
           uiOutput(ns("data_options_ui")),
-          uiOutput(ns("plot_cols_ui")),
+          # which columns to plot
+          uiOutput(ns("plot_cols_ui"), style = "margin-top: 1rem;"),
+          # shown if more than one site
           uiOutput(ns("plot_sites_ui")),
+          # warning if there is missing data
           uiOutput(ns("weather_missing_ui")),
+          # main plot area
           div(
             class = "plotly-container",
+            style = "margin-top: 1rem;",
             plotlyOutput(ns("data_plot"))
           ),
+          # download button
           div(
             style = "text-align: right;",
             downloadButton(
@@ -138,12 +142,16 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       })
 
       ## metric_switch ----
-      output$metric_switch <- renderUI({
-        materialSwitch(
-          inputId = ns("metric"),
-          label = "Use metric",
-          value = isolate(input$metric) %||% FALSE,
-          status = "primary"
+      output$switches_ui <- renderUI({
+        div(
+          class = "flex-across",
+          materialSwitch(
+            inputId = ns("metric"),
+            label = "Use metric",
+            value = isolate(input$metric) %||% FALSE,
+            status = "primary"
+          ),
+          uiOutput(ns("forecast_switch"))
         )
       })
 
@@ -151,11 +159,14 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       output$forecast_switch <- renderUI({
         dates <- wx_data()$dates
         req(dates$end == today())
-        materialSwitch(
-          inputId = ns("forecast"),
-          label = "Show forecast",
-          value = input$forecast %||% TRUE,
-          status = "primary"
+        div(
+          style = "margin-left: 2rem;",
+          materialSwitch(
+            inputId = ns("forecast"),
+            label = "Show forecast",
+            value = input$forecast %||% TRUE,
+            status = "primary"
+          )
         )
       })
 
@@ -180,6 +191,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (type == "ma") {
           div(
             class = "flex-across",
+            style = "margin-top: 1rem;",
             div(tags$label("Moving average type:")),
             radioButtons(
               inputId = ns("ma_align"),
@@ -197,10 +209,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         sites <- wx_data()$sites
         req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
 
-        div(
-          style = "margin-bottom: 15px;",
-          missing_weather_ui(n = nrow(sites))
-        )
+        weather_warning_for_sites(sites) |>
+          build_warning_box()
       })
 
       ## plot_sites_ui ----
@@ -305,14 +315,16 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       ## data_plot - renderPlotly ----
       output$data_plot <- renderPlotly({
-        wx <- wx_data()
-        sites <- wx$sites
         df <- selected_data()
+        sites <- wx_data()$sites
+        dates <- wx_data()$dates
+
         req(nrow(sites) > 0)
 
+        # build main options list from vars and inputs
         opts <- lst(
           multi_site = nrow(sites) > 1,
-          dates = wx$dates,
+          dates = dates,
           date_range = c(
             ymd_hms(paste(dates$start, "00:00:00")),
             ymd_hms(paste(max(df$date), "23:00:00"))
@@ -322,161 +334,20 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           cols = req(input$plot_cols),
           unit_system = ifelse(input$metric, "metric", "imperial"),
           site_ids = unique(df$site_id),
+          show_forecast = input$forecast,
           filename = download_filename()$plot
         )
 
+        # if multiple sites filter by the ones selected in the UI
         if (opts$multi_site) {
           opts$selected_ids <- req(input$plot_sites)
           df <- filter(df, site_id %in% opts$selected_ids)
         }
+
         req(nrow(df) > 0)
         req(all(opts$cols %in% names(df)))
 
-        # change marker style depending on amount of data
-        opts$mode <- ifelse(nrow(df) <= 100, "lines+markers", "lines")
-        opts$linewidth <- ifelse(nrow(df) <= 500, 2, 1)
-
-        # create plot title
-        opts$title <- if (!opts$multi_site) {
-          req(nrow(sites) == 1)
-          sprintf(
-            "%s data for %.3f°N, %.3f°W",
-            opts$data_name,
-            sites$lat,
-            sites$lng
-          )
-        } else {
-          site_locs <-
-            with(
-              filter(sites, id %in% opts$selected_ids),
-              sprintf("Site %s: %.2f,%.2f", id, lat, lng)
-            ) |>
-            paste(collapse = " / ") |>
-            str_wrap(120) |>
-            str_replace_all("\\\n", "<br>")
-          paste0(
-            opts$data_name,
-            " data<br><span style='font-size:12px;font-style:italic;'>",
-            site_locs,
-            "</span>"
-          )
-        }
-
-        if ("datetime_local" %in% names(df)) {
-          df$date <- df$datetime_local
-        }
-
-        # try to assign the columns to axes with values in similar ranges
-        # also bunches the more numerous columns on the left
-        col_ranges <- df |>
-          summarize(across(all_of(opts$cols), ~ calc_max(.x))) |>
-          pivot_longer(everything()) |>
-          drop_na(value) |>
-          mutate(value = sqrt(abs(value))) |>
-          mutate(y2 = value >= mean(value) - .5) |>
-          mutate(y2 = if (mean(y2) > .5) !y2 else y2) |>
-          mutate(axis = if_else(y2, "y2", "y1"))
-
-        y1_title <- filter(col_ranges, axis == "y1")$name |>
-          make_clean_names("title") |>
-          paste(collapse = ", ")
-        y2_title <- filter(col_ranges, axis == "y2")$name |>
-          make_clean_names("title") |>
-          paste(collapse = ", ")
-
-        plt <- plot_ly() |>
-          layout(
-            title = list(
-              text = opts$title,
-              font = OPTS$plot_title_font
-            ),
-            hovermode = "x",
-            showlegend = TRUE,
-            margin = list(t = 50, r = 50),
-            legend = list(
-              orientation = "h",
-              font = OPTS$plot_legend_font
-            ),
-            xaxis = list(
-              range = opts$date_range
-            ),
-            yaxis = list(
-              title = list(
-                text = str_wrap(y1_title, 40),
-                font = OPTS$plot_axis_font
-              ),
-              fixedrange = TRUE
-            ),
-            yaxis2 = list(
-              overlaying = "y",
-              side = "right",
-              title = list(
-                text = str_wrap(y2_title, 40),
-                font = OPTS$plot_axis_font
-              ),
-              fixedrange = TRUE
-            )
-          ) |>
-          config(
-            displaylogo = FALSE,
-            toImageButtonOptions = list(
-              format = "png",
-              filename = opts$filename,
-              height = 800,
-              width = 1500,
-              scale = 1
-            )
-          )
-
-        for (col in opts$cols) {
-          col_name <- make_clean_names(col, "title")
-          col_axis <- filter(col_ranges, name == col)$axis
-
-          add_trace_to_plot <- function(plt, x, y, name) {
-            add_trace(
-              plt,
-              x = x,
-              y = y,
-              name = name,
-              type = "scatter",
-              mode = opts$mode,
-              yaxis = col_axis,
-              hovertemplate = paste0(
-                "%{y:.3~f}",
-                find_unit(col, opts$unit_system)
-              ),
-              line = list(shape = "spline", width = opts$linewidth)
-            )
-          }
-
-          if (opts$multi_site) {
-            for (id in opts$selected_ids) {
-              site_df <- df |> filter(site_id == id)
-              name <- str_trunc(first(site_df$site_name), 15)
-              plt <- add_trace_to_plot(
-                plt,
-                x = site_df$date,
-                y = site_df[[col]],
-                name = sprintf("%s: %s - %s", id, name, col_name)
-              )
-            }
-          } else {
-            plt <- add_trace_to_plot(
-              plt,
-              x = df$date,
-              y = df[[col]],
-              name = col_name
-            )
-          }
-        }
-
-        # indicate forecast
-        if (isTruthy(input$forecast)) {
-          annot <- plotly_get_forecast_annot(xmax = opts$date_range[2])
-          plt |> layout(shapes = annot$shapes, annotations = annot$annotations)
-        } else {
-          plt
-        }
+        build_data_plot(df, sites, opts)
       })
 
       # Download button ----
