@@ -51,10 +51,6 @@ if (FALSE) {
 # renv::snapshot()
 # renv::clean()
 
-# renv::install("httr2@1.1.0")
-# renv::install("ragg@1.4.0") # -> 1.5.0
-# renv::install("terra@1.8-60") # -> 1.8-80
-
 ## turn warnings into errors
 # options(warn = 2)
 
