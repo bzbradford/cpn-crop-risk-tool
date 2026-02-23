@@ -2,7 +2,7 @@
 '$schema' = 'https://cdn.posit.co/publisher/schemas/posit-publishing-record-schema-v3.json'
 server_type = 'connect'
 server_url = 'https://connect.doit.wisc.edu'
-client_version = '1.31.8'
+client_version = '1.35.0'
 created_at = ''
 dismissed_at = ''
 type = 'r-shiny'
@@ -11,9 +11,9 @@ id = '4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 dashboard_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 direct_url = 'https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/'
 logs_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs'
-deployed_at = '2026-02-19T16:34:23-06:00'
-bundle_id = '4525'
-bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4525/download'
+deployed_at = '2026-02-23T16:24:07-06:00'
+bundle_id = '4537'
+bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4537/download'
 files = [
   '.Renviron',
   '.posit/publish/Crop Risk Tool-TGSR.toml',
@@ -47,9 +47,6 @@ files = [
   'global.R',
   'ibm_auth.rds',
   'renv.lock',
-  'renv/.gitignore',
-  'renv/activate.R',
-  'renv/settings.json',
   'server.R',
   'src/api_ibm.R',
   'src/api_noaa_forecast.R',
@@ -88,7 +85,6 @@ files = [
   '/ui.R',
   '/src',
   '/server.R',
-  '/renv',
   '/ibm_auth.rds',
   '/docs',
   '/data',
@@ -830,29 +826,6 @@ needscompilation = 'no'
 author = 'Hadley Wickham [aut, cre], RStudio [cph, fnd]'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate'
-
-[renv.packages.covr]
-package = 'covr'
-version = '3.6.5'
-source = 'Repository'
-repository = 'RSPM'
-depends = ['R (>= 3.1.0)', 'methods']
-hash = ''
-title = 'Test Coverage for Packages'
-'authors@r' = 'c( person("Jim", "Hester", email = "james.f.hester@gmail.com", role = c("aut", "cre")), person("Willem", "Ligtenberg", role = "ctb"), person("Kirill", "Müller", role = "ctb"), person("Henrik", "Bengtsson", role = "ctb"), person("Steve", "Peak", role = "ctb"), person("Kirill", "Sevastyanenko", role = "ctb"), person("Jon", "Clayden", role = "ctb"), person("Robert", "Flight", role = "ctb"), person("Eric", "Brown", role = "ctb"), person("Brodie", "Gaslam", role = "ctb"), person("Will", "Beasley", role = "ctb"), person("Robert", "Krzyzanowski", role = "ctb"), person("Markus", "Wamser", role = "ctb"), person("Karl", "Forner", role = "ctb"), person("Gergely", "Daróczi", role = "ctb"), person("Jouni", "Helske", role = "ctb"), person("Kun", "Ren", role = "ctb"), person("Jeroen", "Ooms", role = "ctb"), person("Ken", "Williams", role = "ctb"), person("Chris", "Campbell", role = "ctb"), person("David", "Hugh-Jones", role = "ctb"), person("Qin", "Wang", role = "ctb"), person("Doug", "Kelkhoff", role = "ctb"), person("Ivan", "Sagalaev", role = c("ctb", "cph"), comment = "highlight.js library"), person("Mark", "Otto", role = "ctb", comment = "Bootstrap library"), person("Jacob", "Thornton", role = "ctb", comment = "Bootstrap library"), person(family = "Bootstrap contributors", role = "ctb", comment = "Bootstrap library"), person(family = "Twitter, Inc", role = "cph", comment = "Bootstrap library") )'
-maintainer = 'Jim Hester <james.f.hester@gmail.com>'
-description = "Track and report code coverage for your package and (optionally) upload the results to a coverage service like 'Codecov' <https://about.codecov.io> or 'Coveralls' <https://coveralls.io>. Code coverage is a measure of the amount of code being exercised by a set of tests. It is an indirect measure of test quality and completeness. This package is compatible with any testing methodology or framework and tracks coverage of both R code and compiled C/C++/FORTRAN code."
-url = 'https://covr.r-lib.org, https://github.com/r-lib/covr'
-bugreports = 'https://github.com/r-lib/covr/issues'
-license = 'MIT + file LICENSE'
-imports = ['digest', 'stats', 'utils', 'jsonlite', 'rex', 'httr', 'cli', 'withr (>= 1.0.2)', 'yaml']
-suggests = ['R6', 'S7 (>= 0.2.0)', 'curl', 'knitr', 'rmarkdown', 'htmltools', 'DT (>= 0.2)', 'testthat (>= 3.0.0)', 'rlang', 'rstudioapi (>= 0.2)', 'xml2 (>= 1.0.0)', 'parallel', 'memoise', 'covr', 'box (>= 1.2.0)']
-vignettebuilder = 'knitr'
-roxygennote = '7.3.3'
-encoding = 'UTF-8'
-needscompilation = 'yes'
-author = 'Jim Hester [aut, cre], Willem Ligtenberg [ctb], Kirill Müller [ctb], Henrik Bengtsson [ctb], Steve Peak [ctb], Kirill Sevastyanenko [ctb], Jon Clayden [ctb], Robert Flight [ctb], Eric Brown [ctb], Brodie Gaslam [ctb], Will Beasley [ctb], Robert Krzyzanowski [ctb], Markus Wamser [ctb], Karl Forner [ctb], Gergely Daróczi [ctb], Jouni Helske [ctb], Kun Ren [ctb], Jeroen Ooms [ctb], Ken Williams [ctb], Chris Campbell [ctb], David Hugh-Jones [ctb], Qin Wang [ctb], Doug Kelkhoff [ctb], Ivan Sagalaev [ctb, cph] (highlight.js library), Mark Otto [ctb] (Bootstrap library), Jacob Thornton [ctb] (Bootstrap library), Bootstrap contributors [ctb] (Bootstrap library), Twitter, Inc [cph] (Bootstrap library)'
-'config/testthat/edition' = '3'
 
 [renv.packages.cpp11]
 package = 'cpp11'
@@ -2122,9 +2095,9 @@ author = 'Winston Chang [aut] (ORCID: <https://orcid.org/0000-0002-1576-2126>), 
 
 [renv.packages.lattice]
 package = 'lattice'
-version = '0.22-9'
+version = '0.22-7'
 source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
+repository = 'CRAN'
 depends = ['R (>= 4.0.0)']
 hash = ''
 title = 'Trellis Graphics for R'
@@ -2136,9 +2109,8 @@ bugreports = 'https://github.com/deepayan/lattice/issues'
 license = 'GPL (>= 2)'
 imports = ['grid', 'grDevices', 'graphics', 'stats', 'utils']
 suggests = ['KernSmooth', 'MASS', 'latticeExtra', 'colorspace']
-encoding = 'UTF-8'
 needscompilation = 'yes'
-author = 'Deepayan Sarkar [aut, cre] (ORCID: <https://orcid.org/0000-0003-4107-1553>), Felix Andrews [ctb], Kevin Wright [ctb] (documentation), Neil Klepeis [ctb], Johan Larsson [ctb] (miscellaneous improvements), Zhijian (Jason) Wen [cph] (filled contour code), Paul Murrell [ctb], Stefan Eng [ctb] (violin plot improvements), Achim Zeileis [ctb] (modern colors), Alexandre Courtiol [ctb] (generics for larrows, lpolygon, lrect and lsegments)'
+author = 'Deepayan Sarkar [aut, cre] (<https://orcid.org/0000-0003-4107-1553>), Felix Andrews [ctb], Kevin Wright [ctb] (documentation), Neil Klepeis [ctb], Johan Larsson [ctb] (miscellaneous improvements), Zhijian (Jason) Wen [cph] (filled contour code), Paul Murrell [ctb], Stefan Eng [ctb] (violin plot improvements), Achim Zeileis [ctb] (modern colors), Alexandre Courtiol [ctb] (generics for larrows, lpolygon, lrect and lsegments)'
 
 [renv.packages.lazyeval]
 package = 'lazyeval'
@@ -2184,11 +2156,17 @@ author = 'Joe Cheng [aut], Barret Schloerke [aut] (ORCID: <https://orcid.org/000
 
 [renv.packages.'leaflet.extras']
 package = 'leaflet.extras'
-version = '2.0.1'
-source = 'Repository'
-repository = 'RSPM'
+version = '2.0.1.9000'
+source = 'GitHub'
+repository = ''
 depends = ['R (>= 3.1.0)', 'leaflet (>= 2.0.0)']
 hash = ''
+remote_type = 'github'
+remote_ref = 'HEAD'
+remote_sha = 'e619a981fd39be0733ba1c06a6e10e2dcf8d3f77'
+remote_host = 'api.github.com'
+remote_repo = 'leaflet.extras'
+remote_username = 'trafficonese'
 type = 'Package'
 title = "Extra Functionality for 'leaflet' Package"
 'authors@r' = 'c( person("Sebastian", "Gatscha", email = "sebastian_gatscha@gmx.at", role = c("aut", "cre")), person("Bhaskar", "Karambelkar", email = "bhaskarvk@gmail.com", role = c("aut")), person("Barret", "Schloerke", email = "barret@rstudio.com", role = c("aut")), person("Bangyou", "Zheng", email= "Bangyou.Zheng@csiro.au", role = c("ctb"), comment = "Leaflet-search and Leaflet-GPS plugin integration"), person("Robin", "Cura", email= "robin@cura.info", role = c("ctb"), comment = "Fixes for Draw Options"), person("Markus", "Voge", email= "markus.voge@ea-aw.de", role = c("ctb"), comment = "Enhancements for Draw Options"), person("Markus", "Dumke", role = c("ctb"), comment = "Bounce Marker addition"), person(family = "Mapbox", role = c("ctb", "cph"), comment = "leaflet-omnivore, csv2geojson, and togeojson libraries"), person("Henry", "Thasler", role = c("ctb", "cph"), comment = "Leaflet.Geodesic library"), person("Dennis", "Wilhelm", role = c("ctb", "cph"), comment = "Leaflet.StyleEditor library"), person("Kirollos", "Risk", role = c("ctb", "cph"), comment = "fuse.js library"), person("Tim", "Wisniewski", role = c("ctb", "cph"), comment = "leaflet-choropleth library"), person(family = "Leaflet", role = c("ctb", "cph"), comment = "leaflet-draw library"), person("Alexander", "Milevski", role = c("ctb", "cph"), comment = "leaflet-draw-drag library"), person("John", "Firebaugh", role = c("ctb", "cph"), comment = "leaflet-fullscreen library"), person("Stefano", "Cudini", role = c("ctb", "cph"), comment = "leaflet-gps library"), person("Johannes", "Rudolph", role = c("ctb", "cph"), comment = "leaflet-hash library"), person("Per", "Liedman", role = c("ctb", "cph"), comment = "leaflet-measure-path library"), person("Pavel", "Shramov", role = c("ctb", "cph"), comment = "leaflet-plugins library"), person("Filip", "Zavadil", role = c("ctb", "cph"), comment = "leaflet-pulse-icon library"), person("Stefano", "Cudini", role = c("ctb", "cph"), comment = "leaflet-search library"), person(family = "CliffCloud", role = c("ctb", "cph"), comment = "leaflet-sleep library"), person(family = "Ursudio", role = c("ctb", "cph"), comment = "leaflet-webgl-heatmap library"), person("Maxime", "Hadjinlian", role = c("ctb", "cph"), comment = "leaflet.BounceMarker library"), person("Vladimir", "Agafonkin", role = c("ctb", "cph"), comment = "leaflet.heat library"), person("Iván Sánchez", "Ortega", role = c("ctb", "cph"), comment = "leaflet.tilelayer.pouchdbcached library"), person("Dale", "Harvey", role = c("ctb", "cph"), comment = "pouchdb-browser library"), person("Mike", "Bostock", role = c("ctb", "cph"), comment = "topojson library") )'
@@ -2199,7 +2177,7 @@ bugreports = 'https://github.com/trafficonese/leaflet.extras/issues'
 license = 'GPL-3 | file LICENSE'
 imports = ['htmlwidgets', 'htmltools', 'stringr', 'magrittr']
 suggests = ['jsonlite', 'readr', 'sf', 'xfun', 'testthat (>= 3.0.0)']
-roxygennote = '7.3.1'
+roxygennote = '7.3.2'
 encoding = 'UTF-8'
 needscompilation = 'no'
 author = 'Sebastian Gatscha [aut, cre], Bhaskar Karambelkar [aut], Barret Schloerke [aut], Bangyou Zheng [ctb] (Leaflet-search and Leaflet-GPS plugin integration), Robin Cura [ctb] (Fixes for Draw Options), Markus Voge [ctb] (Enhancements for Draw Options), Markus Dumke [ctb] (Bounce Marker addition), Mapbox [ctb, cph] (leaflet-omnivore, csv2geojson, and togeojson libraries), Henry Thasler [ctb, cph] (Leaflet.Geodesic library), Dennis Wilhelm [ctb, cph] (Leaflet.StyleEditor library), Kirollos Risk [ctb, cph] (fuse.js library), Tim Wisniewski [ctb, cph] (leaflet-choropleth library), Leaflet [ctb, cph] (leaflet-draw library), Alexander Milevski [ctb, cph] (leaflet-draw-drag library), John Firebaugh [ctb, cph] (leaflet-fullscreen library), Stefano Cudini [ctb, cph] (leaflet-gps library), Johannes Rudolph [ctb, cph] (leaflet-hash library), Per Liedman [ctb, cph] (leaflet-measure-path library), Pavel Shramov [ctb, cph] (leaflet-plugins library), Filip Zavadil [ctb, cph] (leaflet-pulse-icon library), Stefano Cudini [ctb, cph] (leaflet-search library), CliffCloud [ctb, cph] (leaflet-sleep library), Ursudio [ctb, cph] (leaflet-webgl-heatmap library), Maxime Hadjinlian [ctb, cph] (leaflet.BounceMarker library), Vladimir Agafonkin [ctb, cph] (leaflet.heat library), Iván Sánchez Ortega [ctb, cph] (leaflet.tilelayer.pouchdbcached library), Dale Harvey [ctb, cph] (pouchdb-browser library), Mike Bostock [ctb, cph] (topojson library)'
@@ -3027,26 +3005,26 @@ author = 'Gábor Csárdi [cre, aut]'
 
 [renv.packages.readr]
 package = 'readr'
-version = '2.1.6'
+version = '2.2.0'
 source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 3.6)']
+repository = 'CRAN'
+depends = ['R (>= 4.1)']
 hash = ''
 title = 'Read Rectangular Text Data'
-'authors@r' = 'c( person("Hadley", "Wickham", , "hadley@posit.co", role = "aut"), person("Jim", "Hester", role = "aut"), person("Romain", "Francois", role = "ctb"), person("Jennifer", "Bryan", , "jenny@posit.co", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-6983-2759")), person("Shelby", "Bearrows", role = "ctb"), person("Posit Software, PBC", role = c("cph", "fnd")), person("https://github.com/mandreyel/", role = "cph", comment = "mio library"), person("Jukka", "Jylänki", role = c("ctb", "cph"), comment = "grisu3 implementation"), person("Mikkel", "Jørgensen", role = c("ctb", "cph"), comment = "grisu3 implementation") )'
+'authors@r' = 'c( person("Hadley", "Wickham", , "hadley@posit.co", role = "aut"), person("Jim", "Hester", role = "aut"), person("Romain", "Francois", role = "ctb"), person("Jennifer", "Bryan", , "jenny@posit.co", role = c("aut", "cre"), comment = c(ORCID = "0000-0002-6983-2759")), person("Shelby", "Bearrows", role = "ctb"), person("Posit Software, PBC", role = c("cph", "fnd"), comment = c(ROR = "03wc8by49")), person("https://github.com/mandreyel/", role = "cph", comment = "mio library"), person("Jukka", "Jylänki", role = c("ctb", "cph"), comment = "grisu3 implementation"), person("Mikkel", "Jørgensen", role = c("ctb", "cph"), comment = "grisu3 implementation") )'
 maintainer = 'Jennifer Bryan <jenny@posit.co>'
 description = "The goal of 'readr' is to provide a fast and friendly way to read rectangular data (like 'csv', 'tsv', and 'fwf').  It is designed to flexibly parse many types of data found in the wild, while still cleanly failing when data unexpectedly changes."
 url = 'https://readr.tidyverse.org, https://github.com/tidyverse/readr'
 bugreports = 'https://github.com/tidyverse/readr/issues'
 license = 'MIT + file LICENSE'
-imports = ['cli (>= 3.2.0)', 'clipr', 'crayon', 'hms (>= 0.4.1)', 'lifecycle (>= 0.2.0)', 'methods', 'R6', 'rlang', 'tibble', 'utils', 'vroom (>= 1.6.0)']
-suggests = ['covr', 'curl', 'datasets', 'knitr', 'rmarkdown', 'spelling', 'stringi', 'testthat (>= 3.2.0)', 'tzdb (>= 0.1.1)', 'waldo', 'withr', 'xml2']
+imports = ['cli', 'clipr', 'crayon', 'glue', 'hms (>= 0.4.1)', 'lifecycle', 'methods', 'R6', 'rlang', 'tibble', 'utils', 'vroom (>= 1.7.0)', 'withr']
+suggests = ['covr', 'curl', 'datasets', 'knitr', 'rmarkdown', 'spelling', 'stringi', 'testthat (>= 3.2.0)', 'tzdb (>= 0.1.1)', 'waldo', 'xml2']
 linkingto = ['cpp11', 'tzdb (>= 0.1.1)']
 vignettebuilder = 'knitr'
 roxygennote = '7.3.3'
 encoding = 'UTF-8'
 needscompilation = 'yes'
-author = 'Hadley Wickham [aut], Jim Hester [aut], Romain Francois [ctb], Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Shelby Bearrows [ctb], Posit Software, PBC [cph, fnd], https://github.com/mandreyel/ [cph] (mio library), Jukka Jylänki [ctb, cph] (grisu3 implementation), Mikkel Jørgensen [ctb, cph] (grisu3 implementation)'
+author = 'Hadley Wickham [aut], Jim Hester [aut], Romain Francois [ctb], Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Shelby Bearrows [ctb], Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>), https://github.com/mandreyel/ [cph] (mio library), Jukka Jylänki [ctb, cph] (grisu3 implementation), Mikkel Jørgensen [ctb, cph] (grisu3 implementation)'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse, tidyverse/tidytemplate'
 
@@ -3538,10 +3516,10 @@ systemrequirements = 'GDAL (>= 2.0.1), GEOS (>= 3.4.0), PROJ (>= 4.8.0), sqlite3
 
 [renv.packages.shiny]
 package = 'shiny'
-version = '1.12.1'
+version = '1.13.0'
 source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['methods', 'R (>= 3.0.2)']
+repository = 'CRAN'
+depends = ['methods', 'R (>= 3.1.2)']
 hash = ''
 type = 'Package'
 title = 'Web Application Framework for R'
@@ -3550,7 +3528,7 @@ maintainer = 'Carson Sievert <carson@posit.co>'
 description = 'Makes it incredibly easy to build interactive web applications with R. Automatic "reactive" binding between inputs and outputs and extensive prebuilt widgets make it possible to build beautiful, responsive, and powerful applications with minimal effort.'
 url = 'https://shiny.posit.co/, https://github.com/rstudio/shiny'
 bugreports = 'https://github.com/rstudio/shiny/issues'
-license = 'GPL-3 | file LICENSE'
+license = 'MIT + file LICENSE'
 imports = ['bslib (>= 0.6.0)', 'cachem (>= 1.1.0)', 'cli', 'commonmark (>= 2.0.0)', 'fastmap (>= 1.1.1)', 'fontawesome (>= 0.4.0)', 'glue (>= 1.3.2)', 'grDevices', 'htmltools (>= 0.5.4)', 'httpuv (>= 1.5.2)', 'jsonlite (>= 0.9.16)', 'later (>= 1.0.0)', 'lifecycle (>= 0.2.0)', 'mime (>= 0.3)', 'otel', 'promises (>= 1.5.0)', 'R6 (>= 2.0)', 'rlang (>= 0.4.10)', 'sourcetools', 'tools', 'utils', 'withr', 'xtable']
 suggests = ['Cairo (>= 1.5-5)', 'coro (>= 1.1.0)', 'datasets', 'DT', 'dygraphs', 'future', 'ggplot2', 'knitr (>= 1.6)', 'magrittr', 'markdown', 'mirai', 'otelsdk (>= 0.2.0)', 'ragg', 'reactlog (>= 1.0.0)', 'rmarkdown', 'sass', 'showtext', 'testthat (>= 3.2.1)', 'watcher', 'yaml']
 roxygennote = '7.3.3'
@@ -4453,9 +4431,9 @@ author = 'Gábor Csárdi [aut, cre], Fathi Boudra [aut], Rex Dieter [aut], Kevin
 
 [renv.packages.xtable]
 package = 'xtable'
-version = '1.8-4'
+version = '1.8-8'
 source = 'Repository'
-repository = 'RSPM'
+repository = 'CRAN'
 depends = ['R (>= 2.10.0)']
 hash = ''
 title = 'Export Tables to LaTeX or HTML'
@@ -4464,10 +4442,9 @@ maintainer = 'David Scott <d.scott@auckland.ac.nz>'
 description = 'Coerce data to LaTeX and HTML tables.'
 url = 'http://xtable.r-forge.r-project.org/'
 license = 'GPL (>= 2)'
-imports = ['stats', 'utils']
-suggests = ['knitr', 'plm', 'zoo', 'survival']
+imports = ['stats', 'utils', 'methods']
+suggests = ['knitr', 'zoo', 'survival', 'glue', 'tinytex']
 vignettebuilder = 'knitr'
-encoding = 'UTF-8'
 needscompilation = 'no'
 author = 'David B. Dahl [aut], David Scott [aut, cre], Charles Roosen [aut], Arni Magnusson [aut], Jonathan Swinton [aut], Ajay Shah [ctb], Arne Henningsen [ctb], Benno Puetz [ctb], Bernhard Pfaff [ctb], Claudio Agostinelli [ctb], Claudius Loehnert [ctb], David Mitchell [ctb], David Whiting [ctb], Fernando da Rosa [ctb], Guido Gay [ctb], Guido Schulz [ctb], Ian Fellows [ctb], Jeff Laake [ctb], John Walker [ctb], Jun Yan [ctb], Liviu Andronic [ctb], Markus Loecher [ctb], Martin Gubri [ctb], Matthieu Stigler [ctb], Robert Castelo [ctb], Seth Falcon [ctb], Stefan Edwards [ctb], Sven Garbade [ctb], Uwe Ligges [ctb]'
 

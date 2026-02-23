@@ -15,7 +15,6 @@ files = [
   '/ui.R',
   '/src',
   '/server.R',
-  '/renv',
   '/ibm_auth.rds',
   '/docs',
   '/data',

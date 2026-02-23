@@ -32,38 +32,42 @@ suppressPackageStartupMessages({
 
 # Dev settings -----------------------------------------------------------------
 
-# add to renv without loading
 if (FALSE) {
+  # add to renv without loading
   library(devtools)
-  library(languageserver)
   library(testthat)
-  library(covr)
+
+  # this got removed from CRAN
+  devtools::install_github("trafficonese/leaflet.extras")
+
+  # RENV
+  renv::init()
+  renv::status()
+  renv::restore()
+  renv::update()
+  renv::snapshot()
+  renv::clean()
+
+  # enable development mode
+  shiny::devmode(TRUE)
+
+  # turn warnings into errors
+  options(warn = 2)
+
+  # disable forecasts for testing
+  options(forecast = FALSE)
+
+  # Run unit tests
+  testthat::test_dir("tests/testthat")
+
+  # load test weather
+  test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 }
 
-## development mode
-# shiny::devmode(TRUE)
-
-## RENV
-# renv::init()
-# renv::status()
-# renv::restore()
-# renv::update()
-# renv::snapshot()
-# renv::clean()
-
-## turn warnings into errors
-# options(warn = 2)
-
-## disable forecasts for testing
-# options(forecast = FALSE)
-
-## Run unit tests
-# testthat::test_dir("tests/testthat")
-# test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
 # Async tasks ------------------------------------------------------------------
 
-# set up a second session for asynchronous tasks
+# set up a second session for asynchronous tasks but not in tests
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
   plan(multisession, workers = 2)
 }
