@@ -1,7 +1,7 @@
 #--- main server ---#
 
 server <- function(input, output, session) {
-  # Startup and cookie handling ----
+  # Startup and cookie handling ------------------------------------------------
 
   # cookie has .userId and .sites keys
   read_cookie <- function() {
@@ -33,33 +33,25 @@ server <- function(input, output, session) {
   ## Parse sites from cookie ----
   observeEvent(input$cookie, {
     cookie <- req(input$cookie)
+    cookie_sites <- req(cookie$sites)
+    sites <- parse_cookie_sites(cookie_sites)
+    req(sites)
 
-    tryCatch(
-      {
-        sites <- parse_cookie_sites(cookie[["sites"]])
-        req(!is.null(sites))
+    rv$sites <- sites
+    rv$selected_site <- first(sites$id)
+    rv$map_cmd <- "fit_sites"
 
-        rv$sites <- sites
-        rv$selected_site <- first(sites$id)
-        rv$map_cmd <- "fit_sites"
+    showNotification(paste(
+      "Loaded",
+      nrow(sites),
+      ifelse(nrow(sites) == 1, "site", "sites"),
+      "from a previous session."
+    ))
 
-        showNotification(paste(
-          "Loaded",
-          nrow(sites),
-          ifelse(nrow(sites) == 1, "site", "sites"),
-          "from a previous session."
-        ))
-
-        # trigger weather fetch after a second
-        delay(1000, {
-          rv$fetch <- runif(1)
-        })
-      },
-      error = function(e) {
-        message("Failed to read sites from cookie: ", e)
-        echo(cookie)
-      }
-    )
+    # trigger weather fetch after a second
+    delay(1000, {
+      rv$fetch <- runif(1)
+    })
   })
 
   # based on user ID which is set by javascript on the client
@@ -114,7 +106,7 @@ server <- function(input, output, session) {
   }) |>
     bindEvent(rv$weather)
 
-  # Reactive values ----
+  # Reactive values ------------------------------------------------------------
 
   ## rv ----
   rv <- reactiveValues(
@@ -153,6 +145,18 @@ server <- function(input, output, session) {
     # error message displayed under fetch button
     status_msg = NULL,
   )
+
+  ## rv$status helper ----
+  set_status <- function(msg = NULL, type = c("error", "info")) {
+    rv$status <- if (is.null(msg)) {
+      NULL
+    } else {
+      list(
+        msg = msg,
+        type = match.arg(type)
+      )
+    }
+  }
 
   ## rv$sites_ready ----
   # update sites_ready but only if different than existing value
@@ -203,6 +207,27 @@ server <- function(input, output, session) {
     rv$dates_valid <- !isTruthy(msg)
   })
 
+  ## rv$grids handler ----
+  # keep record of which grid_ids are associated with sites this session
+  # used by forecasts and map
+  observe({
+    sites <- sites_sf()
+    req(nrow(sites) > 0)
+
+    sites <- sites |>
+      st_drop_geometry() |>
+      drop_na(grid_id) |>
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
+
+    req(nrow(sites) > 0)
+
+    rv$grids <- rv$grids |>
+      bind_rows(sites) |>
+      distinct(grid_id, grid_lat, grid_lng, time_zone)
+  })
+
+  # observe(echo(rv$grids))
+
   ## rv$map_risk_data ----
   # used by the map to render pin colors
   # set by the risk module
@@ -212,7 +237,7 @@ server <- function(input, output, session) {
     rv$map_risk_data <- NULL
   })
 
-  # Reactives ----
+  # Reactives ------------------------------------------------------------------
 
   ## selected_dates ----
   # will block fetch button if invalid dates selected
@@ -302,28 +327,32 @@ server <- function(input, output, session) {
     }
   })
 
-  ## rv$grids handler ----
-  # keep record of which grid_ids are associated with sites this session
-  # used by forecasts and map
-  observe({
-    sites <- sites_sf()
-    req(nrow(sites) > 0)
-
+  ## fetch_args // reactive ----
+  # record coordinates and dates queried from IBM to avoid duplicate attempts
+  # uses the grid lat/lng instead of site lat/lng if available
+  fetch_args <- reactive({
+    sites <- req(sites_sf())
     sites <- sites |>
       st_drop_geometry() |>
-      drop_na(grid_id) |>
-      distinct(grid_id, grid_lat, grid_lng, time_zone)
+      mutate(
+        lat = coalesce(grid_lat, lat),
+        lng = coalesce(grid_lng, lng)
+      ) |>
+      distinct(lat, lng)
 
-    req(nrow(sites) > 0)
+    date_range <- expanded_dates()
 
-    rv$grids <- rv$grids |>
-      bind_rows(sites) |>
-      distinct(grid_id, grid_lat, grid_lng, time_zone)
+    list(
+      wx = saved_weather,
+      sites = sites,
+      start_date = date_range$start,
+      end_date = date_range$end
+    )
   })
 
-  # observe(echo(rv$grids))
+  # observe(echo(fetch_args()))
 
-  # Forecasts Extended Task ----
+  # Forecasts Extended Task ----------------------------------------------------
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_forecasts) {
     message("Getting forecasts...")
@@ -368,7 +397,7 @@ server <- function(input, output, session) {
 
   # observe(echo(rv$forecasts))
 
-  # IBM Weather Extended Task ----
+  # IBM Weather Extended Task --------------------------------------------------
 
   task_get_weather <- ExtendedTask$new(function(args) {
     message("Getting weather...")
@@ -425,7 +454,7 @@ server <- function(input, output, session) {
     }
   })
 
-  # Weather data ----
+  # Weather data ---------------------------------------------------------------
 
   ## wx_forecasts ----
   wx_forecasts <- reactive({
@@ -535,7 +564,7 @@ server <- function(input, output, session) {
 
   # observe(echo(wx_data()))
 
-  # Help modal --------------------------------------------------------------------
+  # Help modal -----------------------------------------------------------------
 
   observeEvent(input$about, show_modal(md = "README.md"))
   observe({
@@ -543,7 +572,7 @@ server <- function(input, output, session) {
     show_modal(md = mod$md, title = mod$title)
   })
 
-  # Site selection ----------------------------------------------------------
+  # Site selection -------------------------------------------------------------
 
   ## site_help_ui ----
   output$site_help_ui <- renderUI({
@@ -784,6 +813,7 @@ server <- function(input, output, session) {
     )
   })
 
+  ## Handle uploaded sites csv ----
   observe({
     upload <- req(input$sites_csv)
     tryCatch(
@@ -809,7 +839,7 @@ server <- function(input, output, session) {
   #   fit_sites()
   # }) |> bindEvent(input$load_example)
 
-  ### Handle clear_sites button ----
+  ## Handle clear_sites button ----
   observeEvent(input$clear_sites, {
     shinyalert(
       text = "Are you sure you want to delete all your sites?",
@@ -829,7 +859,7 @@ server <- function(input, output, session) {
     )
   })
 
-  ### Handle sort_sites button ----
+  ## Handle sort_sites button ----
   observeEvent(input$sort_sites, {
     sort_categories <- list(
       list(
@@ -896,6 +926,7 @@ server <- function(input, output, session) {
     showModal(mod)
   })
 
+  ## Handle site sorting ----
   observeEvent(input$sort_sites_by, {
     sort_type <- req(input$sort_sites_by)
     removeModal()
@@ -918,7 +949,7 @@ server <- function(input, output, session) {
       mutate(id = row_number())
   })
 
-  ### Handle export_sites button ----
+  ## Handle export_sites button ----
   output$export_sites <- downloadHandler("Sites.csv", function(file) {
     sites <- rv$sites
     req(nrow(sites) > 0)
@@ -927,9 +958,9 @@ server <- function(input, output, session) {
       write_csv(file, na = "")
   })
 
-  # Date selection ----------------------------------------------------------
+  # Date selection -------------------------------------------------------------
 
-  ### date_select_ui ----
+  ## date_select_ui ----
   output$date_select_ui <- renderUI({
     div(
       style = "display: flex; column-gap: 10px; margin: 10px 0;",
@@ -979,17 +1010,6 @@ server <- function(input, output, session) {
   })
 
   ## date_btns_ui ----
-  # create a date button element
-  date_btn <- function(value, label, btn_class = c("default", "primary")) {
-    btn_class <- match.arg(btn_class)
-    HTML(
-      str_glue(
-        "<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"
-      )
-    )
-  }
-
-  # create the date buttons component
   output$date_btns_ui <- renderUI({
     cur_dates <- as.Date(c(rv$start_date, rv$end_date))
     presets <- date_presets()
@@ -1000,7 +1020,7 @@ server <- function(input, output, session) {
         value <- presets[[name]]
         label <- snakecase::to_sentence_case(name)
         selected <- setequal(cur_dates, value)
-        date_btn(
+        build_date_btn(
           name,
           label,
           btn_class = ifelse(selected, "primary", "default")
@@ -1094,17 +1114,6 @@ server <- function(input, output, session) {
 
   ## status_ui ----
 
-  set_status <- function(msg = NULL, type = c("error", "info")) {
-    rv$status <- if (is.null(msg)) {
-      NULL
-    } else {
-      list(
-        msg = msg,
-        type = match.arg(type)
-      )
-    }
-  }
-
   # reports to user if there's a problem with weather fetching
   output$status_ui <- renderUI({
     status <- req(rv$status)
@@ -1119,31 +1128,6 @@ server <- function(input, output, session) {
       msg
     )
   })
-
-  ## fetch_args // reactive ----
-  # record coordinates and dates queried from IBM to avoid duplicate attempts
-  # uses the grid lat/lng instead of site lat/lng if available
-  fetch_args <- reactive({
-    sites <- req(sites_sf())
-    sites <- sites |>
-      st_drop_geometry() |>
-      mutate(
-        lat = coalesce(grid_lat, lat),
-        lng = coalesce(grid_lng, lng)
-      ) |>
-      distinct(lat, lng)
-
-    date_range <- expanded_dates()
-
-    list(
-      wx = saved_weather,
-      sites = sites,
-      start_date = date_range$start,
-      end_date = date_range$end
-    )
-  })
-
-  # observe(echo(fetch_args()))
 
   ## already_fetched // reactive ----
   # already_fetched <- reactive({

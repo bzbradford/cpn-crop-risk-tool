@@ -162,6 +162,89 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
+      # Generate model data ----
+
+      ## model_data - reactive ----
+      model_data <- reactive({
+        model <- req(input$model)
+        wx_data <- wx_data()
+        wx <- wx_data$daily_full
+        req(nrow(wx) > 0)
+        date_range <- wx_data$dates
+
+        results <- switch(
+          model,
+          "tarspot" = build_tar_spot(wx),
+          "gls" = build_gray_leaf_spot(wx),
+          "don" = build_don(wx),
+          "whitemold" = local({
+            irrig <- req(input$irrigation)
+            spacing <- if (irrig) req(input$spacing)
+            build_white_mold(wx, irrig, spacing)
+          }),
+          "frogeye" = build_frogeye_leaf_spot(wx),
+          "wheatscab" = local({
+            res <- req(input$resistance)
+            build_wheat_scab(wx, res)
+          }),
+          "earlyblight" = build_early_blight(wx),
+          "lateblight" = build_late_blight(wx),
+          "alternaria" = build_alternaria(wx),
+          "cercospora" = build_cercospora(wx),
+          "botrytis" = build_botrytis(wx),
+          warning("Don't know how to build data for model '", model, "'")
+        )
+
+        results |>
+          filter(date >= date_range$start)
+      })
+
+      # observe(echo(model_data()))
+
+      ## model_warning // reactive ----
+      # check for a validation message for select models
+      model_warning <- reactive({
+        model <- selected_model()
+
+        if (is.function(model$validate)) {
+          dates <- wx_data()$dates
+          params <- list(
+            date_range = c(dates$start, dates$end)
+          )
+          model$validate(params)
+        }
+      })
+
+      ## selected_sites // reactive ----
+      selected_sites <- reactive({
+        sites <- wx_data()$sites
+
+        if (nrow(sites) > 1) {
+          i <- req(input$show_all_sites)
+          if (i == FALSE) {
+            sites <- subset(sites, id == rv$selected_site)
+          }
+        }
+
+        sites
+      })
+
+      ## joined_data - reactive ----
+      # join model data to sites list
+      joined_data <- reactive({
+        selected_sites() |>
+          st_drop_geometry() |>
+          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) |>
+          left_join(
+            model_data(),
+            join_by(grid_id),
+            relationship = "many-to-many"
+          ) |>
+          mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
+      })
+
+      # observe(echo(joined_data()))
+
       ## model_warning_ui ----
       # Display warnings for various conditions
       output$model_warnings <- renderUI({
@@ -169,20 +252,11 @@ riskServer <- function(rv, wx_data) {
         model <- selected_model()
         sites <- selected_sites()
         selected_dates <- req(wx_data()$dates)
+
+        # check for any warnings
         warnings <- list()
-
-        # warning for missing weather
         warnings$wx <- weather_warning_for_sites(sites)
-
-        # warning when outside of risk period
-        if (!is.null(model$risk_period)) {
-          dates <- c(selected_dates$start, selected_dates$end)
-          risk_dates <- model$risk_period
-          does_overlap <- check_date_overlap(dates, risk_dates)
-          if (!any(does_overlap)) {
-            warnings$risk_period <- "The crop is not likely to be in a vulnerable growth stage during the dates you have selected. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
-          }
-        }
+        warnings$model <- model_warning()
 
         req(length(warnings) > 0)
 
@@ -204,7 +278,9 @@ riskServer <- function(rv, wx_data) {
         build_warning_box(content)
       })
 
-      # results_ui ----
+      # Plot feed --------------------------------------------------------------
+
+      ## results_ui ----
       output$results_ui <- renderUI({
         validate(
           need(rv$sites_ready, OPTS$validation_sites_ready),
@@ -239,75 +315,6 @@ riskServer <- function(rv, wx_data) {
           )
         )
       })
-
-      ## selected_sites - reactive ----
-      selected_sites <- reactive({
-        sites <- wx_data()$sites
-
-        if (nrow(sites) > 1) {
-          i <- req(input$show_all_sites)
-          if (i == FALSE) {
-            sites <- subset(sites, id == rv$selected_site)
-          }
-        }
-
-        sites
-      })
-
-      # Generate model data ----
-
-      ## model_data - reactive ----
-      model_data <- reactive({
-        model <- req(input$model)
-        wx_data <- wx_data()
-        wx <- wx_data$daily_full
-        req(nrow(wx) > 0)
-        date_range <- wx_data$dates
-
-        df <- switch(
-          model,
-          "tarspot" = build_tar_spot(wx),
-          "gls" = build_gray_leaf_spot(wx),
-          "don" = build_don(wx),
-          "whitemold" = if (req(input$irrigation)) {
-            build_white_mold_irrig(wx, req(input$spacing))
-          } else {
-            build_white_mold_dry(wx)
-          },
-          "frogeye" = build_frogeye_leaf_spot(wx),
-          "wheatscab" = build_wheat_scab(
-            wx,
-            resistance = req(input$resistance)
-          ),
-          "earlyblight" = build_early_blight(wx),
-          "lateblight" = build_late_blight(wx),
-          "alternaria" = build_alternaria(wx),
-          "cercospora" = build_cercospora(wx),
-          "botrytis" = build_botrytis(wx),
-          warning("Don't know how to build data for model '", model, "'")
-        )
-
-        filter(df, date >= date_range$start)
-      })
-
-      # observe(echo(model_data()))
-
-      ## joined_data - reactive ----
-      joined_data <- reactive({
-        selected_sites() |>
-          st_drop_geometry() |>
-          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) |>
-          left_join(
-            model_data(),
-            join_by(grid_id),
-            relationship = "many-to-many"
-          ) |>
-          mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
-      })
-
-      # observe(echo(joined_data()))
-
-      # Build risk plots ----
 
       ## plots_ui ----
       # generate the feed of mini plots by site

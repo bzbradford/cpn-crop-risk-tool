@@ -1,5 +1,96 @@
-#--- charts and data module ---#
+# Data module
 
+# Helpers ----------------------------------------------------------------------
+
+## Build all moving averages ----
+#' Generate several moving average periods from daily data
+#' @param daily accepts daily data from `build_daily()`
+#' @param align moving average alignment
+#' @returns tibble
+build_ma_from_daily <- function(daily, align = c("center", "right")) {
+  align <- match.arg(align)
+
+  # retain attribute cols
+  attr <- daily |> select(grid_id, any_of(OPTS$date_attr_cols))
+
+  # define moving average functions
+  roll_mean <- function(vec, width) {
+    rollapply(vec, width, \(x) calc_mean(x), partial = TRUE, align = align)
+  }
+  fns <- c(
+    "7day" = ~ roll_mean(.x, 7),
+    "14day" = ~ roll_mean(.x, 14),
+    "21day" = ~ roll_mean(.x, 21),
+    "30day" = ~ roll_mean(.x, 30)
+  )
+
+  # apply moving average functions to each primary data column
+  ma <- daily |>
+    select(-hours) |>
+    mutate(
+      across(
+        starts_with(c(
+          "temperature",
+          "dew_point",
+          "relative_humidity",
+          "wind",
+          "pressure",
+          "hours"
+        )),
+        fns
+      ),
+      .by = grid_id,
+      .keep = "none"
+    ) |>
+    select(-grid_id)
+
+  # bind attributes
+  bind_cols(attr, ma)
+}
+
+# test_hourly_wx |> build_daily() |> build_ma_from_daily()
+
+## Build all GDDs ----
+#' Generate various growing degree day models with and without an 86F upper threshold
+#' input temperatures must be Celsius and will be converted to Fahrenheit GDDs
+#' @param daily accepts daily dataset from `build_daily()`
+#' @returns tibble
+build_gdd_from_daily <- function(daily) {
+  # retain attribute cols
+  attr <- daily |> select(grid_id, date)
+
+  # convert temperatures
+  tmin <- c_to_f(daily$temperature_min)
+  tmax <- c_to_f(daily$temperature_max)
+
+  # start with a base 86F model for chopping off the upper thresholds
+  gdd <- tibble(base_86 = gdd_sine(tmin, tmax, 86))
+
+  # generate each of the base temperature models with and without the upper threshold
+  for (base in c(32, 39.2, 41, 45, 48, 50, 52, 55)) {
+    name <- str_replace_all(paste0("base_", base), "\\.", "p")
+    gdd[[name]] <- gdd_sine(tmin, tmax, base)
+    gdd[[paste0(name, "_upper_86")]] <- gdd[[name]] - gdd$base_86
+  }
+
+  # remove the upper threshold model
+  gdd$base_86 <- NULL
+
+  # assemble, add cumulative cols, sort names
+  bind_cols(attr, gdd) |>
+    mutate(
+      across(starts_with("base_"), c(cumulative = cumsum)),
+      .by = grid_id
+    ) %>%
+    select(
+      all_of(names(attr)),
+      all_of(sort(names(.)))
+    )
+}
+
+# test_hourly_wx |> build_daily() |> build_gdd_from_daily()
+
+# Data UI ----------------------------------------------------------------------
 dataUI <- function() {
   ns <- NS("data")
   div(
@@ -13,6 +104,7 @@ dataUI <- function() {
   )
 }
 
+# Data server ------------------------------------------------------------------
 dataServer <- function(wx_data, selected_site, sites_ready) {
   moduleServer(
     id = "data",

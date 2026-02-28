@@ -602,60 +602,33 @@ test_that("get_cache_file returns NULL for empty/missing user_id", {
   expect_null(get_cache_file(""))
 })
 
-
-# Model definitions ----------------------------------------------------------
-
-example_doc <- "example.md"
-
-test_that("model_list list is properly structured", {
-  expect_true(length(model_list) > 0)
-  for (model in model_list) {
-    expect_named(
-      model,
-      c("name", "crop", "model_name", "info", "doc", "risk_period", "slug")
-    )
-  }
+test_that("build_ma_from_daily", {
+  expect_silent({
+    test_hourly_wx |>
+      filter(grid_id == sample(grid_id, 1)) |>
+      build_daily() |>
+      build_ma_from_daily() |>
+      ggplot(aes(x = date, color = grid_id)) +
+      geom_line(aes(y = temperature_mean_7day))
+  })
 })
 
-test_that("Model creates valid model config object", {
-  m <- Model(
-    name = "Test Model",
-    crop = "Any",
-    info = "Test info",
-    doc = example_doc
-  )
-  expect_equal(m$name, "Test Model")
-  expect_equal(m$crop, "Any")
-  expect_equal(m$info, "Test info")
-  expect_equal(m$doc, example_doc)
-  expect_null(m$risk_period)
+test_that("gdd_sine", {
+  expect_silent({
+    expand_grid(tmin = 0:30, tmax = 0:30) |>
+      filter(tmax >= tmin) |>
+      mutate(gdd = gdd_sine(tmin, tmax, 10)) |>
+      ggplot(aes(x = tmin, y = tmax, fill = gdd)) +
+      geom_tile() +
+      scale_fill_viridis_c() +
+      coord_cartesian(expand = F)
+  })
 })
 
-test_that("Model validates risk_period dates", {
-  m <- Model(
-    name = "Test",
-    info = "Test",
-    doc = example_doc,
-    risk_period = c("Jul 1", "Aug 15")
-  )
-  expect_equal(m$risk_period, c("Jul 1", "Aug 15"))
-})
-
-test_that("Model errors on invalid doc file", {
-  expect_error(
-    Model(name = "Test", info = "Test", doc = "nonexistent.md"),
-    "Missing doc file"
-  )
-})
-
-test_that("Model errors on invalid parameters", {
-  expect_error(
-    Model(
-      name = "Test",
-      info = "Test",
-      doc = example_doc,
-      invalid_param = TRUE
-    ),
-    "Invalid model config: invalid_param"
-  )
+test_that("build_gdd_from_daily", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_gdd_from_daily()
+  })
 })

@@ -1,6 +1,38 @@
 # tests for src/models.R
 
-# Weather data ------------------------------------------------------------
+# Model constructor ----
+
+example_doc <- "example.md"
+
+test_that("Model creates valid model config object", {
+  m <- Model(
+    name = "Test Model",
+    crop = "Any",
+    group = "vegetable",
+    info = "Test info",
+    doc = example_doc
+  )
+  expect_equal(m$name, "Test Model")
+  expect_equal(m$crop, "Any")
+  expect_equal(m$info, "Test info")
+  expect_equal(m$doc, example_doc)
+  expect_null(m$risk_period)
+})
+
+test_that("Model errors on invalid doc file", {
+  expect_error(
+    Model(
+      name = "Test Model",
+      crop = "Any",
+      group = "field",
+      info = "Test info",
+      doc = "nonexistent.md"
+    ),
+    "Missing doc file"
+  )
+})
+
+# Weather data ----
 
 test_that("build_daily", {
   expect_silent({
@@ -14,41 +46,34 @@ test_that("build_daily", {
   })
 })
 
-test_that("build_ma_from_daily", {
+# Model helpers ----
+
+test_that("risk_from_prob", {
   expect_silent({
-    test_hourly_wx |>
-      filter(grid_id == sample(grid_id, 1)) |>
-      build_daily() |>
-      build_ma_from_daily() |>
-      ggplot(aes(x = date, color = grid_id)) +
-      geom_line(aes(y = temperature_mean_7day))
+    tibble(
+      value = runif(20),
+      risk_from_prob(value, 5, 25, 60)
+    )
   })
 })
 
-test_that("gdd_sine", {
+test_that("attenuate_prob", {
   expect_silent({
-    expand_grid(tmin = 0:30, tmax = 0:30) |>
-      filter(tmax >= tmin) |>
-      mutate(gdd = gdd_sine(tmin, tmax, 10)) |>
-      ggplot(aes(x = tmin, y = tmax, fill = gdd)) +
-      geom_tile() +
-      scale_fill_viridis_c() +
-      coord_cartesian(expand = F)
+    tibble(value = c(10:1, 2:10), temp = c(1:10, 9:1) * 3) |>
+      mutate(new_value = attenuate_prob(value, temp))
   })
 })
 
-test_that("build_gdd_from_daily", {
+test_that("risk_from_severity", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_gdd_from_daily()
+    tibble(
+      value = round(runif(10, 0, 4)),
+      risk_from_severity(value)
+    )
   })
 })
 
-
-# Model functions --------------------------------------------------------------
-
-## Field crops ----
+# Tar spot ----
 test_that("predict_tarspot", {
   expect_silent({
     expand_grid(temp = 10:40, rh = seq(0, 100, 5), hours = 0:24) |>
@@ -61,6 +86,17 @@ test_that("predict_tarspot", {
   })
 })
 
+test_that("build_tar_spot", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_tar_spot() |>
+      test_plot()
+  })
+})
+
+# Gray leaf spot ----
+
 test_that("predict_gls", {
   expect_silent({
     expand_grid(temp = 0:30, dp = 0:30) |>
@@ -71,6 +107,17 @@ test_that("predict_gls", {
       coord_cartesian(expand = F)
   })
 })
+
+test_that("build_gls", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_gray_leaf_spot() |>
+      test_plot()
+  })
+})
+
+# DON ----
 
 test_that("predict_don", {
   expect_silent({
@@ -108,6 +155,17 @@ test_that("predict_don", {
   })
 })
 
+test_that("build_don", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_don() |>
+      test_plot()
+  })
+})
+
+# White mold ----
+
 test_that("predict_white_mold_dry", {
   expect_silent({
     expand_grid(temp = 0:40, wind = 0:20, rh = (0:10) * 10) |>
@@ -122,7 +180,7 @@ test_that("predict_white_mold_dry", {
 
 test_that("predict_white_mold_irrig", {
   expect_silent({
-    expand_grid(temp = 15:40, rh = seq(50, 100, 5), spacing = c("15", "30")) |>
+    expand_grid(temp = 15:40, rh = seq(50, 100, 5), spacing = c(TRUE, FALSE)) |>
       rowwise() |>
       mutate(prob = predict_white_mold_irrig(temp, rh, spacing)) |>
       ggplot(aes(x = temp, y = rh, fill = prob)) +
@@ -132,6 +190,31 @@ test_that("predict_white_mold_irrig", {
       coord_cartesian(expand = F)
   })
 })
+
+test_that("build_white_mold", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_white_mold(irrigated = FALSE) |>
+      test_plot()
+  })
+
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_white_mold(irrigated = TRUE, row_spacing = "30") |>
+      test_plot()
+  })
+
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_white_mold(irrigated = TRUE, row_spacing = "15") |>
+      test_plot()
+  })
+})
+
+# Frogeye leaf spot ----
 
 test_that("predict_fls", {
   expect_silent({
@@ -143,6 +226,17 @@ test_that("predict_fls", {
       coord_cartesian(expand = F)
   })
 })
+
+test_that("build_frogeye_leaf_spot", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_frogeye_leaf_spot() |>
+      test_plot()
+  })
+})
+
+# Wheat scab ----
 
 test_that("predict_wheat_scab", {
   expect_silent({
@@ -156,8 +250,16 @@ test_that("predict_wheat_scab", {
   })
 })
 
+test_that("build_wheat_scab", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_wheat_scab(resistance = "VS") |>
+      test_plot()
+  })
+})
 
-## Vegetable crops ----
+# Early blight ----
 
 test_that("calc_pdays", {
   expect_silent({
@@ -170,6 +272,30 @@ test_that("calc_pdays", {
   })
 })
 
+test_that("risk_for_early_blight", {
+  expect_silent({
+    tibble(
+      value = runif(100, 5, 10),
+      risk_for_early_blight(value),
+    ) |>
+      mutate(day = row_number()) |>
+      ggplot(aes(x = day, color = risk, group = 1)) +
+      geom_line(aes(y = total)) +
+      scale_color_brewer(palette = "Spectral", direction = -1)
+  })
+})
+
+test_that("build_early_blight", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_early_blight() |>
+      test_plot()
+  })
+})
+
+# Late blight ----
+
 test_that("calc_late_blight_dsv", {
   expect_silent({
     expand_grid(temp = 0:30, hours = 0:24) |>
@@ -180,6 +306,31 @@ test_that("calc_late_blight_dsv", {
       coord_cartesian(expand = F)
   })
 })
+
+test_that("risk_for_late_blight", {
+  expect_silent({
+    tibble(
+      value = runif(100, 0, 3),
+      risk_for_late_blight(value)
+    ) |>
+      mutate(day = row_number()) |>
+      ggplot(aes(x = day, group = 1, color = risk)) +
+      geom_line(aes(y = total14)) +
+      geom_line(aes(y = total)) +
+      scale_color_brewer(palette = "Spectral", direction = -1)
+  })
+})
+
+test_that("build_late_blight", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_late_blight() |>
+      test_plot()
+  })
+})
+
+## Alternaria ----
 
 test_that("calc_alternaria_dsv", {
   expect_silent({
@@ -192,6 +343,30 @@ test_that("calc_alternaria_dsv", {
   })
 })
 
+test_that("risk_for_alternaria", {
+  expect_silent({
+    tibble(
+      value = runif(100, 0, 5),
+      risk_for_alternaria(value)
+    ) |>
+      mutate(day = row_number()) |>
+      ggplot(aes(x = day, color = risk, group = 1)) +
+      geom_line(aes(y = total7)) +
+      scale_color_brewer(palette = "Spectral", direction = -1)
+  })
+})
+
+test_that("build_alternaria", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_alternaria() |>
+      test_plot()
+  })
+})
+
+## Cercospora ----
+
 test_that("calc_cercospora_div", {
   expect_silent({
     expand_grid(temp = 15:30, hours = 0:24) |>
@@ -203,14 +378,39 @@ test_that("calc_cercospora_div", {
   })
 })
 
+test_that("risk_for_cercospora", {
+  expect_silent({
+    tibble(
+      value = runif(100, 0, 4),
+      risk_for_cercospora(value)
+    ) |>
+      mutate(day = row_number()) |>
+      ggplot(aes(x = day, color = risk, group = 1)) +
+      geom_line(aes(y = avg2)) +
+      geom_line(aes(y = avg7)) +
+      scale_color_brewer(palette = "Spectral", direction = -1)
+  })
+})
+
+test_that("build_cercospora", {
+  expect_silent({
+    test_hourly_wx |>
+      build_daily() |>
+      build_cercospora() |>
+      test_plot()
+  })
+})
+
+## Botrytis ----
+
 test_that("botcast_dinov", {
   expect_silent({
     expand_grid(
       hot = c(F, T),
-      lw = 0:24,
-      dry = c(F, T)
+      dry = c(F, T),
+      lw = 0:24
     ) |>
-      mutate(dinov = botcast_dinov(hot, lw, dry)) |>
+      mutate(dinov = botcast_dinov(hot, dry, lw)) |>
       summary()
   })
 })
@@ -239,94 +439,6 @@ test_that("calc_botrytis_dsi", {
   })
 })
 
-
-# Risk calculators -------------------------------------------------------------
-
-test_that("assign_risk", {
-  expect_s3_class(assign_risk("tar_spot_prob", .2), "data.frame")
-  expect_warning(assign_risk("don_prob", 10))
-  expect_error(assign_risk("foo", 1))
-})
-
-test_that("risk_from_prob", {
-  expect_silent({
-    tibble(
-      value = runif(20),
-      risk_from_prob(value, 5, 25, 60)
-    )
-  })
-})
-
-test_that("attenuate_prob", {
-  expect_silent({
-    tibble(value = c(10:1, 2:10), temp = c(1:10, 9:1) * 3) |>
-      mutate(new_value = attenuate_prob(value, temp))
-  })
-})
-
-test_that("risk_from_severity", {
-  expect_silent({
-    tibble(
-      value = round(runif(10, 0, 4)),
-      risk_from_severity(value)
-    )
-  })
-})
-
-test_that("risk_for_early_blight", {
-  expect_silent({
-    tibble(
-      value = runif(100, 5, 10),
-      risk_for_early_blight(value),
-    ) |>
-      mutate(day = row_number()) |>
-      ggplot(aes(x = day, color = risk, group = 1)) +
-      geom_line(aes(y = total)) +
-      scale_color_brewer(palette = "Spectral", direction = -1)
-  })
-})
-
-test_that("risk_for_late_blight", {
-  expect_silent({
-    tibble(
-      value = runif(100, 0, 3),
-      risk_for_late_blight(value)
-    ) |>
-      mutate(day = row_number()) |>
-      ggplot(aes(x = day, group = 1, color = risk)) +
-      geom_line(aes(y = total14)) +
-      geom_line(aes(y = total)) +
-      scale_color_brewer(palette = "Spectral", direction = -1)
-  })
-})
-
-test_that("risk_for_alternaria", {
-  expect_silent({
-    tibble(
-      value = runif(100, 0, 5),
-      risk_for_alternaria(value)
-    ) |>
-      mutate(day = row_number()) |>
-      ggplot(aes(x = day, color = risk, group = 1)) +
-      geom_line(aes(y = total7)) +
-      scale_color_brewer(palette = "Spectral", direction = -1)
-  })
-})
-
-test_that("risk_for_cercospora", {
-  expect_silent({
-    tibble(
-      value = runif(100, 0, 4),
-      risk_for_cercospora(value)
-    ) |>
-      mutate(day = row_number()) |>
-      ggplot(aes(x = day, color = risk, group = 1)) +
-      geom_line(aes(y = avg2)) +
-      geom_line(aes(y = avg7)) +
-      scale_color_brewer(palette = "Spectral", direction = -1)
-  })
-})
-
 test_that("risk_for_botrytis", {
   expect_silent({
     tibble(
@@ -338,115 +450,6 @@ test_that("risk_for_botrytis", {
       geom_col(aes(y = value)) +
       geom_line(aes(y = total)) +
       scale_color_brewer(palette = "Spectral", direction = -1)
-  })
-})
-
-
-# Model runners -----------------------------------------------------------
-
-test_that("build_tar_spot", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_tar_spot() |>
-      test_plot()
-  })
-})
-
-test_that("build_gls", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_gray_leaf_spot() |>
-      test_plot()
-  })
-})
-
-test_that("build_don", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_don() |>
-      test_plot()
-  })
-})
-
-test_that("build_white_mold_dry", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_white_mold_dry() |>
-      test_plot()
-  })
-})
-
-test_that("build_white_mold_irrig", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_white_mold_irrig("30") |>
-      test_plot()
-  })
-
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_white_mold_irrig("15") |>
-      test_plot()
-  })
-})
-
-test_that("build_frogeye_leaf_spot", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_frogeye_leaf_spot() |>
-      test_plot()
-  })
-})
-
-test_that("build_wheat_scab", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_wheat_scab(resistance = "VS") |>
-      test_plot()
-  })
-})
-
-test_that("build_early_blight", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_early_blight() |>
-      test_plot()
-  })
-})
-
-test_that("build_late_blight", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_late_blight() |>
-      test_plot()
-  })
-})
-
-test_that("build_alternaria", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_alternaria() |>
-      test_plot()
-  })
-})
-
-test_that("build_cercospora", {
-  expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
-      build_cercospora() |>
-      test_plot()
   })
 })
 
