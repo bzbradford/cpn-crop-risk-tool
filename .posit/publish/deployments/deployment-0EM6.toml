@@ -2,7 +2,7 @@
 '$schema' = 'https://cdn.posit.co/publisher/schemas/posit-publishing-record-schema-v3.json'
 server_type = 'connect'
 server_url = 'https://connect.doit.wisc.edu'
-client_version = '1.35.0'
+client_version = '1.35.3'
 created_at = ''
 dismissed_at = ''
 type = 'r-shiny'
@@ -11,9 +11,9 @@ id = '4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 dashboard_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 direct_url = 'https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/'
 logs_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs'
-deployed_at = '2026-02-23T16:24:07-06:00'
-bundle_id = '4537'
-bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4537/download'
+deployed_at = '2026-02-28T17:34:26-06:00'
+bundle_id = '4558'
+bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4558/download'
 files = [
   '.Renviron',
   '.posit/publish/Crop Risk Tool-TGSR.toml',
@@ -187,102 +187,6 @@ suggests = ['lattice', 'nlme', 'nnet', 'survival']
 needscompilation = 'yes'
 author = 'Brian Ripley [aut, cre, cph], Bill Venables [aut, cph], Douglas M. Bates [ctb], Kurt Hornik [trl] (partial port ca 1998), Albrecht Gebhardt [trl] (partial port ca 1998), David Firth [ctb] (support functions for polr)'
 
-[renv.packages.PKI]
-package = 'PKI'
-version = '0.1-15'
-source = 'Repository'
-repository = 'CRAN'
-depends = ['R (>= 2.9.0)', 'base64enc']
-hash = ''
-title = 'Public Key Infrastucture for R Based on the X.509 Standard'
-'authors@r' = 'person("Simon", "Urbanek", role=c("aut","cre","cph"), email="Simon.Urbanek@r-project.org", comment=c("https://urbanek.nz", ORCID="0000-0003-2297-1732"))'
-maintainer = 'Simon Urbanek <Simon.Urbanek@r-project.org>'
-description = 'Public Key Infrastucture functions such as verifying certificates, RSA encription and signing which can be used to build PKI infrastructure and perform cryptographic tasks.'
-url = 'http://www.rforge.net/PKI'
-license = 'GPL-2 | GPL-3 | file LICENSE'
-needscompilation = 'yes'
-author = 'Simon Urbanek [aut, cre, cph] (https://urbanek.nz, ORCID: <https://orcid.org/0000-0003-2297-1732>)'
-systemrequirements = 'OpenSSL library and headers (openssl-dev or similar)'
-
-[renv.packages.'R.cache']
-package = 'R.cache'
-version = '0.17.0'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 2.14.0)']
-hash = ''
-title = 'Fast and Light-Weight Caching (Memoization) of Objects and Results to Speed Up Computations'
-'authors@r' = 'c(person("Henrik", "Bengtsson", role=c("aut", "cre", "cph"), email = "henrikb@braju.com"))'
-maintainer = 'Henrik Bengtsson <henrikb@braju.com>'
-description = 'Memoization can be used to speed up repetitive and computational expensive function calls.  The first time a function that implements memoization is called the results are stored in a cache memory.  The next time the function is called with the same set of parameters, the results are momentarily retrieved from the cache avoiding repeating the calculations.  With this package, any R object can be cached in a key-value storage where the key can be an arbitrary set of R objects.  The cache memory is persistent (on the file system).'
-url = 'https://github.com/HenrikBengtsson/R.cache'
-bugreports = 'https://github.com/HenrikBengtsson/R.cache/issues'
-license = 'LGPL (>= 2.1)'
-imports = ['utils', 'R.methodsS3 (>= 1.8.1)', 'R.oo (>= 1.24.0)', 'R.utils (>= 2.10.1)', 'digest (>= 0.6.13)']
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Henrik Bengtsson [aut, cre, cph]'
-
-[renv.packages.'R.methodsS3']
-package = 'R.methodsS3'
-version = '1.8.2'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 2.13.0)']
-hash = ''
-title = 'S3 Methods Simplified'
-'authors@r' = 'c(person("Henrik", "Bengtsson", role=c("aut", "cre", "cph"), email = "henrikb@braju.com"))'
-maintainer = 'Henrik Bengtsson <henrikb@braju.com>'
-description = 'Methods that simplify the setup of S3 generic functions and S3 methods.  Major effort has been made in making definition of methods as simple as possible with a minimum of maintenance for package developers.  For example, generic functions are created automatically, if missing, and naming conflict are automatically solved, if possible.  The method setMethodS3() is a good start for those who in the future may want to migrate to S4.  This is a cross-platform package implemented in pure R that generates standard S3 methods.'
-url = 'https://github.com/HenrikBengtsson/R.methodsS3'
-bugreports = 'https://github.com/HenrikBengtsson/R.methodsS3/issues'
-license = 'LGPL (>= 2.1)'
-imports = ['utils']
-suggests = ['codetools']
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Henrik Bengtsson [aut, cre, cph]'
-
-[renv.packages.'R.oo']
-package = 'R.oo'
-version = '1.27.1'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 2.13.0)', 'R.methodsS3 (>= 1.8.2)']
-hash = ''
-title = 'R Object-Oriented Programming with or without References'
-'authors@r' = 'c(person("Henrik", "Bengtsson", role=c("aut", "cre", "cph"), email = "henrikb@braju.com"))'
-maintainer = 'Henrik Bengtsson <henrikb@braju.com>'
-description = 'Methods and classes for object-oriented programming in R with or without references.  Large effort has been made on making definition of methods as simple as possible with a minimum of maintenance for package developers.  The package has been developed since 2001 and is now considered very stable.  This is a cross-platform package implemented in pure R that defines standard S3 classes without any tricks.'
-url = 'https://henrikbengtsson.github.io/R.oo/, https://github.com/HenrikBengtsson/R.oo'
-bugreports = 'https://github.com/HenrikBengtsson/R.oo/issues'
-license = 'LGPL (>= 2.1)'
-imports = ['methods', 'utils']
-suggests = ['tools']
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Henrik Bengtsson [aut, cre, cph]'
-
-[renv.packages.'R.utils']
-package = 'R.utils'
-version = '2.13.0'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 2.14.0)', 'R.oo']
-hash = ''
-title = 'Various Programming Utilities'
-'authors@r' = 'c(person("Henrik", "Bengtsson", role=c("aut", "cre", "cph"), email = "henrikb@braju.com"))'
-maintainer = 'Henrik Bengtsson <henrikb@braju.com>'
-description = 'Utility functions useful when programming and developing R packages.'
-url = 'https://henrikbengtsson.github.io/R.utils/, https://github.com/HenrikBengtsson/R.utils'
-bugreports = 'https://github.com/HenrikBengtsson/R.utils/issues'
-license = 'LGPL (>= 2.1)'
-imports = ['methods', 'utils', 'tools', 'R.methodsS3']
-suggests = ['datasets', 'digest (>= 0.6.10)']
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Henrik Bengtsson [aut, cre, cph]'
-
 [renv.packages.R6]
 package = 'R6'
 version = '2.6.1'
@@ -341,28 +245,6 @@ roxygennote = '6.1.1'
 encoding = 'UTF-8'
 needscompilation = 'yes'
 author = 'Dirk Eddelbuettel [aut, cre] (ORCID: <https://orcid.org/0000-0001-6419-907X>), Romain Francois [aut] (ORCID: <https://orcid.org/0000-0002-2444-4226>), JJ Allaire [aut] (ORCID: <https://orcid.org/0000-0003-0174-9868>), Kevin Ushey [aut] (ORCID: <https://orcid.org/0000-0003-2880-7407>), Qiang Kou [aut] (ORCID: <https://orcid.org/0000-0001-6786-5453>), Nathan Russell [aut], Iñaki Ucar [aut] (ORCID: <https://orcid.org/0000-0001-6403-5550>), Doug Bates [aut] (ORCID: <https://orcid.org/0000-0001-8316-9503>), John Chambers [aut]'
-
-[renv.packages.RcppTOML]
-package = 'RcppTOML'
-version = '0.2.3'
-source = 'Repository'
-repository = 'CRAN'
-depends = ['R (>= 3.3.0)']
-hash = ''
-type = 'Package'
-title = "'Rcpp' Bindings to Parser for \"Tom's Obvious Markup Language\""
-'authors@r' = "c(person(\"Dirk\", \"Eddelbuettel\", role = c(\"aut\", \"cre\"), email = \"edd@debian.org\", comment = c(ORCID = \"0000-0001-6419-907X\")), person(\"Mark\", \"Gillard\", role = \"aut\", comment = \"Author of 'toml++' header library\"))"
-maintainer = 'Dirk Eddelbuettel <edd@debian.org>'
-description = "The configuration format defined by 'TOML' (which expands to \"Tom's Obvious Markup Language\") specifies an excellent format (described at <https://toml.io/en/>) suitable for both human editing as well as the common uses of a machine-readable format. This package uses 'Rcpp' to connect to the 'toml++' parser written by Mark Gillard to R."
-url = 'http://dirk.eddelbuettel.com/code/rcpp.toml.html'
-bugreports = 'https://github.com/eddelbuettel/rcpptoml/issues'
-license = 'GPL (>= 2)'
-imports = ['Rcpp (>= 1.0.8)']
-suggests = ['tinytest']
-linkingto = ['Rcpp']
-needscompilation = 'yes'
-author = "Dirk Eddelbuettel [aut, cre] (<https://orcid.org/0000-0001-6419-907X>), Mark Gillard [aut] (Author of 'toml++' header library)"
-systemrequirements = 'A C++17 compiler'
 
 [renv.packages.S7]
 package = 'S7'
@@ -764,25 +646,6 @@ url = 'https://gitlab.com/luke-tierney/codetools'
 license = 'GPL'
 needscompilation = 'no'
 author = 'Luke Tierney <luke-tierney@uiowa.edu>'
-
-[renv.packages.collections]
-package = 'collections'
-version = '0.3.11'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-hash = ''
-type = 'Package'
-title = 'High Performance Container Data Types'
-'authors@r' = 'c(person(given = "Randy", family = "Lai", role = c("aut", "cre"), email = "randy.cs.lai@gmail.com"), person(given = "Andrea", family = "Mazzoleni", role = "cph", comment = "tommy hash table library"), person(given = "Yann", family = "Collet", role = "cph", comment = "xxhash algorithm"))'
-maintainer = 'Randy Lai <randy.cs.lai@gmail.com>'
-description = 'Provides high performance container data types such as queues, stacks, deques, dicts and ordered dicts. Benchmarks <https://randy3k.github.io/collections/articles/benchmark.html> have shown that these containers are asymptotically more efficient than those offered by other packages.'
-url = 'https://github.com/randy3k/collections/'
-license = 'MIT + file LICENSE'
-suggests = ['testthat (>= 2.3.1)']
-roxygennote = '7.1.0'
-encoding = 'UTF-8'
-needscompilation = 'yes'
-author = 'Randy Lai [aut, cre], Andrea Mazzoleni [cph] (tommy hash table library), Yann Collet [cph] (xxhash algorithm)'
 
 [renv.packages.commonmark]
 package = 'commonmark'
@@ -1943,29 +1806,6 @@ needscompilation = 'no'
 author = 'Sam Firke [aut, cre], Bill Denney [ctb], Chris Haid [ctb], Ryan Knight [ctb], Malte Grosser [ctb], Jonathan Zadra [ctb]'
 'config/testthat/edition' = '3'
 
-[renv.packages.jose]
-package = 'jose'
-version = '1.2.1'
-source = 'Repository'
-repository = 'CRAN'
-depends = ['openssl (>= 1.2.1)']
-hash = ''
-type = 'Package'
-title = 'JavaScript Object Signing and Encryption'
-'authors@r' = 'person("Jeroen", "Ooms", role = c("aut", "cre"),  email = "jeroenooms@gmail.com", comment = c(ORCID = "0000-0002-4035-0289"))'
-maintainer = 'Jeroen Ooms <jeroenooms@gmail.com>'
-description = 'Read and write JSON Web Keys (JWK, rfc7517), generate and verify JSON Web Signatures (JWS, rfc7515) and encode/decode JSON Web Tokens (JWT, rfc7519) <https://datatracker.ietf.org/wg/jose/documents/>. These standards provide  modern signing and encryption formats that are natively supported by browsers via the JavaScript WebCryptoAPI <https://www.w3.org/TR/WebCryptoAPI/#jose>,  and used by services like OAuth 2.0, LetsEncrypt, and Github Apps.'
-url = 'https://r-lib.r-universe.dev/jose'
-bugreports = 'https://github.com/r-lib/jose/issues'
-license = 'MIT + file LICENSE'
-imports = ['jsonlite']
-suggests = ['spelling', 'testthat', 'knitr', 'rmarkdown']
-vignettebuilder = 'knitr'
-roxygennote = '7.1.2'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Jeroen Ooms [aut, cre] (<https://orcid.org/0000-0002-4035-0289>)'
-
 [renv.packages.jquerylib]
 package = 'jquerylib'
 version = '0.1.4'
@@ -2044,28 +1884,6 @@ license = 'MIT + file LICENSE | Unlimited'
 imports = ['stats', 'graphics']
 needscompilation = 'no'
 author = 'Justin Talbot,'
-
-[renv.packages.languageserver]
-package = 'languageserver'
-version = '0.3.16'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 3.4.0)']
-hash = ''
-type = 'Package'
-title = 'Language Server Protocol'
-'authors@r' = 'c(person(given = "Randy", family = "Lai", role = c("aut", "cre"), email = "randy.cs.lai@gmail.com"), person(given = "Kun", family = "Ren", role = "ctb", email = "mail@renkun.me"))'
-maintainer = 'Randy Lai <randy.cs.lai@gmail.com>'
-description = 'An implementation of the Language Server Protocol for R. The Language Server protocol is used by an editor client to integrate features like auto completion. See <https://microsoft.github.io/language-server-protocol/> for details.'
-url = 'https://github.com/REditorSupport/languageserver/'
-license = 'MIT + file LICENSE'
-imports = ['callr (>= 3.0.0)', 'collections (>= 0.3.0)', 'fs (>= 1.3.1)', 'jsonlite (>= 1.6)', 'lintr (>= 3.0.0)', 'parallel', 'R6 (>= 2.4.1)', 'roxygen2 (>= 7.0.0)', 'stringi (>= 1.1.7)', 'styler (>= 1.5.1)', 'tools', 'utils', 'xml2 (>= 1.2.2)', 'xmlparsedata (>= 1.0.3)']
-suggests = ['covr (>= 3.4.0)', 'magrittr (>= 1.5)', 'mockery (>= 0.4.2)', 'pacman', 'processx (>= 3.4.1)', 'purrr (>= 0.3.3)', 'testthat (>= 2.1.0)', 'withr (>= 2.3.0)', 'rmarkdown (>= 2.0)']
-roxygennote = '7.2.1'
-encoding = 'UTF-8'
-needscompilation = 'yes'
-author = 'Randy Lai [aut, cre], Kun Ren [ctb]'
-'config/testthat/edition' = '3'
 
 [renv.packages.later]
 package = 'later'
@@ -2230,30 +2048,6 @@ needscompilation = 'no'
 author = 'Lionel Henry [aut, cre], Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Posit Software, PBC [cph, fnd]'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate, usethis'
-
-[renv.packages.lintr]
-package = 'lintr'
-version = '3.3.0-1'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 4.0)']
-hash = ''
-title = "A 'Linter' for R Code"
-'authors@r' = 'c( person("Jim", "Hester", , role = "aut"), person("Florent", "Angly", role = "aut", comment = c(GitHub = "fangly")), person("Russ", "Hyde", role = "aut"), person("Michael", "Chirico", email = "michaelchirico4@gmail.com", role = c("aut", "cre"), comment = c(ORCID = "0000-0003-0787-087X")), person("Kun", "Ren", role = "aut"), person("Alexander", "Rosenstock", role = "aut", comment = c(GitHub = "AshesITR")), person("Indrajeet", "Patil", email = "patilindrajeet.science@gmail.com", role = "aut", comment = c(ORCID = "0000-0003-1995-6531")), person("Hugo", "Gruson", role = "aut", comment = c(ORCID = "0000-0002-4094-1476")) )'
-maintainer = 'Michael Chirico <michaelchirico4@gmail.com>'
-description = "Checks adherence to a given style, syntax errors and possible semantic issues.  Supports on the fly checking of R code edited with 'RStudio IDE', 'Emacs', 'Vim', 'Sublime Text', 'Atom' and 'Visual Studio Code'."
-url = 'https://lintr.r-lib.org, https://github.com/r-lib/lintr'
-bugreports = 'https://github.com/r-lib/lintr/issues'
-license = 'MIT + file LICENSE'
-imports = ['backports (>= 1.5.0)', 'cli (>= 3.4.0)', 'codetools', 'digest', 'glue', 'knitr', 'rex', 'stats', 'utils', 'xfun', 'xml2 (>= 1.0.0)', 'xmlparsedata (>= 1.0.5)']
-suggests = ['bookdown', 'cyclocomp', 'jsonlite', 'patrick (>= 0.2.0)', 'rlang', 'rmarkdown', 'rstudioapi (>= 0.2)', 'testthat (>= 3.2.1)', 'tibble', 'tufte', 'withr (>= 2.5.0)']
-vignettebuilder = 'knitr'
-roxygennote = '7.3.3'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Jim Hester [aut], Florent Angly [aut] (GitHub: fangly), Russ Hyde [aut], Michael Chirico [aut, cre] (ORCID: <https://orcid.org/0000-0003-0787-087X>), Kun Ren [aut], Alexander Rosenstock [aut] (GitHub: AshesITR), Indrajeet Patil [aut] (ORCID: <https://orcid.org/0000-0003-1995-6531>), Hugo Gruson [aut] (ORCID: <https://orcid.org/0000-0002-4094-1476>)'
-'config/testthat/edition' = '3'
-'config/needs/website' = 'tidyverse/tidytemplate'
 
 [renv.packages.listenv]
 package = 'listenv'
@@ -2520,29 +2314,6 @@ needscompilation = 'no'
 author = 'Gábor Csárdi [aut, cre]'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate'
-
-[renv.packages.packrat]
-package = 'packrat'
-version = '0.9.3'
-source = 'Repository'
-repository = 'CRAN'
-depends = ['R (>= 3.0.0)']
-hash = ''
-type = 'Package'
-title = 'A Dependency Management System for Projects and their R Package Dependencies'
-'authors@r' = 'c( person("Aron", "Atkins", , "aron@posit.co", role = c("aut", "cre")), person("Toph", "Allen", role = "aut"), person("Kevin", "Ushey", role = "aut"), person("Jonathan", "McPherson", role = "aut"), person("Joe", "Cheng", role = "aut"), person("JJ", "Allaire", role = "aut"), person("Posit Software, PBC", role = c("cph", "fnd")) )'
-maintainer = 'Aron Atkins <aron@posit.co>'
-description = 'Manage the R packages your project depends on in an isolated, portable, and reproducible way.'
-url = 'https://github.com/rstudio/packrat'
-bugreports = 'https://github.com/rstudio/packrat/issues'
-license = 'GPL-2'
-imports = ['tools', 'utils']
-suggests = ['devtools', 'httr', 'knitr', 'mockery', 'rmarkdown', 'testthat (>= 3.0.0)', 'webfakes', 'withr']
-roxygennote = '7.3.2'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Aron Atkins [aut, cre], Toph Allen [aut], Kevin Ushey [aut], Jonathan McPherson [aut], Joe Cheng [aut], JJ Allaire [aut], Posit Software, PBC [cph, fnd]'
-'config/testthat/edition' = '3'
 
 [renv.packages.parallelly]
 package = 'parallelly'
@@ -3165,28 +2936,6 @@ author = 'Jennifer Bryan [aut, cre] (<https://orcid.org/0000-0002-6983-2759>), J
 'config/needs/website' = 'dplyr, tidyverse/tidytemplate'
 systemrequirements = 'pandoc (>= 2.0) - https://pandoc.org/'
 
-[renv.packages.rex]
-package = 'rex'
-version = '1.2.1'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-hash = ''
-type = 'Package'
-title = 'Friendly Regular Expressions'
-'authors@r' = 'c( person("Kevin", "Ushey", , "kevinushey@gmail.com", role = c("aut", "cre")), person("Jim", "Hester", , "james.f.hester@gmail.com", role = "aut"), person("Robert", "Krzyzanowski", , "rkrzyzanowski@gmail.com", role = "aut") )'
-maintainer = 'Kevin Ushey <kevinushey@gmail.com>'
-description = 'A friendly interface for the construction of regular expressions.'
-url = 'https://github.com/kevinushey/rex'
-bugreports = 'https://github.com/kevinushey/rex/issues'
-license = 'MIT + file LICENSE'
-imports = ['lazyeval']
-suggests = ['covr', 'dplyr', 'ggplot2', 'Hmisc', 'knitr', 'magrittr', 'rmarkdown', 'roxygen2', 'rvest', 'stringr', 'testthat']
-vignettebuilder = 'knitr'
-roxygennote = '7.1.2'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Kevin Ushey [aut, cre], Jim Hester [aut], Robert Krzyzanowski [aut]'
-
 [renv.packages.rlang]
 package = 'rlang'
 version = '1.1.7'
@@ -3281,31 +3030,6 @@ roxygennote = '7.3.2.9000'
 encoding = 'UTF-8'
 needscompilation = 'no'
 author = 'Kirill Müller [aut, cre] (ORCID: <https://orcid.org/0000-0002-1416-3412>)'
-'config/testthat/edition' = '3'
-'config/needs/website' = 'tidyverse/tidytemplate'
-
-[renv.packages.rsconnect]
-package = 'rsconnect'
-version = '1.7.0'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 3.5.0)']
-hash = ''
-type = 'Package'
-title = "Deploy Docs, Apps, and APIs to 'Posit Connect', 'shinyapps.io', and 'RPubs'"
-'authors@r' = 'c( person("Aron", "Atkins", , "aron@posit.co", role = c("aut", "cre")), person("Toph", "Allen", role = "aut"), person("Hadley", "Wickham", role = "aut"), person("Jonathan", "McPherson", role = "aut"), person("JJ", "Allaire", role = "aut"), person("Posit Software, PBC", role = c("cph", "fnd")) )'
-maintainer = 'Aron Atkins <aron@posit.co>'
-description = "Programmatic deployment interface for 'RPubs', 'shinyapps.io', and 'Posit Connect'. Supported content types include R Markdown documents, Shiny applications, Plumber APIs, plots, and static web content."
-url = 'https://rstudio.github.io/rsconnect/, https://github.com/rstudio/rsconnect'
-bugreports = 'https://github.com/rstudio/rsconnect/issues'
-license = 'GPL-2'
-imports = ['cli', 'curl', 'digest', 'jsonlite', 'lifecycle', 'openssl (>= 2.0.0)', 'PKI', 'packrat (>= 0.6)', 'renv (>= 1.0.0)', 'rlang (>= 1.0.0)', 'rstudioapi (>= 0.5)', 'snowflakeauth', 'tools', 'yaml (>= 2.1.5)', 'utils']
-suggests = ['Biobase', 'BiocManager', 'foreign', 'knitr', 'MASS', 'plumber (>= 0.3.2)', 'quarto', 'RCurl', 'reticulate', 'rmarkdown (>= 1.1)', 'shiny', 'testthat (>= 3.1.9)', 'webfakes', 'withr']
-vignettebuilder = 'knitr, rmarkdown'
-roxygennote = '7.3.3'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Aron Atkins [aut, cre], Toph Allen [aut], Hadley Wickham [aut], Jonathan McPherson [aut], JJ Allaire [aut], Posit Software, PBC [cph, fnd]'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate'
 
@@ -3663,27 +3387,6 @@ encoding = 'UTF-8'
 needscompilation = 'no'
 author = 'Malte Grosser [aut, cre]'
 
-[renv.packages.snowflakeauth]
-package = 'snowflakeauth'
-version = '0.2.1'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-hash = ''
-title = "Authentication Helpers for 'Snowflake'"
-'authors@r' = 'c( person("Aaron", "Jacobs", , "aaron.jacobs@posit.co", role = c("aut")), person("E. David", "Aja", , "david@posit.co", role = c("aut", "cre")), person("Posit Software, PBC", role = c("cph", "fnd")) )'
-maintainer = 'E. David Aja <david@posit.co>'
-description = "Authentication helpers for 'Snowflake'. It provides compatibility with authentication approaches supported by the 'Snowflake Connector for Python' <https://pypi.org/project/snowflake-connector-python> and the 'Snowflake CLI' <https://pypi.org/project/snowflake-cli>."
-url = 'https://posit-dev.github.io/snowflakeauth/, https://github.com/posit-dev/snowflakeauth'
-bugreports = 'https://github.com/posit-dev/snowflakeauth/issues'
-license = 'MIT + file LICENSE'
-imports = ['cli', 'curl', 'jsonlite', 'RcppTOML', 'rlang', 'jose', 'openssl']
-suggests = ['httpuv', 'testthat (>= 3.0.0)', 'withr']
-roxygennote = '7.3.2'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Aaron Jacobs [aut], E. David Aja [aut, cre], Posit Software, PBC [cph, fnd]'
-'config/testthat/edition' = '3'
-
 [renv.packages.sourcetools]
 package = 'sourcetools'
 version = '0.1.7-1'
@@ -3769,30 +3472,6 @@ needscompilation = 'no'
 author = 'Hadley Wickham [aut, cre, cph], Posit Software, PBC [cph, fnd]'
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate'
-
-[renv.packages.styler]
-package = 'styler'
-version = '1.11.0'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 4.0.0)']
-hash = ''
-type = 'Package'
-title = 'Non-Invasive Pretty Printing of R Code'
-'authors@r' = 'c(person(given = "Kirill", family = "Müller", role = "aut", email = "kirill@cynkra.com", comment = c(ORCID = "0000-0002-1416-3412")), person(given = "Lorenz", family = "Walthert", role = c("cre", "aut"), email = "lorenz.walthert@icloud.com"), person(given = "Indrajeet", family = "Patil", role = "aut", email = "patilindrajeet.science@gmail.com", comment = c(ORCID = "0000-0003-1995-6531")))'
-maintainer = 'Lorenz Walthert <lorenz.walthert@icloud.com>'
-description = "Pretty-prints R code without changing the user's formatting intent."
-url = 'https://github.com/r-lib/styler, https://styler.r-lib.org'
-bugreports = 'https://github.com/r-lib/styler/issues'
-license = 'MIT + file LICENSE'
-imports = ['cli (>= 3.1.1)', 'magrittr (>= 2.0.0)', 'purrr (>= 1.0.2)', 'R.cache (>= 0.15.0)', 'rlang (>= 1.0.0)', 'rprojroot (>= 1.1)', 'tools', 'vctrs (>= 0.4.1)', 'withr (>= 2.3.0)']
-suggests = ['data.tree (>= 0.1.6)', 'digest', 'here', 'knitr', 'prettycode', 'rmarkdown', 'roxygen2', 'rstudioapi (>= 0.7)', 'tibble (>= 1.4.2)', 'testthat (>= 3.2.1)']
-vignettebuilder = 'knitr'
-roxygennote = '7.3.3'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Kirill Müller [aut] (ORCID: <https://orcid.org/0000-0002-1416-3412>), Lorenz Walthert [cre, aut], Indrajeet Patil [aut] (ORCID: <https://orcid.org/0000-0003-1995-6531>)'
-'config/testthat/edition' = '3'
 
 [renv.packages.sys]
 package = 'sys'
@@ -4386,25 +4065,6 @@ author = 'Hadley Wickham [aut], Jim Hester [aut], Jeroen Ooms [aut, cre], Posit 
 'config/testthat/edition' = '3'
 'config/needs/website' = 'tidyverse/tidytemplate'
 systemrequirements = 'libxml2: libxml2-dev (deb), libxml2-devel (rpm)'
-
-[renv.packages.xmlparsedata]
-package = 'xmlparsedata'
-version = '1.0.5'
-source = 'Repository'
-repository = 'https://packagemanager.posit.co/cran/latest'
-depends = ['R (>= 3.0.0)']
-hash = ''
-title = "Parse Data of 'R' Code as an 'XML' Tree"
-maintainer = 'Gábor Csárdi <csardi.gabor@gmail.com>'
-description = "Convert the output of 'utils::getParseData()' to an 'XML' tree, that one can search via 'XPath', and easier to manipulate in general."
-url = 'https://github.com/r-lib/xmlparsedata#readme'
-bugreports = 'https://github.com/r-lib/xmlparsedata/issues'
-license = 'MIT + file LICENSE'
-suggests = ['covr', 'testthat', 'xml2']
-roxygennote = '6.0.1'
-encoding = 'UTF-8'
-needscompilation = 'no'
-author = 'Gábor Csárdi'
 
 [renv.packages.xopen]
 package = 'xopen'

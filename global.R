@@ -59,10 +59,10 @@ if (FALSE) {
 
   # Run unit tests
   testthat::test_dir("tests/testthat")
-}
 
-# load test weather
-test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
+  # load test weather
+  test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
+}
 
 
 # Async tasks ------------------------------------------------------------------
