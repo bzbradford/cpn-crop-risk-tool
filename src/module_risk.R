@@ -25,12 +25,22 @@ riskServer <- function(rv, wx_data) {
       ## main_ui ----
       # handle validation messages
       output$main_ui <- renderUI({
-        validate(
-          need(rv$sites_ready, OPTS$validation_sites_ready),
-          need(rv$weather_ready, OPTS$validation_weather_ready)
-        )
-
         tagList(
+          div(
+            class = "label-inline",
+            style = "margin-bottom: 1rem;",
+            tags$label(
+              "Group:",
+              `for` = ns("model_group")
+            ),
+            radioGroupButtons(
+              inputId = ns("model_group"),
+              label = NULL,
+              choices = OPTS$model_group_choices,
+              size = "sm",
+              individual = TRUE
+            )
+          ),
           uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
           uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
           uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
@@ -40,17 +50,19 @@ riskServer <- function(rv, wx_data) {
 
       ## model_picker ----
       output$model_picker <- renderUI({
-        choices <- build_choices(model_list, "model_name", "slug")
+        model_group <- req(input$model_group)
+        selected_models <- Filter(\(m) m$group == model_group, model_list)
+        choices <- build_choices(selected_models, "display_name", "slug")
 
-        tags$div(
-          style = "display: flex; align-items: center; gap: 10px;",
+        div(
+          class = "label-inline",
           tags$label(
-            "Select model:",
+            "Model:",
             `for` = ns("model"),
             class = "form-group",
           ),
-          tags$div(
-            style = "flex: 1;",
+          div(
+            style = "flex: 1; font-weight: bold;",
             selectInput(
               inputId = ns("model"),
               label = NULL,
@@ -195,10 +207,8 @@ riskServer <- function(rv, wx_data) {
       # results_ui ----
       output$results_ui <- renderUI({
         validate(
-          need(
-            rv$weather_ready,
-            "No weather data downloaded yet for selected dates."
-          )
+          need(rv$sites_ready, OPTS$validation_sites_ready),
+          need(rv$weather_ready, OPTS$validation_weather_ready)
         )
 
         tagList(

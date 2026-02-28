@@ -59,10 +59,10 @@ if (FALSE) {
 
   # Run unit tests
   testthat::test_dir("tests/testthat")
-
-  # load test weather
-  test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 }
+
+# load test weather
+test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
 
 # Async tasks ------------------------------------------------------------------
@@ -112,12 +112,6 @@ OPTS <- lst(
   default_start_date = today() - 30,
 
   ## map ----
-  # state_colors = {
-  #   pals = RColorBrewer::brewer.pal.info
-  #   pal = RColorBrewer::brewer.pal
-  #   qual_col_pals = pals[pals$category == 'qual',]
-  #   unlist(mapply(pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
-  # },
   map_bounds_wi = list(
     lat1 = 42.4,
     lat2 = 47.1,
@@ -137,7 +131,6 @@ OPTS <- lst(
     "Grey Canvas" = providers$CartoDB.Positron
   ),
   map_layers = list(
-    # counties = "States/Counties"
     grid = "Weather data grids"
   ),
   map_click_zoom = 10,
@@ -167,7 +160,10 @@ OPTS <- lst(
   ),
 
   ## Model risk tab ----
-  # crop_choices = setNames(names(crops), sapply(crops, \(x) x$name)),
+  model_group_choices = list(
+    "Field crops" = "field",
+    "Vegetable crops" = "vegetable"
+  ),
 
   ## plotting ----
   plot_title_font = list(family = "Redhat Display", size = 14),
@@ -912,21 +908,26 @@ load_sites <- function(fpath) {
 # Model definitions ----------------------------------------------------------
 
 #' @param name display name
-#' @param crop relevant crop or crop group
+#' @param crop relevant crop
+#' @param group
 #' @param info model info
 #' @param doc markdown file for More Information
 #' @param risk_period NULL or length two character vector eg 'Jul 1'
 Model <- function(
-  ...,
   name,
+  group,
   info,
   crop = NULL,
+  display_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop)),
   doc = NULL,
   risk_period = NULL
 ) {
-  if (length(list(...)) > 0) {
-    stop("Invalid model config: ", names(list(...)))
+  # check for valid group
+  if (!(group %in% OPTS$model_group_choices)) {
+    stop("Invalid model group ", group)
   }
+
+  # check for doc
   if (!is.null(doc)) {
     all_docs <- list.files(
       pattern = "*.md",
@@ -949,10 +950,12 @@ Model <- function(
     )
   }
 
+  # return validated list
   list(
     name = name,
+    display_name = display_name,
     crop = crop,
-    model_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop)),
+    group = group,
     info = info,
     doc = doc,
     risk_period = risk_period
@@ -963,6 +966,7 @@ model_list <- list(
   tarspot = Model(
     name = "Tar spot",
     crop = "Corn",
+    group = "field",
     info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
     doc = "docs/tar-spot.md",
     risk_period = c("Jul 1", "Aug 15")
@@ -971,6 +975,7 @@ model_list <- list(
   gls = Model(
     name = "Gray leaf spot",
     crop = "Corn",
+    group = "field",
     info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
     doc = "docs/gray-leaf-spot.md",
     risk_period = c("Jul 1", "Aug 15")
@@ -979,6 +984,7 @@ model_list <- list(
   don = Model(
     name = "Gibberella ear rot/DON",
     crop = "Corn",
+    group = "field",
     info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this Model may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking.",
     doc = "docs/don.md",
     risk_period = c("Jul 15", "Aug 7")
@@ -987,6 +993,7 @@ model_list <- list(
   whitemold = Model(
     name = "White mold",
     crop = "Soybean",
+    group = "field",
     info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
     doc = "docs/white-mold.md",
     risk_period = c("Jun 15", "Aug 7")
@@ -995,6 +1002,7 @@ model_list <- list(
   frogeye = Model(
     name = "Frogeye leaf spot",
     crop = "Soybean",
+    group = "field",
     info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
     doc = "docs/frogeye.md",
     risk_period = c("Jun 15", "Sep 7")
@@ -1003,6 +1011,7 @@ model_list <- list(
   wheatscab = Model(
     name = "Wheat scab FHB",
     crop = "Wheat",
+    group = "field",
     info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on Model probability. Model depends on 14-day moving average relative humidity.",
     doc = "docs/wheat-scab.md"
   ),
@@ -1010,6 +1019,7 @@ model_list <- list(
   earlyblight = Model(
     name = "Early blight",
     crop = "Solanum",
+    group = "vegetable",
     info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
     doc = "docs/early-blight.md"
   ),
@@ -1017,6 +1027,7 @@ model_list <- list(
   lateblight = Model(
     name = "Late blight",
     crop = "Solanum",
+    group = "vegetable",
     info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of Model severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md"
   ),
@@ -1024,6 +1035,7 @@ model_list <- list(
   alternaria = Model(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
+    group = "vegetable",
     info = "<b>Alternaria and Cercospora leaf blights are a common fungal Model of carrot leaves and petioles.</b> Risk depends on the number of Model severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md"
   ),
@@ -1031,6 +1043,7 @@ model_list <- list(
   cercospora = Model(
     name = "Cercospora leaf spot",
     crop = "Beet",
+    group = "vegetable",
     info = "<b>Cercospora leaf spot is a damaging fungal Model affecting beets.</b> Risk depends on the average Model severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora.md"
   ),
@@ -1038,6 +1051,7 @@ model_list <- list(
   botrytis = Model(
     name = "Botrytis leaf blight",
     crop = "Onion",
+    group = "vegetable",
     info = "<b>Onions are susceptible to Botrytis leaf blight.</b> Risk depends on cumulative Model severity values since crop emergence. Model depends on temperature, hours of high humidity, and precipitation.",
     doc = "docs/botrytis.md"
   )
