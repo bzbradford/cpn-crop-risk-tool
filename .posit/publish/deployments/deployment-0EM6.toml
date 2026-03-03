@@ -11,9 +11,9 @@ id = '4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 dashboard_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c'
 direct_url = 'https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/'
 logs_url = 'https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs'
-deployed_at = '2026-02-28T17:34:26-06:00'
-bundle_id = '4558'
-bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4558/download'
+deployed_at = '2026-03-02T18:28:41-06:00'
+bundle_id = '4561'
+bundle_url = 'https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4561/download'
 files = [
   '.Renviron',
   '.posit/publish/Crop Risk Tool-TGSR.toml',
@@ -38,6 +38,7 @@ files = [
   'docs/gray-leaf-spot.md',
   'docs/late-blight-potato.png',
   'docs/late-blight.md',
+  'docs/rye-biomass.md',
   'docs/tar-spot.jpg',
   'docs/tar-spot.md',
   'docs/wheat-scab.jpg',

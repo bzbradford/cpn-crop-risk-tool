@@ -1065,39 +1065,10 @@ build_botrytis <- function(daily) {
 #' Predicts biomass (lb/ac) of rye cover crop when planted in the fall and
 #' harvested in the spring/early summer (Apr - Jun). Trained on data from Wisconsin
 #' Typical biomass range should be 0 - 16000
-#' @param gdd_total Cumulative sine GDD base 4C
+#' @param plant_doy Planting day of year
+#' @param gdd_total Cumulative sine GDD base 0C
 #' @param precip_60d Cumulative precip in first 60 days after planting (mm)
 #' @param latitude Latitude of prediction location
-# predict_rye_biomass <- function(
-#   gdd_total,
-#   precip_fall,
-#   latitude
-# ) {
-#   b0 <- 7.271e+02
-#   b_pf <- -5.358e-02
-#   b_lat <- -1.377e+01
-#   k <- 4.975e-03
-#   x0 <- 6.856e+02
-
-#   ((b0 + b_pf * precip_fall + b_lat * latitude) /
-#     (1 + exp(-k * (gdd_total - x0))))^2
-# }
-
-# predict_rye_biomass <- function(
-#   gdd_total,
-#   precip_fall,
-#   latitude
-# ) {
-#   b0 <- 8.619e+02
-#   b_pf <- -7.545e-02
-#   b_lat <- -1.648e+01
-#   k <- 3.303e-03
-#   x0 <- 1.195e+03
-
-#   ((b0 + b_pf * precip_fall + b_lat * latitude) /
-#     (1 + exp(-k * (gdd_total - x0))))^2
-# }
-
 predict_rye_biomass <- function(
   plant_doy,
   gdd_total,
