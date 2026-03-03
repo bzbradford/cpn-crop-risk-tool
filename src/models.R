@@ -98,10 +98,14 @@ Model <- function(
   group,
   info,
   crop,
-  display_name = sprintf("%s (%s)", name, crop),
-  doc = NULL,
-  validate = NULL
+  doc,
+  validate,
+  ycol,
+  yrange,
+  display_name = sprintf("%s (%s)", name, crop)
 ) {
+  args <- as.list(environment())
+
   # check for valid group
   if (!(group %in% OPTS$model_group_choices)) {
     stop("Invalid model group ", group)
@@ -118,16 +122,7 @@ Model <- function(
     }
   }
 
-  # return validated list
-  list(
-    name = name,
-    display_name = display_name,
-    crop = crop,
-    group = group,
-    info = info,
-    doc = doc,
-    validate = validate
-  )
+  args
 }
 
 model_list <- list(
@@ -135,74 +130,91 @@ model_list <- list(
     name = "Tar spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
+    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/tar-spot.md",
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
         "Corn is only vulnerable to tarspot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
-    }
+    },
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
+
   gls = Model(
     name = "Gray leaf spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
+    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/gray-leaf-spot.md",
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
         "Corn is only vulnerable to tar spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
-    }
+    },
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
+
   don = Model(
     name = "Gibberella ear rot/DON",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking.",
+    info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/don.md",
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 15", "Aug 7"))
       if (!any(overlap)) {
         "Corn is only vulnerable to Gibberella ear rot during silking. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
-    }
+    },
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
+
   whitemold = Model(
     name = "White mold",
     crop = "Soybean",
     group = "field",
-    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
+    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/white-mold.md",
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jun 15", "Aug 7"))
       if (!any(overlap)) {
         "Soybean is only vulnerable to white mold between R1 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
-    }
+    },
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
+
   frogeye = Model(
     name = "Frogeye leaf spot",
     crop = "Soybean",
     group = "field",
-    info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
+    info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/frogeye.md",
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jun 15", "Sep 7"))
       if (!any(overlap)) {
         "Soybean is only vulnerable to white mold between R1 and R5. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
-    }
+    },
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
+
   wheatscab = Model(
     name = "Wheat scab FHB",
     crop = "Wheat",
     group = "field",
-    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity.",
+    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/wheat-scab.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "probability",
+    yrange = c(0, 1)
   ),
 
   earlyblight = Model(
@@ -211,7 +223,9 @@ model_list <- list(
     group = "vegetable",
     info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
     doc = "docs/early-blight.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "severity",
+    yrange = c(0, 4)
   ),
 
   lateblight = Model(
@@ -220,34 +234,61 @@ model_list <- list(
     group = "vegetable",
     info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of disease severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "severity",
+    yrange = c(0, 4)
   ),
-
   alternaria = Model(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
     group = "vegetable",
     info = "<b>Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles.</b> Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "severity",
+    yrange = c(0, 4)
   ),
-
   cercospora = Model(
     name = "Cercospora leaf spot",
     crop = "Beet",
     group = "vegetable",
     info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "severity",
+    yrange = c(0, 4)
   ),
-
   botrytis = Model(
     name = "Botrytis leaf blight",
     crop = "Onion",
     group = "vegetable",
     info = "<b>Onions are susceptible to Botrytis leaf blight.</b> Risk depends on cumulative disease severity values since crop emergence. Model depends on temperature, hours of high humidity, and precipitation.",
     doc = "docs/botrytis.md",
-    validate = NULL
+    validate = NULL,
+    ycol = "severity",
+    yrange = c(0, 4)
+  ),
+  ryebiomass = Model(
+    name = "Winter rye biomass",
+    display_name = "Winter rye biomass",
+    crop = "Rye",
+    group = "cover",
+    info = "This cover crop termination model predicts biomass accumulation in overwintering rye. Start date should be set to the fall planting date and biomass predictions will be made through the end date. This model is an early prototype trained on data from Wisconsin. Actual yields will depend on additional factors not included in the model such as rye cultivar, soil type, and nitrogen inputs.",
+    doc = "docs/rye-biomass.md",
+    validate = function(params) {
+      dr <- params$date_range
+      msg <- paste(
+        if (yday(dr[1]) < 200) {
+          "Start date (planting date) should be in the fall."
+        },
+        if (!(year(dr[2]) > year(dr[1]))) {
+          "End date should be the year after planting."
+        }
+      )
+      if (length(msg) > 0) msg else NULL
+    },
+    ycol = "biomass",
+    yrange = c(0, 10000)
   )
 )
 
@@ -320,12 +361,13 @@ risk_from_severity <- function(severity) {
 #' @param df any of the data from build_* functions
 test_plot <- function(df) {
   df |>
-    pivot_longer(cols = any_of(c("model_value", "severity"))) |>
+    pivot_longer(cols = any_of(c("probability", "severity", "biomass"))) |>
     ggplot(aes(x = date, y = value)) +
     geom_col(aes(fill = risk_color), lwd = 0, width = 1) +
-    geom_line(aes(group = grid_id)) +
+    geom_line(aes(color = name, group = grid_id)) +
     scale_fill_identity() +
-    facet_grid(name ~ grid_id, scales = "free")
+    facet_wrap(~grid_id, scales = "free_x") +
+    theme(legend.position = "none")
 }
 
 # Tar spot (corn) --------------------------------------------------------------
@@ -362,13 +404,13 @@ build_tar_spot <- function(daily) {
       temperature_min_21day = roll_mean(temperature_min, 21),
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
       hours_rh_over_90_night_14day = roll_mean(hours_rh_over_90_night, 14),
-      model_value = predict_tarspot(
+      probability = predict_tarspot(
         temperature_mean_30day,
         relative_humidity_max_30day,
         hours_rh_over_90_night_14day
       ) |>
         attenuate_prob(temperature_min_21day),
-      risk_from_prob(model_value, 0.35, 0.2, 0.01),
+      risk_from_prob(probability, 0.35, 0.2, 0.01),
       .by = grid_id,
       .keep = "used"
     )
@@ -401,8 +443,8 @@ build_gray_leaf_spot <- function(daily) {
       date = date,
       temperature_min_21day = roll_mean(temperature_min, 21),
       dew_point_min_30day = roll_mean(dew_point_min, 30),
-      model_value = predict_gls(temperature_min_21day, dew_point_min_30day),
-      risk_from_prob(model_value, 0.6, 0.4, 0.01),
+      probability = predict_gls(temperature_min_21day, dew_point_min_30day),
+      risk_from_prob(probability, 0.6, 0.4, 0.01),
       .by = grid_id,
       .keep = "used"
     )
@@ -457,7 +499,7 @@ build_don <- function(daily) {
       days_precip_14day = roll_sum(precip_daily > 0, 14),
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
       days_rh_over_80_14day = roll_sum(relative_humidity_mean > 80, 14),
-      model_value = predict_don(
+      probability = predict_don(
         lag(temp_max_14day, 7),
         lag(temp_min_14day, 7),
         lag(days_temp_over_25_14day, 7),
@@ -465,11 +507,11 @@ build_don <- function(daily) {
         rh_mean_14day,
         days_rh_over_80_14day
       ),
-      risk_from_prob(model_value, 0.8, 0.4, 0.2),
+      risk_from_prob(probability, 0.8, 0.4, 0.2),
       .by = grid_id,
       .keep = "used"
     ) |>
-    drop_na(model_value)
+    drop_na(probability)
 }
 # test_hourly_wx |> build_daily() |> build_don() |> test_plot()
 
@@ -496,13 +538,14 @@ predict_white_mold_dry <- function(max_temp_30ma, max_wind_30ma, max_rh_30ma) {
 #' Risk criteria: High >=40%, Med >=20%, Low >=5%
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
-#' @param spacing_dummy T if row spacing is 30", F if 15"
+#' @param row_spacing "30" or "15" inches
 #' @returns probability of spore presence
 predict_white_mold_irrig <- function(
   max_temp_30ma,
   max_rh_30ma,
-  spacing_dummy
+  row_spacing
 ) {
+  spacing_dummy <- ifelse(row_spacing == "30", 1, 0)
   mu <- -52.65 +
     -2.38 * spacing_dummy +
     0.65 * max_temp_30ma +
@@ -513,11 +556,11 @@ predict_white_mold_irrig <- function(
 #' Build from weather
 #' @param daily daily weather data
 #' @param irrigated T/F use irrigated or dry model
-#' @param row_spacing if irrigated, indicate row spacing
+#' @param row_spacing if irrigated, indicate row spacing "30" or "15" inches
 build_white_mold <- function(
   daily,
   irrigated = TRUE,
-  row_spacing = c("30", "15")
+  row_spacing = "30"
 ) {
   req(nrow(daily) > 0)
 
@@ -533,28 +576,26 @@ build_white_mold <- function(
     )
 
   if (irrigated) {
-    row_spacing <- match.arg(row_spacing)
-    spacing_dummy <- row_spacing == "30"
     wx |>
       mutate(
-        model_value = predict_white_mold_irrig(
+        probability = predict_white_mold_irrig(
           temperature_max_30day,
           relative_humidity_max_30day,
-          spacing_dummy
+          row_spacing
         ),
-        risk_from_prob(model_value, 0.1, 0.005, 0.0001),
+        risk_from_prob(probability, 0.1, 0.005, 0.0001),
         .by = grid_id
       )
   } else {
     wx |>
       mutate(
-        model_value = predict_white_mold_dry(
+        probability = predict_white_mold_dry(
           temperature_max_30day,
           kmh_to_mps(wind_speed_max_30day),
           relative_humidity_max_30day
         ) |>
           attenuate_prob(temperature_min_21day),
-        risk_from_prob(model_value, 0.35, 0.2, 0.0001),
+        risk_from_prob(probability, 0.35, 0.2, 0.0001),
         .by = grid_id
       )
   }
@@ -588,8 +629,8 @@ build_frogeye_leaf_spot <- function(daily) {
       date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
       hours_rh_over_80_30day = roll_mean(hours_rh_over_80, 30),
-      model_value = predict_fls(temperature_max_30day, hours_rh_over_80_30day),
-      risk_from_prob(model_value, 0.5, 0.4, 0.01),
+      probability = predict_fls(temperature_max_30day, hours_rh_over_80_30day),
+      risk_from_prob(probability, 0.5, 0.4, 0.01),
       .by = grid_id,
       .keep = "used"
     )
@@ -627,8 +668,8 @@ build_wheat_scab <- function(daily, resistance) {
     mutate(
       date = date,
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
-      model_value = predict_wheat_scab(rh_mean_14day)[, resistance],
-      risk_from_prob(model_value, 0.32, 0.24, 0.01),
+      probability = predict_wheat_scab(rh_mean_14day)[, resistance],
+      risk_from_prob(probability, 0.32, 0.24, 0.01),
       .by = grid_id,
       .keep = "used"
     )
@@ -702,11 +743,11 @@ build_early_blight <- function(daily) {
   daily |>
     mutate(
       date = date,
-      model_value = calc_pdays(
+      pdays = calc_pdays(
         temperature_min,
         temperature_max
       ),
-      risk_for_early_blight(model_value),
+      risk_for_early_blight(pdays),
       .by = grid_id,
       .keep = "used"
     )
@@ -768,11 +809,11 @@ build_late_blight <- function(daily) {
   daily |>
     mutate(
       date = date,
-      model_value = calc_late_blight_dsv(
+      dsv = calc_late_blight_dsv(
         temperature_mean_rh_over_90,
         hours_rh_over_90
       ),
-      risk_for_late_blight(model_value),
+      risk_for_late_blight(dsv),
       .by = grid_id,
       .keep = "used"
     )
@@ -830,11 +871,11 @@ build_alternaria <- function(daily) {
   daily |>
     mutate(
       date = date,
-      model_value = calc_alternaria_dsv(
+      dsv = calc_alternaria_dsv(
         temperature_mean_rh_over_90,
         hours_rh_over_90
       ),
-      risk_for_alternaria(model_value),
+      risk_for_alternaria(dsv),
       .by = grid_id,
       .keep = "used"
     )
@@ -908,11 +949,11 @@ build_cercospora <- function(daily) {
   daily |>
     mutate(
       date = date,
-      model_value = calc_cercospora_div(
+      dsv = calc_cercospora_div(
         temperature_mean_rh_over_90,
         hours_rh_over_90
       ),
-      risk_for_cercospora(model_value),
+      risk_for_cercospora(dsv),
       .by = grid_id,
       .keep = "used",
     )
@@ -1006,15 +1047,127 @@ build_botrytis <- function(daily) {
   daily |>
     mutate(
       date = date,
-      model_value = calc_botrytis_dsi(
+      dsv = calc_botrytis_dsi(
         hot_past_5_days,
         dry,
         hours_rh_over_90,
         temperature_mean_rh_over_90
       ),
-      risk_for_botrytis(model_value),
+      risk_for_botrytis(dsv),
       .by = grid_id,
       .keep = "used",
     )
 }
 # test_hourly_wx |> build_daily() |> build_botrytis() |> test_plot()
+
+# Cereal rye biomass -----------------------------------------------------------
+#' Cover crop termination model
+#' Predicts biomass (lb/ac) of rye cover crop when planted in the fall and
+#' harvested in the spring/early summer (Apr - Jun). Trained on data from Wisconsin
+#' Typical biomass range should be 0 - 16000
+#' @param gdd_total Cumulative sine GDD base 4C
+#' @param precip_60d Cumulative precip in first 60 days after planting (mm)
+#' @param latitude Latitude of prediction location
+# predict_rye_biomass <- function(
+#   gdd_total,
+#   precip_fall,
+#   latitude
+# ) {
+#   b0 <- 7.271e+02
+#   b_pf <- -5.358e-02
+#   b_lat <- -1.377e+01
+#   k <- 4.975e-03
+#   x0 <- 6.856e+02
+
+#   ((b0 + b_pf * precip_fall + b_lat * latitude) /
+#     (1 + exp(-k * (gdd_total - x0))))^2
+# }
+
+# predict_rye_biomass <- function(
+#   gdd_total,
+#   precip_fall,
+#   latitude
+# ) {
+#   b0 <- 8.619e+02
+#   b_pf <- -7.545e-02
+#   b_lat <- -1.648e+01
+#   k <- 3.303e-03
+#   x0 <- 1.195e+03
+
+#   ((b0 + b_pf * precip_fall + b_lat * latitude) /
+#     (1 + exp(-k * (gdd_total - x0))))^2
+# }
+
+predict_rye_biomass <- function(
+  plant_doy,
+  gdd_total,
+  precip_fall,
+  latitude
+) {
+  b0 <- 1.282e+03
+  b_pd <- -9.826e-01
+  b_pf <- -7.066e-02
+  b_lat <- -2.111e+01
+  k <- 3.973e-03
+  x0 <- 9.681e+02
+
+  ((b0 + b_pd * plant_doy + b_pf * precip_fall + b_lat * latitude) /
+    (1 + exp(-k * (gdd_total - x0))))^2
+}
+
+build_rye_biomass <- function(daily) {
+  req(nrow(daily) > 0)
+
+  daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      plant_doy = yday(min(date)),
+      duration = row_number(),
+      season = if_else(year == min(year), 1, 2),
+      gdd_0C = gdd_sine(temperature_min, temperature_max, 0, 35),
+      gdd_total = cumsum(gdd_0C),
+      precip_60d = cumsum(
+        precip_daily * (temperature_min > 0) * (duration <= 60)
+      ),
+      biomass = predict_rye_biomass(
+        plant_doy,
+        gdd_total,
+        precip_60d,
+        grid_lat
+      ),
+      risk = case_when(
+        biomass < 2000 ~ "Low",
+        biomass < 4500 ~ "Moderate",
+        biomass >= 4500 ~ "High"
+      ) |>
+        factor(levels = c("Low", "Moderate", "High")),
+      risk_color = recode_values(
+        risk,
+        "Low" ~ "#0082b7",
+        "Moderate" ~ "#ffd700",
+        "High" ~ "#00cc00"
+      ),
+      value_label = sprintf(
+        "%s lb/ac (%s)",
+        format(round(biomass, 0), big.mark = ","),
+        risk
+      ),
+      .by = grid_id,
+      .keep = "used"
+    )
+}
+
+# example
+if (FALSE) {
+  range(test_hourly_wx$date)
+  test_daily <- read_csv("../get-weather/wisconet/weather_data_daily.csv.gz")
+  test_daily |>
+    rename(
+      temperature_min = temperature_min_c,
+      temperature_max = temperature_max_c,
+      precip_daily = precip_daily_mm
+    ) |>
+    filter(!between(yday, 180, sample(200:300, 1))) |>
+    build_rye_biomass() |>
+    test_plot()
+}

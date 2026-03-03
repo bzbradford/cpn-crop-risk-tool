@@ -1000,10 +1000,11 @@ server <- function(input, output, session) {
     dec31 <- make_date(y, 12, 31)
     list(
       "past_week" = c(d - 7, d),
-      "past_month" = c(d - 30, d),
+      "past_month" = c(d - months(1), d),
+      "past_6_months" = c(d - months(6), d),
+      "past_year" = c(d - 365, d),
       "this_season" = c(min(d, apr1), min(d, nov1)),
       "this_year" = c(jan1, d),
-      # "fullyear" = c(d - 365, d),
       "last_year" = c(jan1 - years(1), dec31 - years(1)),
       "last_season" = c(apr1 - years(1), nov1 - years(1))
     )

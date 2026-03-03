@@ -62,6 +62,7 @@ if (FALSE) {
 
   # load test weather
   test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
+  test_daily_wx <- build_daily(test_hourly_wx)
 }
 
 
@@ -109,7 +110,7 @@ OPTS <- lst(
 
   ## dates ----
   earliest_date = ymd("2015-1-1"),
-  default_start_date = today() - 30,
+  default_start_date = today() - months(1),
 
   ## map ----
   map_bounds_wi = list(
@@ -162,7 +163,8 @@ OPTS <- lst(
   ## Model risk tab ----
   model_group_choices = list(
     "Field crops" = "field",
-    "Vegetable crops" = "vegetable"
+    "Vegetable crops" = "vegetable",
+    "Cover crops" = "cover"
   ),
 
   ## plotting ----
@@ -215,7 +217,7 @@ OPTS <- lst(
 # message and print an object to the console for testing
 echo <- function(x) {
   message(deparse(substitute(x)), " <", paste(class(x), collapse = ", "), ">")
-  print(x)
+  print(str(x))
 }
 
 # display a message showing elapsed time since last timestamp
@@ -496,7 +498,7 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 #' @param tmax maximum daily temperature
 #' @param base base/lower temperature threshold
 #' @returns single sine growing degree days for one day
-gdd_sine <- function(tmin, tmax, base) {
+gdd_sine <- function(tmin, tmax, base, upper = 150) {
   mapply(
     function(tmin, tmax, base) {
       if (is.na(tmin) || is.na(tmax)) {
@@ -522,13 +524,39 @@ gdd_sine <- function(tmin, tmax, base) {
         return(average - base)
       }
 
-      # tmin < lower, tmax > lower = sine gdds
       alpha = (tmax - tmin) / 2
-      base_radians = asin((base - average) / alpha)
-      a = average - base
-      b = pi / 2 - base_radians
-      c = alpha * cos(base_radians)
-      (1 / pi) * (a * b + c)
+
+      # min < base, max between base and upper
+      if (tmax <= upper && tmin < base) {
+        base_radians = asin((base - average) / alpha)
+        a = average - base
+        b = pi / 2 - base_radians
+        c = alpha * cos(base_radians)
+        return((1 / pi) * (a * b + c))
+      }
+
+      # max > upper and min between base and upper
+      if (tmax > upper && tmin >= base) {
+        upper_radians = asin((upper - average) / alpha)
+        a = average - base
+        b = upper_radians + pi / 2
+        c = upper - base
+        d = pi / 2 - upper_radians
+        e = alpha * cos(upper_radians)
+        return((1 / pi) * (a * b + c * d - e))
+      }
+
+      # max > upper and min < base
+      if (tmax > upper && tmin < base) {
+        base_radians = asin((base - average) / alpha)
+        upper_radians = asin((upper - average) / alpha)
+        a = average - base
+        b = upper_radians - base_radians
+        c = alpha * (cos(base_radians) - cos(upper_radians))
+        d = upper - base
+        e = pi / 2 - upper_radians
+        return((1 / pi) * ((a * b + c) + (d * e)))
+      }
     },
     tmin,
     tmax,
@@ -536,7 +564,7 @@ gdd_sine <- function(tmin, tmax, base) {
   )
 }
 
-# gdd_sine(10:40, 0:30, 0)
+# gdd_sine(10:40, 0:30, 0, 10)
 # gdd_sine(5:35, 0:30, 10)
 
 # Color helpers ----------------------------------------------------------------

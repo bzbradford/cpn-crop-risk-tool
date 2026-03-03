@@ -87,7 +87,6 @@ riskServer <- function(rv, wx_data) {
           style = "padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;",
           div(
             HTML(model$info),
-            "Risk models are only valid when the crop is present and in a vulnerable growth stage. Risk may be mitigated in commercial production by application of a protective fungicide.",
             build_modal_link(model)
           ),
           uiOutput(ns("whitemold_opts")),
@@ -168,31 +167,42 @@ riskServer <- function(rv, wx_data) {
       model_data <- reactive({
         model <- req(input$model)
         wx_data <- wx_data()
-        wx <- wx_data$daily_full
-        req(nrow(wx) > 0)
         date_range <- wx_data$dates
+
+        # use full weather for models that have moving averages or lookback windows
+        # includes 30 days prior to start_date
+        daily_full <- wx_data$daily_full
+
+        # use exact weather for models without moving averages
+        daily <- wx_data$daily
+
+        req(nrow(daily) > 0)
 
         results <- switch(
           model,
-          "tarspot" = build_tar_spot(wx),
-          "gls" = build_gray_leaf_spot(wx),
-          "don" = build_don(wx),
+          "tarspot" = build_tar_spot(daily_full),
+          "gls" = build_gray_leaf_spot(daily_full),
+          "don" = build_don(daily_full),
           "whitemold" = local({
             irrig <- req(input$irrigation)
             spacing <- if (irrig) req(input$spacing)
-            build_white_mold(wx, irrig, spacing)
+            build_white_mold(daily_full, irrig, spacing)
           }),
-          "frogeye" = build_frogeye_leaf_spot(wx),
+          "frogeye" = build_frogeye_leaf_spot(daily_full),
           "wheatscab" = local({
             res <- req(input$resistance)
-            build_wheat_scab(wx, res)
+            build_wheat_scab(daily_full, res)
           }),
-          "earlyblight" = build_early_blight(wx),
-          "lateblight" = build_late_blight(wx),
-          "alternaria" = build_alternaria(wx),
-          "cercospora" = build_cercospora(wx),
-          "botrytis" = build_botrytis(wx),
-          warning("Don't know how to build data for model '", model, "'")
+          "earlyblight" = build_early_blight(daily_full),
+          "lateblight" = build_late_blight(daily_full),
+          "alternaria" = build_alternaria(daily_full),
+          "cercospora" = build_cercospora(daily_full),
+          "botrytis" = build_botrytis(daily_full),
+          "ryebiomass" = build_rye_biomass(daily),
+          {
+            warning("Don't know how to build data for model '", model, "'")
+            req(FALSE)
+          }
         )
 
         results |>
@@ -320,7 +330,8 @@ riskServer <- function(rv, wx_data) {
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
-        model_data <- joined_data()
+        model_data <- joined_data() |>
+          rename(model_value = !!model$ycol)
         wx <- wx_data()
         sites <- wx$sites
         dates <- wx$dates
@@ -358,9 +369,11 @@ riskServer <- function(rv, wx_data) {
               format(last_value$date, "%b %d, %Y"),
               last_value$value_label
             )
+
             plt <- plot_risk(
               df,
               name = model$name,
+              yrange = model$yrange,
               xrange = date_range,
               risk_period = model$risk_period
             )

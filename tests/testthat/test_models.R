@@ -36,8 +36,7 @@ test_that("Model errors on invalid doc file", {
 
 test_that("build_daily", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       pivot_longer(-c(grid_id:day)) |>
       drop_na(value) |>
       ggplot(aes(x = date, y = value, color = name)) +
@@ -88,8 +87,7 @@ test_that("predict_tarspot", {
 
 test_that("build_tar_spot", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_tar_spot() |>
       test_plot()
   })
@@ -110,8 +108,7 @@ test_that("predict_gls", {
 
 test_that("build_gls", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_gray_leaf_spot() |>
       test_plot()
   })
@@ -157,8 +154,7 @@ test_that("predict_don", {
 
 test_that("build_don", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_don() |>
       test_plot()
   })
@@ -193,22 +189,19 @@ test_that("predict_white_mold_irrig", {
 
 test_that("build_white_mold", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_white_mold(irrigated = FALSE) |>
       test_plot()
   })
 
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_white_mold(irrigated = TRUE, row_spacing = "30") |>
       test_plot()
   })
 
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_white_mold(irrigated = TRUE, row_spacing = "15") |>
       test_plot()
   })
@@ -229,8 +222,7 @@ test_that("predict_fls", {
 
 test_that("build_frogeye_leaf_spot", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_frogeye_leaf_spot() |>
       test_plot()
   })
@@ -252,8 +244,7 @@ test_that("predict_wheat_scab", {
 
 test_that("build_wheat_scab", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_wheat_scab(resistance = "VS") |>
       test_plot()
   })
@@ -287,8 +278,7 @@ test_that("risk_for_early_blight", {
 
 test_that("build_early_blight", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_early_blight() |>
       test_plot()
   })
@@ -323,8 +313,7 @@ test_that("risk_for_late_blight", {
 
 test_that("build_late_blight", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_late_blight() |>
       test_plot()
   })
@@ -358,8 +347,7 @@ test_that("risk_for_alternaria", {
 
 test_that("build_alternaria", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_alternaria() |>
       test_plot()
   })
@@ -394,8 +382,7 @@ test_that("risk_for_cercospora", {
 
 test_that("build_cercospora", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_cercospora() |>
       test_plot()
   })
@@ -455,9 +442,35 @@ test_that("risk_for_botrytis", {
 
 test_that("build_botrytis", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_botrytis() |>
+      test_plot()
+  })
+})
+
+test_that("predict_rye_biomass", {
+  expect_silent({
+    expand_grid(
+      plant_doy = seq(200, 300, by = 10),
+      gdd_total = seq(0, 3000, by = 250),
+      precip_fall = seq(0, 500, by = 50),
+      latitude = seq(30, 60, by = 1)
+    ) |>
+      mutate(
+        biomass = predict_rye_biomass(
+          plant_doy = plant_doy,
+          gdd_total = gdd_total,
+          precip_fall = precip_fall,
+          latitude = latitude
+        )
+      )
+  })
+})
+
+test_that("build_rye_biomass", {
+  expect_silent({
+    test_daily_wx |>
+      build_rye_biomass() |>
       test_plot()
   })
 })

@@ -4,10 +4,8 @@
   --headerHeight: 50px;
   --footerHeight: 70px;
   --minHeight: calc(max(100vw, 100vh) * 0.4);
-  --maxHeight: max(
-    calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
-    var(--minHeight)
-  );
+  --maxHeight: max(calc(100vh - var(--headerHeight) - var(--footerHeight) - 11px),
+      var(--minHeight));
   --wide: 1200px;
   --narrow: 700px;
 
@@ -80,11 +78,11 @@ header {
   color: #fff;
 }
 
-.modal-body > h2 {
+.modal-body>h2 {
   margin: 0 0 20px 0;
 }
 
-.modal-body > * > img {
+.modal-body>*>img {
   float: right;
   max-width: 50%;
   margin-left: 10px;
@@ -254,7 +252,7 @@ footer {
   gap: 10px;
 }
 
-.flex-across > .btn {
+.flex-across>.btn {
   flex: 1;
 }
 
@@ -267,11 +265,11 @@ footer {
 
 .date-btns {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(calc(33% - 20px), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(calc(25% - 10px), 1fr));
   gap: 10px;
 }
 
-.date-btns > .btn {
+.date-btns>.btn {
   padding: 2px 5px;
   line-height: 1;
   white-space: break-spaces;
@@ -311,7 +309,7 @@ td.tbl-coords {
   align-items: center;
 }
 
-.label-inline > label {
+.label-inline>label {
   margin-bottom: 0;
 }
 
@@ -325,12 +323,12 @@ td.tbl-coords {
   margin-top: 1rem;
 }
 
-.submit-btn > button {
+.submit-btn>button {
   width: 100%;
   font-weight: bold;
 }
 
-.submit-btn > button:enabled {
+.submit-btn>button:enabled {
   background-color: #218cb9;
   border: 1px solid #00a8dc;
   color: white;

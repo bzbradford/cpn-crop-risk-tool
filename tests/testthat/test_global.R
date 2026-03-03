@@ -211,8 +211,7 @@ test_that("rename_with_units works", {
   })
 
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       rename_with_units()
   })
 })
@@ -627,8 +626,7 @@ test_that("gdd_sine", {
 
 test_that("build_gdd_from_daily", {
   expect_silent({
-    test_hourly_wx |>
-      build_daily() |>
+    test_daily_wx |>
       build_gdd_from_daily()
   })
 })
