@@ -52,6 +52,7 @@ renv::snapshot()
 - `cookie-handler.js` — Browser cookie persistence for user site list
 - `google-places.js` — Google Places autocomplete for location search
 - `leaflet-cdl.js` — Cropland Data Layer tile integration
+- `style.css` — Application styles
 
 ### Data Flow
 ```
@@ -79,9 +80,10 @@ Defined in `src/models.R` and documented in `docs/`:
 - **Soybean**: White mold, Frogeye
 - **Wheat**: Wheat scab
 - **Vegetables**: Early blight, Late blight (potato/tomato), Alternaria/Cercospora (carrot), Cercospora (beet), Botrytis (onion)
+- **Cover crops**: Winter rye biomass
 
 ## Key Conventions
-- Indentation: 2 spaces (per `.Rproj` config)
+- Indentation: 2 spaces
 - Linting configured in `.lintr.R` (line length and indentation checks disabled)
 - R 4.5.2, dependencies managed with `renv` (see `renv.lock`)
 - Test fixtures stored as `.rds` files in `tests/testthat/`
