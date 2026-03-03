@@ -1,5 +1,5 @@
 
-Predicts spring biomass accumulation of winter rye cover crops using planting date, accumulated growing degree days (GDD base 0°C), and precipitation during the 60-day window following planting date. Final biomass potential is reduced from later planting dates and heavy rain. The model was trained on data from Wisconsin.
+Predicts spring biomass accumulation of winter rye cover crops using accumulated growing degree days (GDD base 0°C). The model was trained on data from Wisconsin.
 
 #### Interpretation
 

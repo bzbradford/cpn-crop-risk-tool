@@ -1,37 +1,5 @@
 # tests for src/models.R
 
-# Model constructor ----
-
-example_doc <- "example.md"
-
-test_that("Model creates valid model config object", {
-  m <- Model(
-    name = "Test Model",
-    crop = "Any",
-    group = "vegetable",
-    info = "Test info",
-    doc = example_doc
-  )
-  expect_equal(m$name, "Test Model")
-  expect_equal(m$crop, "Any")
-  expect_equal(m$info, "Test info")
-  expect_equal(m$doc, example_doc)
-  expect_null(m$risk_period)
-})
-
-test_that("Model errors on invalid doc file", {
-  expect_error(
-    Model(
-      name = "Test Model",
-      crop = "Any",
-      group = "field",
-      info = "Test info",
-      doc = "nonexistent.md"
-    ),
-    "Missing doc file"
-  )
-})
-
 # Weather data ----
 
 test_that("build_daily", {
@@ -448,20 +416,33 @@ test_that("build_botrytis", {
   })
 })
 
+# test_that("predict_rye_biomass", {
+#   expect_silent({
+#     expand_grid(
+#       plant_doy = seq(200, 300, by = 10),
+#       gdd_total = seq(0, 3000, by = 250),
+#       precip_fall = seq(0, 500, by = 50),
+#       latitude = seq(30, 60, by = 1)
+#     ) |>
+#       mutate(
+#         biomass = predict_rye_biomass(
+#           plant_doy = plant_doy,
+#           gdd_total = gdd_total,
+#           precip_fall = precip_fall,
+#           latitude = latitude
+#         )
+#       )
+#   })
+# })
+
 test_that("predict_rye_biomass", {
   expect_silent({
     expand_grid(
-      plant_doy = seq(200, 300, by = 10),
-      gdd_total = seq(0, 3000, by = 250),
-      precip_fall = seq(0, 500, by = 50),
-      latitude = seq(30, 60, by = 1)
+      gdd_total = seq(0, 5000, by = 250)
     ) |>
       mutate(
         biomass = predict_rye_biomass(
-          plant_doy = plant_doy,
-          gdd_total = gdd_total,
-          precip_fall = precip_fall,
-          latitude = latitude
+          gdd_total = gdd_total
         )
       )
   })

@@ -144,6 +144,9 @@ server <- function(input, output, session) {
 
     # error message displayed under fetch button
     status_msg = NULL,
+
+    # tracks fetch attempt counts keyed by hash of fetch_args
+    fetch_attempts = list(),
   )
 
   ## rv$status helper ----
@@ -327,7 +330,29 @@ server <- function(input, output, session) {
     }
   })
 
-  ## fetch_args // reactive ----
+  ## need_weather ----
+  need_weather <- reactive({
+    wx <- rv$weather
+    if (is.null(wx)) {
+      return(TRUE)
+    }
+    if (nrow(wx) == 0) {
+      return(TRUE)
+    }
+    if (nrow(rv$sites) == 0) {
+      return(FALSE)
+    }
+    sites <- sites_with_status()
+    if (anyNA(sites$grid_id)) {
+      return(TRUE)
+    }
+    if (any(sites$needs_download)) {
+      return(TRUE)
+    }
+    FALSE
+  })
+
+  ## fetch_args ----
   # record coordinates and dates queried from IBM to avoid duplicate attempts
   # uses the grid lat/lng instead of site lat/lng if available
   fetch_args <- reactive({
@@ -351,6 +376,14 @@ server <- function(input, output, session) {
   })
 
   # observe(echo(fetch_args()))
+
+  ## fetch_limit_reached // reactive ----
+  fetch_limit_reached <- reactive({
+    args <- fetch_args()
+    h <- rlang::hash(args)
+    count <- rv$fetch_attempts[[h]] %||% 0L
+    count >= 2L
+  })
 
   # Forecasts Extended Task ----------------------------------------------------
 
@@ -412,11 +445,17 @@ server <- function(input, output, session) {
     set_status()
     req(task_get_weather$status() != "running")
     req(need_weather())
+    if (fetch_limit_reached()) {
+      return(invisible())
+    }
+
     args <- fetch_args()
+    h <- rlang::hash(args)
+    rv$fetch_attempts[[h]] <- (rv$fetch_attempts[[h]] %||% 0L) + 1L
+
     disable("fetch")
     runjs("$('#fetch').html('Downloading weather...')")
     task_get_weather$invoke(args)
-    # rv$fetch_hashes <- c(rv$fetch_hashes, rlang::hash(args))
   }
 
   # fetch on button click
@@ -1045,28 +1084,6 @@ server <- function(input, output, session) {
 
   # Fetch weather button ----------------------------------------------------
 
-  ## need_weather // reactive ----
-  need_weather <- reactive({
-    wx <- rv$weather
-    if (is.null(wx)) {
-      return(TRUE)
-    }
-    if (nrow(wx) == 0) {
-      return(TRUE)
-    }
-    if (nrow(rv$sites) == 0) {
-      return(FALSE)
-    }
-    sites <- sites_with_status()
-    if (anyNA(sites$grid_id)) {
-      return(TRUE)
-    }
-    if (any(sites$needs_download)) {
-      return(TRUE)
-    }
-    FALSE
-  })
-
   ## Auto-fetch timer ----
 
   # set a timestamp of the last inputs if weather is needed
@@ -1091,6 +1108,16 @@ server <- function(input, output, session) {
     }
   })
 
+  # notify user when fetch limit is reached
+  observe({
+    req(need_weather())
+    req(fetch_limit_reached())
+    set_status(
+      "Some weather data is unavailable from the server for the selected dates. The available data is shown below.",
+      type = "info"
+    )
+  })
+
   ## action_ui ----
   output$action_ui <- renderUI({
     btn <- function(msg, ...) {
@@ -1108,6 +1135,13 @@ server <- function(input, output, session) {
       return(btn("Invalid date selection", disabled = TRUE))
     }
     if (need_weather()) {
+      if (isolate(fetch_limit_reached())) {
+        return(btn(
+          "Some data unavailable",
+          class = "btn-warning",
+          disabled = TRUE
+        ))
+      }
       return(btn("Fetch weather"))
     }
     btn("Everything up to date", class = "btn-primary", disabled = TRUE)
@@ -1129,12 +1163,6 @@ server <- function(input, output, session) {
       msg
     )
   })
-
-  ## already_fetched // reactive ----
-  # already_fetched <- reactive({
-  #   args <- fetch_args()
-  #   rlang::hash(args) %in% rv$fetch_hashes
-  # })
 
   # Module servers ----------------------------------------------------------
 
