@@ -32,38 +32,43 @@ suppressPackageStartupMessages({
 
 # Dev settings -----------------------------------------------------------------
 
-# add to renv without loading
 if (FALSE) {
+  # add to renv without loading
   library(devtools)
-  library(languageserver)
   library(testthat)
-  library(covr)
+
+  # this got removed from CRAN
+  devtools::install_github("trafficonese/leaflet.extras")
+
+  # RENV
+  renv::init()
+  renv::status()
+  renv::restore()
+  renv::update()
+  renv::snapshot()
+  renv::clean()
+
+  # enable development mode
+  shiny::devmode(TRUE)
+
+  # turn warnings into errors
+  options(warn = 2)
+
+  # disable forecasts for testing
+  options(forecast = FALSE)
+
+  # Run unit tests
+  testthat::test_dir("tests/testthat")
+
+  # load test weather
+  test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
+  test_daily_wx <- build_daily(test_hourly_wx)
 }
 
-## development mode
-# shiny::devmode(TRUE)
-
-## RENV
-# renv::init()
-# renv::status()
-# renv::restore()
-# renv::update()
-# renv::snapshot()
-# renv::clean()
-
-## turn warnings into errors
-# options(warn = 2)
-
-## disable forecasts for testing
-# options(forecast = FALSE)
-
-## Run unit tests
-# testthat::test_dir("tests/testthat")
-# test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
 # Async tasks ------------------------------------------------------------------
 
-# set up a second session for asynchronous tasks
+# set up a second session for asynchronous tasks but not in tests
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
   plan(multisession, workers = 2)
 }
@@ -105,15 +110,9 @@ OPTS <- lst(
 
   ## dates ----
   earliest_date = ymd("2015-1-1"),
-  default_start_date = today() - 30,
+  default_start_date = today() - months(1),
 
   ## map ----
-  # state_colors = {
-  #   pals = RColorBrewer::brewer.pal.info
-  #   pal = RColorBrewer::brewer.pal
-  #   qual_col_pals = pals[pals$category == 'qual',]
-  #   unlist(mapply(pal, qual_col_pals$maxcolors, rownames(qual_col_pals)))
-  # },
   map_bounds_wi = list(
     lat1 = 42.4,
     lat2 = 47.1,
@@ -133,7 +132,6 @@ OPTS <- lst(
     "Grey Canvas" = providers$CartoDB.Positron
   ),
   map_layers = list(
-    # counties = "States/Counties"
     grid = "Weather data grids"
   ),
   map_click_zoom = 10,
@@ -163,7 +161,11 @@ OPTS <- lst(
   ),
 
   ## Model risk tab ----
-  # crop_choices = setNames(names(crops), sapply(crops, \(x) x$name)),
+  model_group_choices = list(
+    "Field crops" = "field",
+    "Vegetable crops" = "vegetable",
+    "Cover crops" = "cover"
+  ),
 
   ## plotting ----
   plot_title_font = list(family = "Redhat Display", size = 14),
@@ -215,10 +217,10 @@ OPTS <- lst(
 # message and print an object to the console for testing
 echo <- function(x) {
   message(deparse(substitute(x)), " <", paste(class(x), collapse = ", "), ">")
-  print(x)
+  print(str(x))
 }
 
-
+# display a message showing elapsed time since last timestamp
 runtime <- function(label = "timestamp", ref = NULL) {
   t <- now()
   message(">> ", label, " [", t, "]")
@@ -228,14 +230,12 @@ runtime <- function(label = "timestamp", ref = NULL) {
   t
 }
 
-
 # swaps names and values in a list or vector
 invert <- function(x) {
   y <- as(names(x), class(x))
   names(y) <- x
   y
 }
-
 
 # create named list from sublist elements
 build_choices <- function(obj, name, value) {
@@ -244,7 +244,6 @@ build_choices <- function(obj, name, value) {
     sapply(obj, \(x) x[[name]])
   )
 }
-
 
 # return the first non-empty argument
 first_truthy <- function(...) {
@@ -256,12 +255,15 @@ first_truthy <- function(...) {
   NULL
 }
 
-
 # restrict a value to between two extremes
 clamp <- function(x, min, max) {
   pmax(min, pmin(max, x))
 }
 
+# return 2 element vector of min, max
+minmax <- function(x) {
+  c(min(x, na.rm = TRUE), max(x, na.rm = TRUE))
+}
 
 # Date/time functions ----------------------------------------------------------
 
@@ -286,9 +288,9 @@ get_yday <- function(...) {
 
 # get_yday("jun 1", "aug 2")
 
-check_date_overlap <- function(dates_actual, dates_partial) {
-  dates_actual <- as_date(dates_actual)
-  date_seq <- seq.Date(dates_actual[1], dates_actual[2], 1)
+check_date_overlap <- function(date_range, dates_partial) {
+  date_range <- as_date(date_range)
+  date_seq <- seq.Date(date_range[1], date_range[2], 1)
   yrs <- unique(year(date_seq))
   sapply(set_names(yrs), function(yr) {
     dt <- ymd(paste(yr, dates_partial))
@@ -485,6 +487,85 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 
 # tibble(temperature = 1) |> rename_with_units("metric")
 # tibble(temperature = 1) |> rename_with_units("imperial")
+
+# Growing degree days ----------------------------------------------------------
+
+#' Single sine method
+#' to create GDDs with an upper threshold, calculate GDDs with the upper threshold
+#' as the base temperature and subtract that value from the GDDs for the base temp
+#' to implement a horizontal cutoff.
+#' @param tmin minimum daily temperature
+#' @param tmax maximum daily temperature
+#' @param base base/lower temperature threshold
+#' @returns single sine growing degree days for one day
+gdd_sine <- function(tmin, tmax, base, upper = 150) {
+  mapply(
+    function(tmin, tmax, base) {
+      if (is.na(tmin) || is.na(tmax)) {
+        return(NA)
+      }
+
+      # swap min and max if in wrong order for some reason
+      if (tmin > tmax) {
+        t = tmin
+        tmin = tmax
+        tmax = t
+      }
+
+      # min and max < lower
+      if (tmax <= base) {
+        return(0)
+      }
+
+      average = (tmin + tmax) / 2
+
+      # tmin > lower = simple average gdds
+      if (tmin >= base) {
+        return(average - base)
+      }
+
+      alpha = (tmax - tmin) / 2
+
+      # min < base, max between base and upper
+      if (tmax <= upper && tmin < base) {
+        base_radians = asin((base - average) / alpha)
+        a = average - base
+        b = pi / 2 - base_radians
+        c = alpha * cos(base_radians)
+        return((1 / pi) * (a * b + c))
+      }
+
+      # max > upper and min between base and upper
+      if (tmax > upper && tmin >= base) {
+        upper_radians = asin((upper - average) / alpha)
+        a = average - base
+        b = upper_radians + pi / 2
+        c = upper - base
+        d = pi / 2 - upper_radians
+        e = alpha * cos(upper_radians)
+        return((1 / pi) * (a * b + c * d - e))
+      }
+
+      # max > upper and min < base
+      if (tmax > upper && tmin < base) {
+        base_radians = asin((base - average) / alpha)
+        upper_radians = asin((upper - average) / alpha)
+        a = average - base
+        b = upper_radians - base_radians
+        c = alpha * (cos(base_radians) - cos(upper_radians))
+        d = upper - base
+        e = pi / 2 - upper_radians
+        return((1 / pi) * ((a * b + c) + (d * e)))
+      }
+    },
+    tmin,
+    tmax,
+    base
+  )
+}
+
+# gdd_sine(10:40, 0:30, 0, 10)
+# gdd_sine(5:35, 0:30, 10)
 
 # Color helpers ----------------------------------------------------------------
 
@@ -764,10 +845,19 @@ site_action_link <- function(
     content
   )
 }
-
 # site_action_link("edit", 1, "foo")
 # site_action_link("save", 1, "foo")
 # site_action_link("trash", 1, "foo")
+
+# create a date button element
+build_date_btn <- function(value, label, btn_class = c("default", "primary")) {
+  btn_class <- match.arg(btn_class)
+  HTML(
+    str_glue(
+      "<button class='btn btn-{btn_class} btn-xs action-button' onclick=\"this.blur(); Shiny.setInputValue('date_preset', '{value}', {{priority: 'event'}});\">{label}</button>"
+    )
+  )
+}
 
 #' @param model object created by Model() call
 #' @returns HTML
@@ -791,7 +881,6 @@ build_modal_link <- function(model) {
     )
   )
 }
-
 # build_modal_link(model_list$whitemold)
 
 #' @param md markdown file to display
@@ -905,147 +994,6 @@ load_sites <- function(fpath) {
 # load_sites("data/example-sites.csv")
 # load_sites("data/wisconet stns.csv")
 
-# Model definitions ----------------------------------------------------------
-
-#' @param name display name
-#' @param crop relevant crop or crop group
-#' @param info model info
-#' @param doc markdown file for More Information
-#' @param risk_period NULL or length two character vector eg 'Jul 1'
-Model <- function(
-  ...,
-  name,
-  info,
-  crop = NULL,
-  doc = NULL,
-  risk_period = NULL
-) {
-  if (length(list(...)) > 0) {
-    stop("Invalid model config: ", names(list(...)))
-  }
-  if (!is.null(doc)) {
-    all_docs <- list.files(
-      pattern = "*.md",
-      recursive = TRUE
-    )
-    if (!(doc %in% all_docs)) {
-      stop("Missing doc file ", doc)
-    }
-  }
-
-  # check that all risk period dates are valid
-  if (!is.null(risk_period)) {
-    withCallingHandlers(
-      {
-        ymd(paste(year(Sys.Date()), risk_period))
-      },
-      warning = function(w) {
-        stop("Invalid date format for risk_period: ", risk_period)
-      }
-    )
-  }
-
-  list(
-    name = name,
-    crop = crop,
-    model_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop)),
-    info = info,
-    doc = doc,
-    risk_period = risk_period
-  )
-}
-
-model_list <- list(
-  tarspot = Model(
-    name = "Tar spot",
-    crop = "Corn",
-    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity.",
-    doc = "docs/tar-spot.md",
-    risk_period = c("Jul 1", "Aug 15")
-  ),
-
-  gls = Model(
-    name = "Gray leaf spot",
-    crop = "Corn",
-    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point.",
-    doc = "docs/gray-leaf-spot.md",
-    risk_period = c("Jul 1", "Aug 15")
-  ),
-
-  don = Model(
-    name = "Gibberella ear rot/DON",
-    crop = "Corn",
-    info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this Model may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking.",
-    doc = "docs/don.md",
-    risk_period = c("Jul 15", "Aug 7")
-  ),
-
-  whitemold = Model(
-    name = "White mold",
-    crop = "Soybean",
-    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only).",
-    doc = "docs/white-mold.md",
-    risk_period = c("Jun 15", "Aug 7")
-  ),
-
-  frogeye = Model(
-    name = "Frogeye leaf spot",
-    crop = "Soybean",
-    info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity.",
-    doc = "docs/frogeye.md",
-    risk_period = c("Jun 15", "Sep 7")
-  ),
-
-  wheatscab = Model(
-    name = "Wheat scab FHB",
-    crop = "Wheat",
-    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on Model probability. Model depends on 14-day moving average relative humidity.",
-    doc = "docs/wheat-scab.md"
-  ),
-
-  earlyblight = Model(
-    name = "Early blight",
-    crop = "Solanum",
-    info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
-    doc = "docs/early-blight.md"
-  ),
-
-  lateblight = Model(
-    name = "Late blight",
-    crop = "Solanum",
-    info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of Model severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
-    doc = "docs/late-blight.md"
-  ),
-
-  alternaria = Model(
-    name = "Alternaria/Cercospora leaf blight",
-    crop = "Carrot",
-    info = "<b>Alternaria and Cercospora leaf blights are a common fungal Model of carrot leaves and petioles.</b> Risk depends on the number of Model severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
-    doc = "docs/alternaria.md"
-  ),
-
-  cercospora = Model(
-    name = "Cercospora leaf spot",
-    crop = "Beet",
-    info = "<b>Cercospora leaf spot is a damaging fungal Model affecting beets.</b> Risk depends on the average Model severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
-    doc = "docs/cercospora.md"
-  ),
-
-  botrytis = Model(
-    name = "Botrytis leaf blight",
-    crop = "Onion",
-    info = "<b>Onions are susceptible to Botrytis leaf blight.</b> Risk depends on cumulative Model severity values since crop emergence. Model depends on temperature, hours of high humidity, and precipitation.",
-    doc = "docs/botrytis.md"
-  )
-)
-
-# set names as $slug
-model_list <- imap(model_list, function(m, slug) {
-  m$slug <- slug
-  m
-})
-
-
 # Cookie helpers ---------------------------------------------------------------
 
 #' Parse and validate sites from browser cookie data
@@ -1056,7 +1004,7 @@ parse_cookie_sites <- function(cookie_sites) {
     return(NULL)
   }
 
-  sites <- tryCatch(
+  tryCatch(
     {
       cookie_sites |>
         bind_rows() |>
@@ -1066,13 +1014,11 @@ parse_cookie_sites <- function(cookie_sites) {
         head(OPTS$max_sites) |>
         mutate(id = row_number())
     },
-    error = function(e) NULL
+    error = function(e) {
+      message("Failed to read sites from cookie: ", e)
+      NULL
+    }
   )
-
-  if (is.null(sites) || nrow(sites) == 0) {
-    return(NULL)
-  }
-  sites
 }
 
 #' Get the cache file path for a user ID, creating the cache directory if needed

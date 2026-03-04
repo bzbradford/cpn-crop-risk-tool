@@ -40,3 +40,4 @@ if (FALSE) {
 # load example ibm response data for tests
 test_ibm_response <- readRDS("test_ibm_response.rds")
 test_hourly_wx <- readRDS("test_hourly_wx.rds")
+test_daily_wx <- build_daily(test_hourly_wx)

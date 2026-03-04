@@ -2,10 +2,10 @@
 
 test_that("expand_range works", {
   # expands by default 5%
-  expand_range(0, 1) |> expect_equal(c(-.05, 1.05))
+  expand_range(c(0, 1)) |> expect_equal(c(-.05, 1.05))
 
   # expands by any amount
-  expand_range(0, 1, .1) |> expect_equal(c(-.1, 1.1))
+  expand_range(c(0, 1), 0.1) |> expect_equal(c(-.1, 1.1))
 })
 
 test_that("plotly_get_forecast_annot works", {
@@ -24,6 +24,9 @@ test_that("plot_risk works", {
       filter(grid_id == sample(grid_id, 1)) |>
       build_daily() |>
       build_frogeye_leaf_spot() |>
-      plot_risk(name = "Frogeye")
+      rename(model_value = probability) |>
+      plot_risk(
+        name = "Frogeye"
+      )
   })
 })

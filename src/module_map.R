@@ -212,14 +212,14 @@ mapServer <- function(rv, map_data) {
             )
           ) |>
           addFullscreenControl() |>
-          onRender(callback) |>
           suspendScroll(
             sleepTime = 0,
             wakeTime = 1000,
             hoverToWake = FALSE,
             sleepNote = FALSE,
             sleepOpacity = 1
-          )
+          ) |>
+          onRender(callback)
       })
 
       ## map_title - renderUI ----
