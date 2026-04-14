@@ -1,4 +1,7 @@
-![](tar-spot.jpg) Tar spot is caused by the fungus *Phyllachora maydis*, and can cause severe yield loss on susceptible hybrids when conditions are favorable for disease. Tar spot appears as small, raised, black spots scattered across the upper and lower leaf surfaces. These spots are stromata (fungal fruiting structures). If viewed under the microscope, hundreds of sausage-shaped asci (spore cases) filled with spores are visible. When severe, stromata can even appear on husks and leaf sheaths.
+
+## Tar Spot (Corn)
+
+![](tar-spot.jpg) **Tar spot** is caused by the fungus *Phyllachora maydis*, and can cause severe yield loss on susceptible hybrids when conditions are favorable for disease. Tar spot appears as small, raised, black spots scattered across the upper and lower leaf surfaces. These spots are stromata (fungal fruiting structures). If viewed under the microscope, hundreds of sausage-shaped asci (spore cases) filled with spores are visible. When severe, stromata can even appear on husks and leaf sheaths.
 
 Tan to brown lesions with dark borders surrounding stromata can also develop. These are known as "fisheye" lesions. In Latin America, where tar spot is more common, fisheye lesions are associated with another fungus, Monographella maydis, that forms a disease complex with P. maydis known as the tar spot complex. M. maydis has not been detected in the United States.
 

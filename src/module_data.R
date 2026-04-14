@@ -453,7 +453,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
             any_of(c("datetime_utc", "datetime_local")),
             as.character
           )) |>
-          clean_names("big_camel")
+          janitor::clean_names("big_camel")
       })
 
       ## download_filename - reactive ----

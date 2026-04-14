@@ -79,6 +79,18 @@ riskServer <- function(rv, wx_data) {
         model_list[[model_slug]]
       })
 
+      ## model biofix handler ----
+      #' when switching to a model, uses currently set end date and adjusts
+      #' start date if a model biofix is defined
+      observe({
+        model <- selected_model()
+        biofix_yday <- req(model$default_start_yday)
+        end_date <- rv$end_date
+        start_year <- year(end_date) - (biofix_yday > yday(end_date))
+        start_date <- make_date(start_year) + biofix_yday - 1
+        rv$start_date_setter <- start_date
+      })
+
       ## model_ui ----
       output$model_ui <- renderUI({
         model <- selected_model()

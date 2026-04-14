@@ -1,3 +1,6 @@
+
+## Wheat Scab / Fusarium Head Blight
+
 ![](wheat-scab.jpg) **Fusarium head blight (FHB)** is currently the most economically important wheat disease in the U.S. and Canada. This disease is also known as scab or head blight and is caused by the fungus *Fusarium graminearum* and other *Fusarium* spp. It reduces yield and produces mycotoxins that impact human and animal health. Infected spikelets are bleached and disease spreads upward and downward by sequentially infecting spikelets. Pink or orange spore masses can sometimes be observed on infected spikelets, particularly at the base. Small, dark fruiting structures may also be present on spikelets. Infected kernels become shriveled, chalky, and can be discolored white-pink. These "tombstone" kernels are lightweight and highly contaminated with mycotoxins. Tombstone kernels often blow away with chaff. The pathogen can survive on infected host residue. Warm, wet weather with high relative humidity during flowering (anthesis) and early grain formation favors disease development.
 
 After infection the mycotoxin deoxynivalenol (DON or vomitoxin) is produced by the fungus. DON accumulation is favored when conditions after anthesis remain warm and wet.
