@@ -1,4 +1,7 @@
-![](frogeye-leaf-spot.jpg) Frogeye leaf spot is caused by the fungus *Cercospora sojina*. The disease occurs across the United States and in Ontario, Canada. Frogeye leaf spot can cause significant yield loss when widespread within a field. Leaf lesions are small, irregular to circular in shape, and gray with reddish-brown borders. Most commonly occurring on the upper leaf surface, lesions start as dark, water-soaked spots that vary in size. As lesions age, the central area becomes gray to light brown with dark, red-brown margins. In severe cases, disease can cause premature leaf drop and will spread to stems and pods.
+
+## Frogeye Leaf Spot (Soybean)
+
+![](frogeye-leaf-spot.jpg) **Frogeye leaf spot** is caused by the fungus *Cercospora sojina*. The disease occurs across the United States and in Ontario, Canada. Frogeye leaf spot can cause significant yield loss when widespread within a field. Leaf lesions are small, irregular to circular in shape, and gray with reddish-brown borders. Most commonly occurring on the upper leaf surface, lesions start as dark, water-soaked spots that vary in size. As lesions age, the central area becomes gray to light brown with dark, red-brown margins. In severe cases, disease can cause premature leaf drop and will spread to stems and pods.
 
 The fungus survives in infested crop residue and infected seed. Early season infections contribute to infection of foliage and pods later in the season. Warm, humid weather promotes spore production, infection, and disease development. Young leaves are more susceptible to infection than older leaves, but visible lesions are not seen on young, expanding leaves because the lesions take two weeks to develop after infection.
 

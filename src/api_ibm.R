@@ -315,7 +315,7 @@ ibm_clean_resp <- function(ibm_response) {
       datetime_utc = validTimeUtc,
       everything()
     ) |>
-    clean_names() |>
+    janitor::clean_names() |>
     mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz"))) |>
     mutate(
       time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE),
@@ -439,7 +439,7 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
       }
 
       # if there is at least one day already downloaded check each date for completeness
-      if (isTruthy(site$days_actual)) {
+      if (is_truthy(site$days_actual)) {
         # tz <- site$time_zone
         date_status <- wx |>
           filter(grid_id == site$grid_id) |>
@@ -476,7 +476,7 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
   resp <- get_ibm(reqs)
 
   # handle response
-  if (!isTruthy(resp)) {
+  if (!is_truthy(resp)) {
     message("Failed to get any weather response")
     return(NULL)
   }

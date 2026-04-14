@@ -128,6 +128,7 @@ server <- function(input, output, session) {
     start_date = OPTS$default_start_date,
     end_date = today(),
     dates_valid = TRUE,
+    start_date_setter = NULL,
 
     # sidebar site upload UI
     show_upload = FALSE,
@@ -186,6 +187,12 @@ server <- function(input, output, session) {
     rv$end_date <- req(input$end_date)
   })
 
+  # update start date input
+  observe({
+    new_start_date <- req(rv$start_date_setter)
+    updateDateInput(inputId = "start_date", value = new_start_date)
+  })
+
   ## rv$dates_valid ----
   validate_dates <- function(start, end) {
     if (length(c(start, end)) < 2) {
@@ -207,7 +214,7 @@ server <- function(input, output, session) {
 
     msg <- validate_dates(start, end)
     set_status(msg)
-    rv$dates_valid <- !isTruthy(msg)
+    rv$dates_valid <- !is_truthy(msg)
   })
 
   ## rv$grids handler ----
@@ -388,25 +395,32 @@ server <- function(input, output, session) {
   # Forecasts Extended Task ----------------------------------------------------
 
   task_get_forecasts <- ExtendedTask$new(function(grids, cur_forecasts) {
-    message("Getting forecasts...")
-    suppressWarnings({
-      future_promise(
-        {
-          forecasts <- cur_forecasts %||% list()
-          for (i in seq_len(nrow(grids))) {
-            grid <- grids[i, ]
-            id <- grid$grid_id
-            if (isTruthy(forecasts[[id]])) {
-              next
-            } # already have it
-            fc <- get_openmeteo_forecast(grid$grid_lat, grid$grid_lng)
-            forecasts[[id]] <- fc
-          }
-          forecasts
-        },
-        seed = NULL
+    # message("Getting forecasts...")
+    mirai(
+      {
+        # get existing forecasts
+        forecasts <- cur_forecasts %||% list()
+
+        # get forecasts for each grid that doesn't have one yet
+        for (i in seq_len(nrow(grids))) {
+          grid <- grids[i, ]
+          id <- grid$grid_id
+          if (is_truthy(forecasts[[id]])) {
+            next
+          } # already have it
+          fc <- get_openmeteo_forecast(grid$grid_lat, grid$grid_lng)
+          forecasts[[id]] <- fc
+        }
+
+        # return updated forecasts list
+        forecasts
+      },
+      .GlobalEnv,
+      .args = lst(
+        grids,
+        cur_forecasts
       )
-    })
+    )
   })
 
   ## Invoke forecast requests ----
@@ -433,10 +447,13 @@ server <- function(input, output, session) {
   # IBM Weather Extended Task --------------------------------------------------
 
   task_get_weather <- ExtendedTask$new(function(args) {
-    message("Getting weather...")
-    future_promise(
+    # message("Getting weather...")
+    mirai(
       do.call(fetch_weather, args),
-      seed = NULL
+      .GlobalEnv,
+      .args = lst(
+        args
+      )
     )
   })
 
@@ -761,7 +778,7 @@ server <- function(input, output, session) {
           class = sprintf(
             "btn-sm btn-%s",
             ifelse(
-              isTruthy(rv$show_upload),
+              is_truthy(rv$show_upload),
               "primary",
               "default"
             )
