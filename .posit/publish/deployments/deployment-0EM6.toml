@@ -10,8 +10,8 @@ id = "4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 dashboard_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 direct_url = "https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/"
 logs_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs"
-bundle_id = "4709"
-bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4709/download"
+bundle_id = "4710"
+bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4710/download"
 files = [
     ".Renviron",
     ".posit/publish/Crop Risk Tool-TGSR.toml",
@@ -78,7 +78,7 @@ files = [
     "www/script.js",
     "www/style.css",
 ]
-deployed_at = "2026-04-14T23:41:13.848Z"
+deployed_at = "2026-04-15T15:29:49.463Z"
 
 [configuration]
 product_type = "connect"
