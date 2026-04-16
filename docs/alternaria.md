@@ -1,3 +1,6 @@
+
+## Alternaria and Cercospora Leaf Blights (Carrot)
+
 ![](alternaria-carrot.png) ***Alternaria*** **and *Cercospora* leaf blights** are common fungal diseases of carrot leaves and petioles. While neither disease directly hurts the carrot root, yield loss occurs when petioles become so brittle that they break off during mechanical harvest leaving the carrot in the ground. In warm, moist weather, *Alternaria* leaf spots develop rapidly so that the entire field may appear to have been injured by frost or chemicals. Crop loss will be more severe when plants become infected early in the season.
 
 *Alternaria* and *Cercospora* are difficult to distinguish in the field and often appear on the same plant. The principle difference involves disease timing. Cercospora leaf blight, caused by the fungus *Cercospora carotae*, attacks young rapidly growing plants; Alternaria leaf blight, caused by the fungus *Alternaria dauci*, primarily attacks older plants, although seedlings may also be infected.

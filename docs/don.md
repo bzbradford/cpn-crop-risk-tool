@@ -1,3 +1,6 @@
+
+## Gibberella Ear Rot / Deoxynivalenol (Corn)
+
 ![](don-gibberella-ear-rot.jpg) **Gibberella ear rot** is caused by the fungus *Gibberella zeae* (synonym *Fusarium graminearum*). It is a consistently important mycotoxigenic fungus in the northern Corn Belt, producing **deoxynivalenol** (DON or vomitoxin), zearalenone, and other toxins. Gibberella ear rot can be identified most readily by the red or pink color of the mold. It almost always begins at the tip of the ear. Excessive mold may cause silks and husks to adhere to the ear. In severe cases, the pink mold is visible on the outside of the husks at the ear tip.
 
 This fungus overwinters in corn residue. Spores are spread by splashing rain and wind, infecting ears through the silks. Silks are most susceptible two to six days after emergence. This ear rot is common, particularly when conditions are cool and wet during grain fill.

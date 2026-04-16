@@ -107,7 +107,8 @@ Model <- function(
   validate,
   ycol,
   yrange,
-  display_name = sprintf("%s (%s)", name, crop)
+  display_name = sprintf("%s (%s)", name, crop),
+  default_start_yday = NULL
 ) {
   args <- as.list(environment())
 
@@ -315,7 +316,8 @@ model_list <- list(
       if (length(msg) > 0) msg else NULL
     },
     ycol = "biomass",
-    yrange = c(0, 10000)
+    yrange = c(0, 10000),
+    default_start_yday = 275
   )
 )
 
@@ -1092,35 +1094,35 @@ build_botrytis <- function(daily) {
 #' Predicts biomass (lb/ac) of rye cover crop when planted in the fall and
 #' harvested in the spring/early summer (Apr - Jun). Trained on data from Wisconsin
 #' Typical biomass range should be 0 - 16000
-#' @param plant_doy Planting day of year
-#' @param gdd_total Cumulative sine GDD base 0C
-#' @param precip_60d Cumulative precip in first 60 days after planting (mm)
-#' @param latitude Latitude of prediction location
-# predict_rye_biomass <- function(
-#   plant_doy,
-#   gdd_total,
-#   precip_fall,
-#   latitude
-# ) {
-#   b0 <- 1.282e+03
-#   b_pd <- -9.826e-01
-#   b_pf <- -7.066e-02
-#   b_lat <- -2.111e+01
-#   k <- 3.973e-03
-#   x0 <- 9.681e+02
-#   ((b0 + b_pd * plant_doy + b_pf * precip_fall + b_lat * latitude) /
-#     (1 + exp(-k * (gdd_total - x0))))^2
-# }
 
 #' @param gdd_total Cumulative sine GDD base 0C
-predict_rye_biomass <- function(gdd_total) {
-  b0 <- 1.027e+02
-  k <- 3.538e-03
-  x0 <- 1.078e+03
-  pred <- (b0) / (1 + exp(-k * (gdd_total - x0)))
+# predict_rye_biomass <- function(gdd_total) {
+#   b0 <- 1.027e+02
+#   k <- 3.538e-03
+#   x0 <- 1.078e+03
+#   pred <- (b0) / (1 + exp(-k * (gdd_total - x0)))
+#   pred^2
+# }
+
+#' @param plant_doy planting day of year
+#' @param precip_fall precipitation (mm) between planting date and Dec 31
+#' @param gdd_total Cumualtive sine GDD base 0C
+predict_rye_biomass <- function(plant_doy, precip_fall, gdd_total) {
+  # coefficients from the NLS model
+  b0 <- 4.231e+02
+  b_pd <- -1.031e+00
+  b_pf <- -2.878e-01
+  k <- 3.663e-03
+  x0 <- 1.049e+03
+
+  # predict from inputs
+  pred <- (b0 + b_pd * plant_doy + b_pf * precip_fall) /
+    (1 + exp(-k * (gdd_total - x0)))
   pred^2
 }
 
+#' Build from weather
+#' @param daily daily weather data
 build_rye_biomass <- function(daily) {
   req(nrow(daily) > 0)
 
@@ -1128,19 +1130,17 @@ build_rye_biomass <- function(daily) {
     arrange(grid_id, date) |>
     mutate(
       date = date,
-      # plant_doy = yday(min(date)),
+      plant_doy = yday(min(date)),
       # duration = row_number(),
       # season = if_else(year == min(year), 1, 2),
       gdd_0C = gdd_sine(temperature_min, temperature_max, 0, 35),
       gdd_total = cumsum(gdd_0C),
-      # precip_60d = cumsum(precip_daily * (duration <= 60)),
-      # biomass = predict_rye_biomass(
-      #   plant_doy,
-      #   gdd_total
-      #   precip_60d,
-      #   grid_lat
-      # ),
-      biomass = predict_rye_biomass(gdd_total),
+      precip_fall = cumsum(precip_daily * (year(date) == year(min(date)))),
+      biomass = predict_rye_biomass(
+        plant_doy,
+        precip_fall,
+        gdd_total
+      ),
       risk = case_when(
         biomass < 2000 ~ "Low",
         biomass < 4500 ~ "Moderate",
