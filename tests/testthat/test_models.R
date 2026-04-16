@@ -416,37 +416,35 @@ test_that("build_botrytis", {
   })
 })
 
-# test_that("predict_rye_biomass", {
-#   expect_silent({
-#     expand_grid(
-#       plant_doy = seq(200, 300, by = 10),
-#       gdd_total = seq(0, 3000, by = 250),
-#       precip_fall = seq(0, 500, by = 50),
-#       latitude = seq(30, 60, by = 1)
-#     ) |>
-#       mutate(
-#         biomass = predict_rye_biomass(
-#           plant_doy = plant_doy,
-#           gdd_total = gdd_total,
-#           precip_fall = precip_fall,
-#           latitude = latitude
-#         )
-#       )
-#   })
-# })
-
 test_that("predict_rye_biomass", {
   expect_silent({
     expand_grid(
-      gdd_total = seq(0, 5000, by = 250)
+      plant_doy = seq(200, 300, by = 10),
+      gdd_total = seq(0, 3000, by = 250),
+      precip_fall = seq(0, 500, by = 50)
     ) |>
       mutate(
         biomass = predict_rye_biomass(
+          plant_doy = plant_doy,
+          precip_fall = precip_fall,
           gdd_total = gdd_total
         )
       )
   })
 })
+
+# test_that("predict_rye_biomass", {
+#   expect_silent({
+#     expand_grid(
+#       gdd_total = seq(0, 5000, by = 250)
+#     ) |>
+#       mutate(
+#         biomass = predict_rye_biomass(
+#           gdd_total = gdd_total
+#         )
+#       )
+#   })
+# })
 
 test_that("build_rye_biomass", {
   expect_silent({

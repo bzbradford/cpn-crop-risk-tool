@@ -298,10 +298,10 @@ build_data_plot <- function(df, sites, opts) {
   col_ranges <- assign_axes(df, opts$cols)
 
   y1_title <- filter(col_ranges, axis == "y1")$name |>
-    make_clean_names("title") |>
+    janitor::make_clean_names("title") |>
     paste(collapse = ", ")
   y2_title <- filter(col_ranges, axis == "y2")$name |>
-    make_clean_names("title") |>
+    janitor::make_clean_names("title") |>
     paste(collapse = ", ")
 
   plt <- plot_ly() |>
@@ -391,7 +391,7 @@ build_data_plot <- function(df, sites, opts) {
   }
 
   # indicate forecast
-  if (isTruthy(opts$show_forecast)) {
+  if (is_truthy(opts$show_forecast)) {
     annot <- plotly_get_forecast_annot(xmax = opts$date_range[2])
     plt |> layout(shapes = annot$shapes, annotations = annot$annotations)
   } else {

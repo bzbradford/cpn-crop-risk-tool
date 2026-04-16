@@ -3,14 +3,12 @@
 suppressPackageStartupMessages({
   # core
   library(tidyverse)
-  library(janitor) # name cleaning
   library(sf) # GIS
   library(fst) # file storage
   library(httr2) # requests
   library(markdown)
   library(zoo) # rollmean
-  library(future) # async
-  library(promises) # async
+  library(mirai) # async
 
   # shiny
   library(shiny)
@@ -34,11 +32,7 @@ suppressPackageStartupMessages({
 
 if (FALSE) {
   # add to renv without loading
-  library(devtools)
   library(testthat)
-
-  # this got removed from CRAN
-  devtools::install_github("trafficonese/leaflet.extras")
 
   # RENV
   renv::init()
@@ -47,9 +41,7 @@ if (FALSE) {
   renv::update()
   renv::snapshot()
   renv::clean()
-
-  # enable development mode
-  shiny::devmode(TRUE)
+  renv::install("sf@1.0-24")
 
   # turn warnings into errors
   options(warn = 2)
@@ -65,12 +57,23 @@ if (FALSE) {
   test_daily_wx <- build_daily(test_hourly_wx)
 }
 
+options(shiny.fullstacktrace = FALSE)
+
 
 # Async tasks ------------------------------------------------------------------
 
-# set up a second session for asynchronous tasks but not in tests
+# set up background session for asynchronous tasks but not in tests
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
-  plan(multisession, workers = 2)
+  # start 2 workers
+  mirai::daemons(2)
+
+  # load required packages on workers
+  mirai::everywhere({
+    library(tidyverse)
+    library(httr2)
+    library(sf)
+    library(fst)
+  })
 }
 
 
@@ -245,10 +248,15 @@ build_choices <- function(obj, name, value) {
   )
 }
 
+# wrapper for shiny::isTruthy
+is_truthy <- function(x) {
+  shiny::isTruthy(x)
+}
+
 # return the first non-empty argument
 first_truthy <- function(...) {
   for (arg in list(...)) {
-    if (shiny::isTruthy(arg)) {
+    if (is_truthy(arg)) {
       return(arg)
     }
   }
@@ -482,7 +490,7 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
         .cols = starts_with(m$measure)
       )
   }
-  clean_names(df)
+  janitor::clean_names(df)
 }
 
 # tibble(temperature = 1) |> rename_with_units("metric")
@@ -973,7 +981,7 @@ load_sites <- function(fpath) {
     stop("File was empty")
   }
   df <- df |>
-    clean_names() |>
+    janitor::clean_names() |>
     select(any_of(OPTS$site_cols)) |>
     drop_na()
   if (!(all(c("name", "lat", "lng") %in% names(df)))) {
@@ -1025,7 +1033,7 @@ parse_cookie_sites <- function(cookie_sites) {
 #' @param user_id character user ID from the browser cookie
 #' @returns file path string, or NULL if user_id is empty/invalid
 get_cache_file <- function(user_id) {
-  if (!isTruthy(user_id)) {
+  if (!is_truthy(user_id)) {
     return(NULL)
   }
   cache_path <- "cache"
