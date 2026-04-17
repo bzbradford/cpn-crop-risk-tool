@@ -50,31 +50,6 @@ test_that("hours_diff calculates difference in hours", {
   expect_equal(hours_diff(now() - days(1), now()), 24)
 })
 
-test_that("get_yday converts partial dates to day of year", {
-  result <- get_yday("jun 1", "aug 2")
-  expect_equal(length(result), 2)
-  expect_equal(result[[1]], yday(ymd(paste(year(Sys.Date()), "jun 1"))))
-  expect_equal(result[[2]], yday(ymd(paste(year(Sys.Date()), "aug 2"))))
-
-  # jun 1 should be around day 152 (varies slightly in leap years)
-  expect_true(result[[1]] >= 152 && result[[1]] <= 153)
-})
-
-test_that("check_date_overlap detects overlapping date ranges", {
-  # overlap: Apr-Jul with May-Aug
-
-  result1 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
-  expect_true(result1[["2025"]])
-
-  # no overlap: Apr-Jul with Jan-Feb
-  result2 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
-  expect_false(result2[["2025"]])
-
-  # cross-year range
-  result3 <- check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
-  expect_true(result3[["2025"]])
-})
-
 
 # Summary functions ------------------------------------------------------------
 

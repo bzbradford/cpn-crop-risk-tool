@@ -49,6 +49,14 @@ riskServer <- function(rv, wx_data) {
       })
 
       ## model_picker ----
+      # combine standard and insect models
+      # set names as $slug
+      model_list <- c(model_list, insect_models) |>
+        imap(function(m, slug) {
+          m$slug <- slug
+          m
+        })
+
       output$model_picker <- renderUI({
         model_group <- req(input$model_group)
         selected_models <- Filter(\(m) m$group == model_group, model_list)
@@ -84,10 +92,10 @@ riskServer <- function(rv, wx_data) {
       #' start date if a model biofix is defined
       observe({
         model <- selected_model()
-        biofix_yday <- req(model$default_start_yday)
+        biofix <- req(model$biofix)
         end_date <- rv$end_date
-        start_year <- year(end_date) - (biofix_yday > yday(end_date))
-        start_date <- make_date(start_year) + biofix_yday - 1
+        start_year <- year(end_date) - (biofix > yday(end_date))
+        start_date <- make_date(start_year) + biofix - 1
         rv$start_date_setter <- start_date
       })
 
@@ -177,7 +185,8 @@ riskServer <- function(rv, wx_data) {
 
       ## model_data - reactive ----
       model_data <- reactive({
-        model <- req(input$model)
+        # model <- req(input$model)
+        model <- selected_model()
         wx_data <- wx_data()
         date_range <- wx_data$dates
 
@@ -190,33 +199,41 @@ riskServer <- function(rv, wx_data) {
 
         req(nrow(daily) > 0)
 
-        results <- switch(
-          model,
-          "tarspot" = build_tar_spot(daily_full),
-          "gls" = build_gray_leaf_spot(daily_full),
-          "don" = build_don(daily_full),
-          "whitemold" = local({
-            irrig <- req(input$irrigation)
-            spacing <- if (irrig) req(input$spacing)
-            build_white_mold(daily_full, irrig, spacing)
-          }),
-          "frogeye" = build_frogeye_leaf_spot(daily_full),
-          "wheatscab" = local({
-            res <- req(input$resistance)
-            build_wheat_scab(daily_full, res)
-          }),
-          "earlyblight" = build_early_blight(daily_full),
-          "lateblight" = build_late_blight(daily_full),
-          "alternaria" = build_alternaria(daily_full),
-          "cercospora" = build_cercospora(daily_full),
-          "botrytis" = build_botrytis(daily_full),
-          "ryebiomass" = build_rye_biomass(daily),
-          {
-            warning("Don't know how to build data for model '", model, "'")
-            req(FALSE)
-          }
-        )
+        results <- if (model$group == "insect") {
+          build_insect(daily, model$tmin, model$tmax, model$key)
+        } else {
+          switch(
+            model$slug,
+            "tarspot" = build_tar_spot(daily_full),
+            "gls" = build_gray_leaf_spot(daily_full),
+            "don" = build_don(daily_full),
+            "whitemold" = local({
+              irrig <- req(input$irrigation)
+              spacing <- if (irrig) req(input$spacing)
+              build_white_mold(daily_full, irrig, spacing)
+            }),
+            "frogeye" = build_frogeye_leaf_spot(daily_full),
+            "wheatscab" = local({
+              res <- req(input$resistance)
+              build_wheat_scab(daily_full, res)
+            }),
+            "earlyblight" = build_early_blight(daily_full),
+            "lateblight" = build_late_blight(daily_full),
+            "alternaria" = build_alternaria(daily_full),
+            "cercospora" = build_cercospora(daily_full),
+            "botrytis" = build_botrytis(daily_full),
+            "ryebiomass" = build_rye_biomass(daily)
+          )
+        }
 
+        if (is.null(results)) {
+          warning(
+            sprintf("Don't know how to build data for model '%s'", model$slug)
+          )
+          req(FALSE)
+        }
+
+        # clip off any early weather that was used for moving averages
         results |>
           filter(date >= date_range$start)
       })
@@ -231,6 +248,7 @@ riskServer <- function(rv, wx_data) {
         if (is.function(model$validate)) {
           dates <- wx_data()$dates
           params <- list(
+            start_date = dates$start,
             date_range = c(dates$start, dates$end)
           )
           model$validate(params)
@@ -376,12 +394,6 @@ riskServer <- function(rv, wx_data) {
             date_range <- c(dates$start, max(dates$end, max(df$date)))
             last_value <- last_values |> filter(site_label == !!label)
 
-            risk_info <- sprintf(
-              "For %s: %s",
-              format(last_value$date, "%b %d, %Y"),
-              last_value$value_label
-            )
-
             plt <- plot_risk(
               df,
               name = model$name,
@@ -392,7 +404,11 @@ riskServer <- function(rv, wx_data) {
 
             div(
               strong(model$name),
-              span(style = "font-size: small", em(risk_info)),
+              # span(
+              #   style = "font-size: small",
+              #   em("For", format(last_value$date, "%b %d, %Y")),
+              #   last_value$value_label
+              # ),
               plt
             )
           } else {
@@ -441,7 +457,7 @@ riskServer <- function(rv, wx_data) {
           model <- selected_model()
           model_data <- joined_data() |>
             select(-any_of(OPTS$grid_attr_cols)) |>
-            select(-c(risk_color, value_label, site_label)) |>
+            select(-c(risk_color, site_label)) |>
             rename_with_units("metric")
 
           header <- tibble(

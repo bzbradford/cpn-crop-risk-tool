@@ -1,5 +1,38 @@
 # Models and data processing
 
+# Helper functions ----
+
+check_date_partial <- function(dpart) {
+  withCallingHandlers(
+    ymd(paste(year(today()), dpart)),
+    warning = function(w) {
+      stop("Invalid partial date format: ", dpart)
+    }
+  )
+}
+
+if (FALSE) {
+  check_date_partial("Jan 1")
+  check_date_partial("Foo 1")
+}
+
+check_date_overlap <- function(date_range, dates_partial) {
+  date_range <- as_date(date_range)
+  date_seq <- seq.Date(date_range[1], date_range[2], 1)
+  yrs <- unique(year(date_seq))
+  sapply(set_names(yrs), function(yr) {
+    dt <- ymd(paste(yr, dates_partial))
+    test_seq <- seq.Date(dt[1], dt[2])
+    any(date_seq %in% test_seq)
+  })
+}
+
+if (FALSE) {
+  check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
+  check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
+  check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
+}
+
 # Daily weather ----------------------------------------------------------------
 # daily weather data used by most models
 
@@ -88,14 +121,15 @@ build_daily <- function(hourly) {
 # Model definitions ----------------------------------------------------------
 
 #' @param name display name
-#' @param crop relevant crop
+#' @param crop NULL or crop name
 #' @param group name of model group eg 'field' or 'vegetable' defined in OPTS
-#' @param info model info
-#' @param doc markdown file for More Information
+#' @param info model info, HTML ok
+#' @param doc markdown file for More Information link
+#' @param risk_period NULL or length two character vector eg 'Jul 1'
+#' @param biofix NULL or day of year
 #' @param validate validation function that returns a message or NULL from params passed by risk module
 #' @param ycol column name to plot on y axis
 #' @param yrange default range for y axis
-#' @param risk_period NULL or length two character vector eg 'Jul 1'
 #' @param display_name full model name displayed in the model picker
 Model <- function(
   name,
@@ -104,38 +138,43 @@ Model <- function(
   info,
   doc,
   risk_period,
+  biofix = NULL,
   validate,
   ycol,
   yrange,
-  display_name = sprintf("%s (%s)", name, crop),
-  default_start_yday = NULL
+  display_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop))
 ) {
   args <- as.list(environment())
 
-  # check for valid group
+  # validate simple inputs
+  stopifnot(is.character(name))
+  stopifnot(is.null(crop) | is.character(crop))
+  stopifnot(is.null(info) | is.character(info))
+
+  # validate group
   if (!(group %in% OPTS$model_group_choices)) {
     stop("Invalid model group ", group)
   }
 
   # check for doc
   if (!is.null(doc)) {
-    all_docs <- list.files(
+    docs <- list.files(
       pattern = "*.md",
       recursive = TRUE
     )
-    if (!(doc %in% all_docs)) {
+    if (!(doc %in% docs)) {
       stop("Missing doc file ", doc)
     }
   }
 
   # check risk period
   if (!is.null(risk_period)) {
-    withCallingHandlers(
-      ymd(paste(year(Sys.Date()), risk_period)),
-      warning = function(w) {
-        stop("Invalid date format for risk_period: ", risk_period)
-      }
-    )
+    check_date_partial(risk_period)
+  }
+
+  # check biofix
+  if (!is.null(biofix)) {
+    stopifnot(between(biofix, 1, 365))
   }
 
   args
@@ -262,6 +301,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   alternaria = Model(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
@@ -273,6 +313,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   cercospora = Model(
     name = "Cercospora leaf spot",
     crop = "Beet",
@@ -284,6 +325,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   botrytis = Model(
     name = "Botrytis leaf blight",
     crop = "Onion",
@@ -295,6 +337,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   ryebiomass = Model(
     name = "Winter rye biomass",
     display_name = "Winter rye biomass",
@@ -303,6 +346,7 @@ model_list <- list(
     info = "This cover crop termination model predicts biomass accumulation in overwintering rye. Start date should be set to the fall planting date and biomass predictions will be made through the end date. This model is an early prototype trained on data from Wisconsin. Actual yields will depend on additional factors not included in the model such as rye cultivar, soil type, and nitrogen inputs.",
     doc = "docs/rye-biomass.md",
     risk_period = NULL,
+    biofix = 274, # Oct 1
     validate = function(params) {
       dr <- params$date_range
       msg <- paste(
@@ -316,16 +360,9 @@ model_list <- list(
       if (length(msg) > 0) msg else NULL
     },
     ycol = "biomass",
-    yrange = c(0, 10000),
-    default_start_yday = 275
+    yrange = c(0, 10000)
   )
 )
-
-# set names as $slug
-model_list <- imap(model_list, function(m, slug) {
-  m$slug <- slug
-  m
-})
 
 
 # Model helpers ----------------------------------------------------------------
@@ -966,7 +1003,7 @@ risk_for_cercospora <- function(value) {
       avg7,
       total,
       risk
-    ),
+    )
   )
 }
 

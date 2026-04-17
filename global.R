@@ -163,11 +163,12 @@ OPTS <- lst(
     # "Model models" = "Model"
   ),
 
-  ## Model risk tab ----
+  ## risk tab ----
   model_group_choices = list(
     "Field crops" = "field",
     "Vegetable crops" = "vegetable",
-    "Cover crops" = "cover"
+    "Cover crops" = "cover",
+    "Insects" = "insect"
   ),
 
   ## plotting ----
@@ -273,6 +274,19 @@ minmax <- function(x) {
   c(min(x, na.rm = TRUE), max(x, na.rm = TRUE))
 }
 
+# rounds to nearest whole multiple of y
+#' @param x number or vector
+#' @param d divisor to round to
+round_to <- function(x, d = 5) {
+  round(x / d) * d
+}
+
+#' prints to tribble format in the console for pasting
+#' @param df a data frame to convert to tribble
+print_tribble <- function(df) {
+  constructive::construct(df, opts_tbl_df("tribble"))
+}
+
 # Date/time functions ----------------------------------------------------------
 
 # calculate the difference in hours between two timestamps
@@ -283,33 +297,6 @@ hours_diff <- function(start, end) {
 # hours_diff(now(), now())
 # hours_diff(now() - hours(6), now())
 # hours_diff(now() - days(1), now())
-
-#' @param ... partial dates like 'aug 1' to convert to yday using current year
-get_yday <- function(...) {
-  args <- list(...)
-  sapply(args, function(v) {
-    paste(year(Sys.Date()), v) |>
-      ymd() |>
-      yday()
-  })
-}
-
-# get_yday("jun 1", "aug 2")
-
-check_date_overlap <- function(date_range, dates_partial) {
-  date_range <- as_date(date_range)
-  date_seq <- seq.Date(date_range[1], date_range[2], 1)
-  yrs <- unique(year(date_seq))
-  sapply(set_names(yrs), function(yr) {
-    dt <- ymd(paste(yr, dates_partial))
-    test_seq <- seq.Date(dt[1], dt[2])
-    any(date_seq %in% test_seq)
-  })
-}
-
-# check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
-# check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
-# check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
 
 # Summary functions ------------------------------------------------------------
 
