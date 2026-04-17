@@ -42,9 +42,7 @@ ui <- fluidPage(
 
     div(
       class = "column sidebar-col",
-
       h2("Site selection", style = "margin-bottom: 1rem;"),
-
       div(
         uiOutput("site_help_ui"),
         div(
@@ -54,17 +52,12 @@ ui <- fluidPage(
         uiOutput("site_btns"),
         uiOutput("file_upload_ui")
       ),
-
-      div(
-        style = "margin-top: 1rem;",
-        uiOutput("date_select_ui")
-      ),
-
+      h2("Weather data", style = "margin-top: 2rem;"),
+      uiOutput("date_select_ui"),
       div(
         style = "margin-top: 1rem;",
         uiOutput("date_btns_ui")
       ),
-
       div(
         style = "margin-top: 1rem;",
         uiOutput("action_ui") |>
