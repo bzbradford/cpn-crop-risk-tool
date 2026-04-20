@@ -111,13 +111,14 @@ riskServer <- function(rv, wx_data) {
           ),
           uiOutput(ns("whitemold_opts")),
           uiOutput(ns("wheatscab_opts")),
+          uiOutput(ns("cotton_opts")),
         )
       })
 
       ## white_mold_opts ----
       # irrigation and crop spacing picker for white mold model
       output$whitemold_opts <- renderUI({
-        req(identical(input$model, model_list$whitemold$slug))
+        req(identical(input$model, "whitemold"))
 
         irrigation_choices <- list("Dry" = FALSE, "Irrigated" = TRUE)
         spacing_choices <- list("30-inch" = "30", "15-inch" = "15")
@@ -157,7 +158,7 @@ riskServer <- function(rv, wx_data) {
 
       ## wheat_scab_opts ----
       output$wheatscab_opts <- renderUI({
-        req(identical(input$model, model_list$wheatscab$slug))
+        req(identical(input$model, "wheatscab"))
 
         choices <- list(
           "Very susceptible" = "VS",
@@ -177,6 +178,53 @@ riskServer <- function(rv, wx_data) {
             selected = isolate(input$resistance) %||%
               first(choices),
             inline = TRUE
+          )
+        )
+      })
+
+      ## cotton planting opts ----
+      output$cotton_opts <- renderUI({
+        req(identical(input$model, "cotton_planting"))
+
+        tagList(
+          div(
+            class = "label-inline",
+            style = "margin: 1rem 0;",
+            tags$label("Pythium present:", `for` = ns("pythium")),
+            radioButtons(
+              inputId = ns("pythium"),
+              label = NULL,
+              choices = c("Yes" = 1, "No" = 0),
+              selected = isolate(input$pythium) %||% 0,
+              inline = TRUE
+            ),
+          ),
+          div(
+            style = "display: flex; gap: 20px;",
+            div(
+              style = "flex: 1;",
+              sliderInput(
+                inputId = ns("planting_pop"),
+                label = "Planting population:",
+                min = 30,
+                max = 60,
+                value = 45,
+                step = 5,
+                post = "k"
+              )
+            ),
+            div(
+              style = "flex: 1;",
+              sliderInput(
+                inputId = ns("limiting_pop"),
+                label = "Yield-limiting population:",
+                min = 10,
+                max = 30,
+                value = 20,
+                step = 1,
+                post = "k"
+              )
+            )
           )
         )
       })
@@ -222,7 +270,13 @@ riskServer <- function(rv, wx_data) {
             "alternaria" = build_alternaria(daily_full),
             "cercospora" = build_cercospora(daily_full),
             "botrytis" = build_botrytis(daily_full),
-            "ryebiomass" = build_rye_biomass(daily)
+            "ryebiomass" = build_rye_biomass(daily),
+            "cotton_planting" = local({
+              py <- as.numeric(req(input$pythium))
+              pp <- req(input$planting_pop)
+              lp <- req(input$limiting_pop)
+              build_cotton_planting(daily, py, pp, lp)
+            })
           )
         }
 
