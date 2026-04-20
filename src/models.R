@@ -361,6 +361,19 @@ model_list <- list(
     },
     ycol = "biomass",
     yrange = c(0, 10000)
+  ),
+
+  cotton_planting = Model(
+    name = "Cotton planting risk model",
+    crop = "Cotton",
+    group = "field",
+    info = "Optimal cotton plant populations generally range from 30,000 to 55,000 plants per acre, with a target of 40,000-50,000 for maximum yield. While minimum stands can be as low as 15,000 plants per acre, 30,000 is recommended for optimal yield. Seeding rates typically range from 24,000 to 45,000+ seeds per acre, depending on row spacing and soil conditions. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, pythium presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    doc = NULL,
+    risk_period = NULL,
+    validate = NULL,
+    # biofix = 90,
+    ycol = "probability",
+    yrange = c(0, 1)
   )
 )
 
@@ -1214,3 +1227,311 @@ if (FALSE) {
     build_rye_biomass() |>
     test_plot()
 }
+
+# Cotton planting risk ---------------------------------------------------------
+#' Cotton planting risk model. Predicts the probability of emerged stand below the yield-limiting stand population
+#' Reference: Dr. Zachary Noel, Auburn University
+#' @param Precip3day 3-day future/forecast total precipitation (mm)
+#' @param MeanMinTemp9ma 9-day moving average of daily minimum air temperatures (C)
+#' @param pythium present, T/F or 1/0 user input
+#' @param planting_pop ~30,000 - 50,000, user input
+#' @param limiting_stand default 15,000 plants per acre
+#' @param year derive from date
+#' @returns probability of emerged stand < limiting_stand
+cotton_planting_model <- Vectorize(function(
+  Precip3day,
+  MeanMinTemp9ma,
+  pythium,
+  planting_pop,
+  limiting_pop,
+  year
+) {
+  # captured from inputs or date
+  py <- pythium # pythyium T/F
+  pp <- planting_pop # planting population
+
+  # constants
+  yr <- year # year, derived from date
+  s_crit <- limiting_pop # yield-limiting population, emerged plants per acre
+
+  # 4.	Generate the predicted emergence from the following formula:
+  mu <- -22.4611 +
+    -0.3359 * py +
+    0.01118 * yr +
+    -0.00750 * Precip3day +
+    0.03929 * MeanMinTemp9ma
+
+  # 5.	Perform the logit transformation to generate the proportion of emerged seedlings and the confidence interval around the prediction.
+  p_emerge <- logistic(mu)
+
+  # 6.	Scale the predictors on the response scale. Multiply the 1x5 X matrix shown below to get the 1x5 g matrix.
+  g_mat <- (p_emerge * (1 - p_emerge)) *
+    matrix(c(1, py, yr, Precip3day, MeanMinTemp9ma), ncol = 5)
+
+  # 7.	Variance-Covariance matrix (VCOV) is needed to calculate the confidence intervals around the prediction. It is fixed based on the model fit and will not change based on new user input.
+  # fmt: skip
+  cov_mat <- matrix(
+    byrow = TRUE, nrow = 5,
+    data = c(
+      89.9570756007,  9.339412e-04, -4.501716e-02,  1.145290e-03,  2.718934e-02,
+      9.339412e-04,  2.248671e-02, -1.077674e-05, -2.326803e-05,  1.823261e-05,
+      -4.501716e-02, -1.077674e-05,  2.253921e-05, -6.018538e-07, -1.454077e-05,
+      1.145290e-03, -2.326803e-05, -6.018538e-07,  4.905222e-06,  1.451229e-06,
+      2.718934e-02,  1.823261e-05, -1.454077e-05,  1.451229e-06,  1.518877e-04
+    )
+  )
+
+  # 8.	Multiply the g matrix by the variance-covariance matrix (VCOV) and then by the transposed g matrix (gT). The result is the variance around the prediction.
+  var <- as.numeric(g_mat %*% cov_mat %*% t(g_mat))
+
+  # 9.	Take the square root of the variance around the prediction (Vη) to calculate the standard error around the mean prediction (SEη)
+  se <- sqrt(var)
+
+  # 10.	Compute the 95% confidence interval around the prediction by multiplying the standard error (SEη) by 1.959964 and adding or subtracting the prediction (Pemerge)
+  se_mult <- 1.959964
+  ci_upper <- p_emerge + se * se_mult
+  ci_lower <- p_emerge - se * se_mult
+
+  # 11.	Pemerge, CIupper,  CIlower are proportions. Therefore, multiply them by the planting population (PP) to convert the prediction and confidence interval to predicted number of emerged plants.
+  pred_emerge <- p_emerge * pp
+  pred_emerge_up <- ci_upper * pp
+  pred_emerge_low <- ci_lower * pp
+
+  # 12.	Calculate the probability of going below the stand threshold of 15,000 plants per acre assuming a normal distribution with the mean and standard deviation defined by the predicted mean (Pemerge) and the standard deviation defined by the standard deviation on the emerged plant scale (SD).
+  sd <- (pred_emerge_up - pred_emerge_low) / (2 * se_mult)
+  p_below <- pnorm((s_crit - pred_emerge) / sd)
+
+  p_below
+})
+
+#' build from weather
+build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
+  req(nrow(daily) > 0)
+
+  daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      year = year,
+      precip_3day_forward = zoo::rollsum(
+        precip_daily,
+        k = 3,
+        fill = 0,
+        align = "left"
+      ),
+      min_temp_9ma = roll_mean(temperature_min, 9),
+      probability = cotton_planting_model(
+        Precip3day = precip_3day_forward,
+        MeanMinTemp9ma = min_temp_9ma,
+        pythium = pythium,
+        planting_pop = planting_pop,
+        limiting_pop = limiting_pop,
+        year = year
+      ),
+      risk_from_prob(probability, 0.01, 0.2, 0.35),
+      .by = grid_id,
+      .keep = "used"
+    )
+}
+
+if (FALSE) {
+  test_daily_wx |>
+    build_cotton_planting(
+      pythium = TRUE,
+      planting_pop = 45000,
+      limiting_pop = 10000
+    ) |>
+    test_plot()
+}
+
+
+# Insect models ----------------------------------------------------------------
+
+#' Map a value onto a sine wave with minima at `start` and maxima at `peak`
+half_sine <- function(value, start, peak) {
+  # normalize the input range to [0, 1]
+  x = (value - start) / (peak - start)
+  (sin(x * pi - pi / 2) + 1) / 2
+}
+
+
+#' Map a value onto a full sine wave passing through start, peak, and end
+full_sine <- function(value, start, peak, end) {
+  case_when(
+    !between(value, start, end) ~ 0,
+    value <= peak ~ half_sine(value, start, peak),
+    value > peak ~ half_sine(-1 * value, -1 * end, -1 * peak),
+    .default = 0
+  )
+}
+
+build_insect <- function(
+  daily,
+  tmin,
+  tmax,
+  stage_key
+) {
+  req(nrow(daily) > 0)
+
+  key <- bind_rows(
+    tibble(start = 0, sev = 0, label = "Before spring emergence"),
+    stage_key
+  )
+
+  daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      freezing = roll_sum(temperature_min <= -2, 14),
+      kill = (yday(date) > 250) * (freezing > 0),
+      gdd_f = gdd_sine(temperature_min, temperature_max, tmin, tmax) * 1.8,
+      cum_gdd = cumsum(gdd_f),
+      .by = c(grid_id, year),
+      .keep = "used"
+    ) |>
+    left_join(key, join_by(cum_gdd >= start), multiple = "last") |>
+    mutate(
+      severity = pmax(0, sev - freezing),
+      risk_from_severity(severity),
+      value_label = paste0(
+        sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
+        label,
+        if_else(
+          kill == 1,
+          ". Recent freezing temperatures may reduce insect populations.",
+          ""
+        )
+      )
+    )
+}
+
+# make sure param$start_date == biofix
+validate_biofix <- function(biofix) {
+  force(biofix)
+
+  return(function(params) {
+    sd <- params$start_date
+    if (yday(sd) != biofix) {
+      biofix_date <- make_date(year(sd)) + biofix - 1
+      paste(
+        "This model requires the start date to be",
+        format(biofix_date, "%b %d")
+      )
+    } else {
+      NULL
+    }
+  })
+}
+
+if (FALSE) {
+  validate_biofix(1)(list(start_date = today()))
+}
+
+## Insect defs -----------------------------------------------------------------
+
+Insect <- function(
+  name,
+  crop = NULL,
+  info,
+  doc,
+  biofix = 1,
+  tmin,
+  tmax = 30,
+  key
+) {
+  m <- Model(
+    name = name,
+    crop = crop,
+    group = "insect",
+    info = info,
+    doc = doc,
+    risk_period = NULL,
+    biofix = biofix,
+    validate = validate_biofix(biofix),
+    ycol = "cum_gdd",
+    yrange = c(0, NA)
+  )
+  stopifnot(tmin < tmax)
+  stopifnot(setequal(names(key), c("start", "sev", "label")))
+  m$tmin <- tmin
+  m$tmax <- tmax
+  m$key <- key
+  m
+}
+
+insect_models <- list(
+  scm = Insect(
+    name = "Seedcorn maggot",
+    crop = "Corn, bean, other",
+    info = "In Wisconsin there are typically 3-5 generations per year, with maximum risk coinciding with peak adult flight times: First (overwintering) generation flight peaks around 360 FDD, second generation flight peaks around 1080 FDD, third generation peaks around 1800 FDD. Wait 450 FDD after peak flight for larval pupation and minimum risk to crops.",
+    doc = "docs/insects/scm.md",
+    tmin = 4,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                                          ,
+         295 ,    1 , "1st gen: Low abundance and risk of damage"     ,
+         315 ,    2 , "1st gen: Medium abundance and risk of damage"  ,
+         330 ,    3 , "1st gen: High abundance and risk of damage"    ,
+         340 ,    4 , "1st gen: Peak adult flight and risk of damage" ,
+         510 ,    3 , "1st gen: High abundance and risk of damage"    ,
+         585 ,    2 , "1st gen: Medium abundance and risk of damage"  ,
+         660 ,    1 , "1st gen: Low abundance and risk of damage"     ,
+         810 ,    0 , "1st gen: Absent or very low abundance"         ,
+         990 ,    1 , "2nd gen: Low abundance and risk of damage"     ,
+        1020 ,    2 , "2nd gen: Medium abundance and risk of damage"  ,
+        1035 ,    3 , "2nd gen: High abundance and risk of damage"    ,
+        1050 ,    4 , "2nd gen: Peak adult flight and risk of damage" ,
+        1245 ,    3 , "2nd gen: High abundance and risk of damage"    ,
+        1325 ,    2 , "2nd gen: Medium abundance and risk of damage"  ,
+        1405 ,    1 , "2nd gen: Low abundance and risk of damage"     ,
+        1570 ,    0 , "2nd gen: Absent or very low abundance"         ,
+        1650 ,    1 , "3rd gen: Low abundance and risk of damage"     ,
+        1700 ,    2 , "3rd gen: Medium abundance and risk of damage"  ,
+        1725 ,    3 , "3rd gen: High abundance and risk of damage"    ,
+        1750 ,    4 , "3rd gen: Peak adult flight and risk of damage" ,
+        1985 ,    3 , "3rd gen: High abundance and risk of damage"    ,
+        2080 ,    2 , "3rd gen: Medium abundance and risk of damage"  ,
+        2175 ,    1 , "3rd gen: Low abundance and risk of damage"     ,
+        2360 ,    0 , "3rd gen: Absent or very low abundance"         ,
+    )
+  ),
+  afw = Insect(
+    "Alfalfa weevil",
+    crop = "Alfalfa",
+    info = "Alfalfa weevil egg hatch begins around 300 FDD. Light feeding damage expected during 1st and 2nd instar life stages (350-500 FDD). Heavy feeding damage expected during 3rd and 4th instar development, approx. 400-600 FDD.",
+    doc = "docs/insects/alfalfa-weevil.md",
+    tmin = 9,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                      ,
+         300 ,    1 , "Egg hatch, begin scouting" ,
+         370 ,    2 , "2nd instar larvae"         ,
+         440 ,    3 , "3rd instar larvae"         ,
+         505 ,    4 , "4th instar larvae"         ,
+         595 ,    2 , "Pupal stage, end scouting" ,
+         815 ,    1 , "Adult emergence"           ,
+        1000 ,    0 , "Adult diapause"            ,
+    )
+  ),
+  cpb = Insect(
+    "Colorado Potato Beetle",
+    crop = "Potato",
+    info = "Our Colorado potato beetle risk model was derived from 10 years of scouting data in the Central Sands and uses a base 50°F degree day model. The indicated risk score represents the estimated total abundance of adults and larvae. First adult colonization of crops is typically around 265 FDD with peak first-generation populations observed around 895 FDD. Total populations decline slightly through 1115 FDD during the period between generations. Populations peak again around 1375 FDD during second generation adult emergence and decline through the end of the season.",
+    doc = "docs/insects/cpb.md",
+    tmin = 10,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                            ,
+         200 ,    1 , "1st gen adult colonization"      ,
+         350 ,    2 , "1st gen egg hatch"               ,
+         600 ,    3 , "1st gen peak adults"             ,
+         800 ,    4 , "1st gen peak larvae"             ,
+         935 ,    2 , "1st gen pupation"                ,
+        1100 ,    3 , "2nd gen adult emergence"         ,
+        1470 ,    4 , "2nd gen peak adults"             ,
+        1800 ,    3 , "2nd gen adult feeding continues" ,
+        1970 ,    2 , "2nd gen adults begin dispersing" ,
+        2265 ,    1 , "2nd gen adults mostly dispersed" ,
+    )
+  )
+)

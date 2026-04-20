@@ -350,7 +350,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       plot_cols <- reactive({
         cols <- names(selected_data())
         cols <- cols[!(cols %in% OPTS$plot_ignore_cols)]
-        set_names(cols, make_clean_names(cols, "title"))
+        set_names(cols, janitor::make_clean_names(cols, "title"))
       })
 
       ## plot_cols_ui ----

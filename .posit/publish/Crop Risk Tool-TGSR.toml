@@ -8,19 +8,18 @@ entrypoint = "global.R"
 validate = true
 files = [
     "/global.R",
-    "/renv.lock",
     "/.posit/publish/Crop Risk Tool-TGSR.toml",
     "/.posit/publish/deployments/deployment-0EM6.toml",
-    "/www",
+    "/renv.lock",
     "/ui.R",
     "/src",
     "/server.R",
     "/ibm_auth.rds",
-    "/docs",
-    "/data",
     "/README.md",
     "/.Renviron",
-    "/tests",
+    "/docs",
+    "/data",
+    "/www",
 ]
 title = "Crop Risk Tool"
 
