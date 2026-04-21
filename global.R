@@ -64,8 +64,8 @@ options(shiny.fullstacktrace = FALSE)
 
 # set up background session for asynchronous tasks but not in tests
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
-  # start 2 workers
-  mirai::daemons(2)
+  # start background workers
+  mirai::daemons(4)
 
   # load required packages on workers
   mirai::everywhere({

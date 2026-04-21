@@ -361,7 +361,7 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, pythium presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, <i>Pythium</i> presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
@@ -1376,7 +1376,7 @@ build_insect <- function(
     mutate(
       date = date,
       freezing = roll_sum(temperature_min <= -2, 14),
-      kill = (yday(date) > 250) * (freezing > 0),
+      kill = (yday(date) > 250) * (freezing > 0), # end of season kill
       gdd_f = gdd_sine(temperature_min, temperature_max, tmin, tmax) * 1.8,
       cum_gdd = cumsum(gdd_f),
       .by = c(grid_id, year),
@@ -1384,14 +1384,15 @@ build_insect <- function(
     ) |>
     left_join(key, join_by(cum_gdd >= start), multiple = "last") |>
     mutate(
-      severity = pmax(0, sev - freezing),
+      # severity = pmax(0, sev - freezing),
+      severity = if_else(kill == 1, pmax(0, sev - freezing), sev),
       risk_from_severity(severity),
       value_label = paste0(
         sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
         label,
         if_else(
           kill == 1,
-          ". Recent freezing temperatures may reduce insect populations.",
+          ".\nRecent freezing temperatures may reduce insect populations.",
           ""
         )
       )
