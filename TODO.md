@@ -28,6 +28,8 @@ Legend:
 **Difficulty:** S–M
 **Risk:** S
 
+**Status: Complete**
+
 ### A3. Debounce date-input observers
 **Location:** `server.R` `rv$start_date` / `rv$dates_valid` observers (lines 183–218)
 **Problem:** Typing into a `dateInput` fires input changes per keystroke. Each intermediate value invalidates `selected_dates()` → `expanded_dates()` → `wx_args()` → `wx_data()`. The weather fetch is already throttled to 15 s, but rebuilds of daily/MA/GDD fire immediately.
@@ -43,6 +45,8 @@ Legend:
 **Impact:** correctness (critical in multi-user deployments)
 **Difficulty:** S
 **Risk:** S
+
+**Status: Complete**
 
 ### A5. Auto-fetch timer wakes up forever
 **Location:** `server.R` lines 1107–1126
