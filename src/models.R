@@ -361,7 +361,7 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, <i>Pythium</i> presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting.",
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
