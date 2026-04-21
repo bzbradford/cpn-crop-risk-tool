@@ -300,10 +300,16 @@ hours_diff <- function(start, end) {
 # Summary functions ------------------------------------------------------------
 
 calc_sum <- function(x) {
+  if (all(is.na(x))) {
+    return(NA)
+  }
   sum(x, na.rm = TRUE)
 }
 
 calc_mean <- function(x) {
+  if (all(is.na(x))) {
+    return(NA)
+  }
   mean(x, na.rm = TRUE)
 }
 
