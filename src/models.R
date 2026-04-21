@@ -69,7 +69,7 @@ build_daily <- function(hourly) {
     mutate(
       precip_cumulative = cumsum(precip_daily),
       snow_cumulative = cumsum(snow_daily),
-      hot_past_5_days = rollapplyr(
+      hot_past_5_days = data.table::frollapply(
         hours_temp_over_30,
         5,
         \(x) any(x >= 4),
@@ -783,7 +783,7 @@ calc_pdays <- function(tmin, tmax) {
 risk_for_early_blight <- function(value) {
   tibble(
     total = cumsum(value),
-    avg7 = rollapplyr(value, 7, mean, partial = TRUE),
+    avg7 = data.table::frollapply(value, 7, mean, partial = TRUE),
     severity = case_when(
       total >= 400 ~
         (avg7 >= 1) +
@@ -853,7 +853,7 @@ calc_late_blight_dsv <- function(t, h) {
 #' @param value dsv from `calc_late_blight_dsv` function
 risk_for_late_blight <- function(value) {
   tibble(
-    total14 = rollapplyr(value, 14, sum, partial = TRUE),
+    total14 = data.table::frollapply(value, 14, sum, partial = TRUE),
     total = cumsum(value),
     severity = case_when(
       total14 >= 21 & total >= 30 ~ 4,
@@ -918,7 +918,7 @@ calc_alternaria_dsv <- function(temp, h) {
 #' @param value dsv from `calc_alternaria_dsv` function
 risk_for_alternaria <- function(value) {
   tibble(
-    total7 = rollapplyr(value, 7, sum, partial = TRUE),
+    total7 = data.table::frollapply(value, 7, sum, partial = TRUE),
     total = cumsum(value),
     severity = (total7 >= 5) +
       (total7 >= 10) +
@@ -991,8 +991,8 @@ calc_cercospora_div <- function(t, h) {
 #' @param value DIV from `calc_cercospora_div`
 risk_for_cercospora <- function(value) {
   tibble(
-    avg2 = rollapplyr(value, 2, mean, partial = TRUE),
-    avg7 = rollapplyr(value, 7, mean, partial = TRUE),
+    avg2 = data.table::frollapply(value, 2, mean, partial = TRUE),
+    avg7 = data.table::frollapply(value, 7, mean, partial = TRUE),
     total = cumsum(value),
     severity = case_when(
       avg7 >= 5 | avg2 >= 5.5 ~ 4,
