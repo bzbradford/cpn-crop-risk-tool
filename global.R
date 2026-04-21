@@ -671,19 +671,15 @@ service_bounds_3857 <- st_transform(service_bounds, 3857)
 #' @param lng longitude of point
 #' @returns boolean
 validate_ll <- function(lat, lng) {
-  mapply(
-    function(lat, lng) {
-      if (!is.numeric(lat) | !is.numeric(lng)) {
-        return(FALSE)
-      }
-      pt <- st_point(c(lng, lat)) |>
-        st_sfc(crs = 4326) |>
-        st_transform(st_crs(service_bounds_3857))
-      length(st_intersection(pt, service_bounds_3857)) == 1
-    },
-    lat,
-    lng
-  )
+  if (!is.numeric(lat) || !is.numeric(lng)) {
+    return(rep(FALSE, max(length(lat), length(lng))))
+  }
+  pts <- st_sfc(
+    mapply(function(lo, la) st_point(c(lo, la)), lng, lat, SIMPLIFY = FALSE),
+    crs = 4326
+  ) |>
+    st_transform(st_crs(service_bounds_3857))
+  as.vector(st_intersects(pts, service_bounds_3857, sparse = FALSE))
 }
 
 # validate_ll(45, -89)

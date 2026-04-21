@@ -20,7 +20,7 @@ Legend:
 **Difficulty:** S
 **Risk:** S — if the key misses a dependency, you get a stale cache
 
-**[Complete]**
+[Complete]
 
 ### A2. Make `module_data.R` lazy — don't build MA and GDD until the user needs them
 **Location:** `src/module_data.R` lines 131–146
@@ -30,7 +30,7 @@ Legend:
 **Difficulty:** S–M
 **Risk:** S
 
-**[Complete]**
+[Complete]
 
 ### A3. Debounce date-input observers
 **Location:** `server.R` `rv$start_date` / `rv$dates_valid` observers (lines 183–218)
@@ -48,7 +48,7 @@ Legend:
 **Difficulty:** S
 **Risk:** S
 
-**[Complete]**
+[Complete]
 
 ### A5. Auto-fetch timer wakes up forever
 **Location:** `server.R` lines 1107–1126
@@ -57,6 +57,8 @@ Legend:
 **Impact:** S (small but measurable background CPU)
 **Difficulty:** S
 **Risk:** S
+
+[Complete]
 
 ### A6. `dt_observer` rebuilds full DT HTML on every selected_site change
 **Location:** `server.R` lines 715–727 (`sites_dt_data` + `dt_observer`)
@@ -79,7 +81,7 @@ Legend:
 **Difficulty:** M (reactive refactor; some care needed to keep `selected_dates` filtering correct)
 **Risk:** M
 
-**[Complete]**
+[Complete]
 
 ---
 
@@ -101,7 +103,7 @@ Legend:
 **Difficulty:** M (need to match the "partial = TRUE" edge semantics and NA handling)
 **Risk:** M (verify numerical parity with existing tests)
 
-**[Complete]**
+[Complete]
 
 ### B3. Vectorise `gdd_sine`
 **Location:** `src/models.R` lines 496–560
@@ -111,7 +113,7 @@ Legend:
 **Difficulty:** M
 **Risk:** M (need equivalence tests vs existing behaviour — already have `test_daily_wx` fixture)
 
-**[Complete]**
+[Complete]
 
 ### B4. Cache daily weather per `(grid_id, date)` across fetches
 **Location:** `server.R` `wx_data` reactive (line ~580)
@@ -121,7 +123,7 @@ Legend:
 **Difficulty:** M
 **Risk:** M (cache invalidation logic)
 
-**[Complete]**
+[Complete]
 
 ### B5. Filter `rv$weather` to needed grids before building
 **Location:** `server.R` `wx_data` (line ~594)
@@ -139,6 +141,8 @@ Legend:
 **Difficulty:** S
 **Risk:** S
 
+[Complete]
+
 ### B7. Per-grid dirty tracking — only rebuild daily/MA/GDD for changed grids
 **Location:** `server.R` `wx_data` reactive (line ~580), cooperating with A7 and B4
 **Problem:** When `rv$weather` grows by one new site's hourly data, the daily summary, moving averages, and GDD tables are recomputed over *every* grid currently in scope, not just the new one. For the "I added one more site to an existing set of 10" case, this is ~10× more work than needed.
@@ -150,6 +154,8 @@ Legend:
 **Impact:** L (converts incremental fetches from O(all sites) to O(new sites))
 **Difficulty:** M (cache plumbing + invalidation logic)
 **Risk:** M (make sure cache is cleared on date-range changes, not just grid changes)
+
+[Complete]
 
 ---
 
@@ -181,6 +187,8 @@ Legend:
 **Impact:** M for CSV upload path (25 sites: seconds → <100 ms)
 **Difficulty:** S
 **Risk:** S
+
+[Complete]
 
 ### C4. Skip forecast re-invoke when no new grids
 **Location:** `server.R` lines 427–434
