@@ -550,54 +550,114 @@ server <- function(input, output, session) {
 
   # observe(echo(wx_forecasts()))
 
-  ## wx_args ----
-  # all inputs to the wx_data function
-  wx_args <- reactive(
-    lst(
-      weather = rv$weather,
-      sites = sites_with_status(),
-      selected_dates = selected_dates(),
-      fetched_dates = expanded_dates(),
-      dates = list(
-        start = selected_dates$start,
-        end = selected_dates$end,
-        today = today()
-      ),
-      forecast = if (dates$end == today()) {
-        wx_forecasts()
-      } else {
-        tibble()
-      }
+  ## wx_hist_key ----
+  # Lightweight scalar cache key for historical weather; avoids hashing the full tibble (A1).
+  wx_hist_key <- reactive({
+    weather <- rv$weather
+    sites <- sites_with_status()
+    dates <- expanded_dates()
+    list(
+      n_weather = nrow(weather),
+      grid_ids = sort(na.omit(sites$grid_id)),
+      fetch_start = dates$start,
+      fetch_end = dates$end
     )
-  )
+  })
 
-  # observe(echo(wx_args()))
+  # observe(echo(wx_hist_key()))
 
-  ## wx_data ----
-  #' will be blocked when no weather
-  #' will return only sites/dates/hourly when no weather in date range
-  wx_data <- reactive({
-    args <- wx_args()
-    list2env(args, envir = environment())
+  ## Per-session grid-level daily cache (B4) ----
+  # Mutable env scoped to this session; persists across reactive evaluations.
+  .daily_grid_cache <- new.env(parent = emptyenv())
+
+  ## wx_daily_hist ----
+  # build_daily for historical data only. Cached per-grid (B4) and by key (A1/A7).
+  # Adding one new site only rebuilds that grid; forecast arrival never re-runs this.
+  wx_daily_hist <- reactive({
+    weather <- rv$weather
+    sites <- sites_with_status()
+    fetch_dates <- expanded_dates()
 
     req(nrow(weather) > 0)
     req(nrow(sites) > 0)
 
+    grid_ids <- intersect(unique(weather$grid_id), na.omit(sites$grid_id))
+    req(length(grid_ids) > 0)
+
+    results <- lapply(grid_ids, function(gid) {
+      grid_hourly <- weather |>
+        filter(
+          grid_id == gid,
+          between(date, fetch_dates$start, fetch_dates$end)
+        )
+
+      if (nrow(grid_hourly) == 0) {
+        return(NULL)
+      }
+
+      dt_range <- range(grid_hourly$datetime_utc, na.rm = TRUE)
+      key <- as.character(gid)
+      cached <- .daily_grid_cache[[key]]
+
+      if (
+        !is.null(cached) &&
+          identical(cached$dt_range, dt_range) &&
+          cached$start == fetch_dates$start &&
+          cached$end == fetch_dates$end
+      ) {
+        cached$daily
+      } else {
+        daily <- build_daily(grid_hourly)
+        .daily_grid_cache[[key]] <- list(
+          dt_range = dt_range,
+          start = fetch_dates$start,
+          end = fetch_dates$end,
+          daily = daily
+        )
+        daily
+      }
+    })
+
+    bind_rows(Filter(Negate(is.null), results))
+  }) |>
+    bindCache(wx_hist_key())
+
+  ## wx_data ----
+  # Thin assembly layer: reuses cached wx_daily_hist and appends a cheap forecast slice (A7).
+  # No bindCache needed here — the expensive work is in wx_daily_hist.
+  wx_data <- reactive({
+    daily_hist <- wx_daily_hist()
+    sites <- sites_with_status()
+    sel_dates <- selected_dates()
+    fetch_dates <- expanded_dates()
+
+    req(nrow(daily_hist) > 0)
+    req(nrow(sites) > 0)
+
     wx <- list()
     wx$sites <- sites
-    wx$dates <- dates
+    wx$dates <- list(
+      start = sel_dates$start,
+      end = sel_dates$end,
+      today = today()
+    )
 
-    # allow up to 30 days before selected start date
-    hourly_full <- weather |>
-      filter(grid_id %in% sites$grid_id) |>
-      filter(between(date, fetched_dates$start, fetched_dates$end)) |>
+    forecast <- if (sel_dates$end == today()) wx_forecasts() else tibble()
+
+    # Assemble hourly (historical + forecast)
+    hourly_hist <- rv$weather |>
+      filter(
+        grid_id %in% sites$grid_id,
+        between(date, fetch_dates$start, fetch_dates$end)
+      )
+
+    hourly_full <- hourly_hist |>
       bind_rows(forecast) |>
       distinct(grid_id, datetime_local, .keep_all = TRUE) |>
       arrange(grid_id, datetime_local)
 
-    # remove the earlier dates that were used for moving averages
     wx$hourly <- hourly_full |>
-      filter(date >= dates$start) |>
+      filter(date >= sel_dates$start) |>
       mutate(
         precip_cumulative = cumsum(precip),
         snow_cumulative = cumsum(snow),
@@ -610,12 +670,42 @@ server <- function(input, output, session) {
       return(wx)
     }
 
-    wx$daily_full <- build_daily(hourly_full)
-    wx$daily <- wx$daily_full |> filter(date >= dates$start)
+    # Build daily_full: cached historical daily + thin forecast slice.
+    if (nrow(forecast) > 0) {
+      fc_hourly <- forecast |> filter(grid_id %in% sites$grid_id)
+
+      if (nrow(fc_hourly) > 0) {
+        # Prepend 5 days of historical hourly so rolling windows in build_daily
+        # (e.g. hot_past_5_days) have correct context at the history/forecast boundary.
+        context_start <- min(as_date(fc_hourly$datetime_local), na.rm = TRUE) -
+          days(5)
+        context_hourly <- hourly_hist |> filter(date >= context_start)
+
+        fc_daily_raw <- build_daily(bind_rows(context_hourly, fc_hourly))
+        fc_daily <- fc_daily_raw |>
+          filter(date %in% unique(as_date(fc_hourly$datetime_local)))
+      } else {
+        fc_daily <- tibble()
+      }
+
+      # Combine and recompute cumulative columns continuously across the full range. De-dupe where historical and forecast overlap, preferring the forecast data which is more complete.
+      daily_full <- bind_rows(fc_daily, daily_hist) |>
+        distinct(grid_id, date, .keep_all = TRUE) |>
+        arrange(grid_id, date) |>
+        mutate(
+          precip_cumulative = cumsum(precip_daily),
+          snow_cumulative = cumsum(snow_daily),
+          .by = grid_id
+        )
+    } else {
+      daily_full <- daily_hist
+    }
+
+    wx$daily_full <- daily_full
+    wx$daily <- daily_full |> filter(date >= sel_dates$start)
 
     wx
-  }) |>
-    bindCache(rlang::hash(wx_args()))
+  })
 
   # observe(echo(wx_data()))
 
@@ -1104,7 +1194,7 @@ server <- function(input, output, session) {
 
   # set a timestamp of the last inputs if weather is needed
   observe({
-    req(wx_args())
+    req(rv$sites_ready)
     req(need_weather())
     # message('Auto-fetching weather data in 15 seconds...')
     rv$fetch_timer <- now()
@@ -1112,7 +1202,7 @@ server <- function(input, output, session) {
 
   # force a weather fetch if it's needed and hasn't been triggered in 15 seconds
   observe({
-    req(wx_args())
+    req(rv$sites_ready)
     req(need_weather())
     timestamp <- rv$fetch_timer
     elapsed <- now() - timestamp
