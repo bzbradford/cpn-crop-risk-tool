@@ -64,26 +64,20 @@ build_daily <- function(hourly) {
       hours_rh_over_90 = sum(relative_humidity >= 90),
       .by = c(grid_id, date, yday, year, month, day)
     ) |>
+    arrange(grid_id, date) |>
+    group_by(grid_id) |>
     mutate(
       precip_cumulative = cumsum(precip_daily),
-      .after = precip_max_hourly,
-      .by = grid_id
-    ) |>
-    mutate(
       snow_cumulative = cumsum(snow_daily),
-      .after = snow_max_hourly,
-      .by = grid_id
-    ) |>
-    mutate(
-      # for botcast
       hot_past_5_days = rollapplyr(
         hours_temp_over_30,
-        width = 5,
-        FUN = \(x) any(x >= 4),
+        5,
+        \(x) any(x >= 4),
         partial = TRUE
       ),
       dry = (hours_rh_under_70 >= 6) & (precip_daily < 1)
-    )
+    ) |>
+    ungroup()
 
   # summarized by "date since night" eg since 8 pm the day before through 7 pm
   by_night <- hourly |>

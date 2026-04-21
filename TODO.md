@@ -20,6 +20,8 @@ Legend:
 **Difficulty:** S
 **Risk:** S — if the key misses a dependency, you get a stale cache
 
+**[Complete]**
+
 ### A2. Make `module_data.R` lazy — don't build MA and GDD until the user needs them
 **Location:** `src/module_data.R` lines 131–146
 **Problem:** Every time `wx_data()` invalidates, the observer eagerly computes *both* centred and right-aligned moving averages **and** GDDs, even if the user is on the risk tab (or never visits the data tab). `build_ma_from_daily()` is the single most expensive non-API step — `rollapply` over 6 measure groups × 4 widths × N columns × N grids.
@@ -28,7 +30,7 @@ Legend:
 **Difficulty:** S–M
 **Risk:** S
 
-**Status: Complete**
+**[Complete]**
 
 ### A3. Debounce date-input observers
 **Location:** `server.R` `rv$start_date` / `rv$dates_valid` observers (lines 183–218)
@@ -46,7 +48,7 @@ Legend:
 **Difficulty:** S
 **Risk:** S
 
-**Status: Complete**
+**[Complete]**
 
 ### A5. Auto-fetch timer wakes up forever
 **Location:** `server.R` lines 1107–1126
@@ -76,6 +78,8 @@ Legend:
 **Impact:** L (targets your biggest pain point — the second cascade after forecast arrival)
 **Difficulty:** M (reactive refactor; some care needed to keep `selected_dates` filtering correct)
 **Risk:** M
+
+**[Complete]**
 
 ---
 
@@ -112,6 +116,8 @@ Legend:
 **Impact:** M–L (adding/removing sites becomes cheap)
 **Difficulty:** M
 **Risk:** M (cache invalidation logic)
+
+**[Complete]**
 
 ### B5. Filter `rv$weather` to needed grids before building
 **Location:** `server.R` `wx_data` (line ~594)
