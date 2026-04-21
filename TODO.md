@@ -101,6 +101,8 @@ Legend:
 **Difficulty:** M (need to match the "partial = TRUE" edge semantics and NA handling)
 **Risk:** M (verify numerical parity with existing tests)
 
+**[Complete]**
+
 ### B3. Vectorise `gdd_sine`
 **Location:** `src/models.R` lines 496–560
 **Problem:** `mapply()` over `tmin`, `tmax`, `base` — pure R scalar branching per day. Called inside `build_rye_biomass`, `build_insect`, `build_cotton_planting`, and especially `build_gdd_from_daily` which loops 9 bases × 2 versions (with/without 86F cap) = 18 calls over the whole daily table.

@@ -145,6 +145,10 @@ server <- function(input, output, session) {
     # error message displayed under fetch button
     status_msg = NULL,
 
+    # fetch timer
+    fetch_timer = now(),
+    fetch_timer_active = FALSE,
+
     # tracks fetch attempt counts keyed by hash of fetch_args
     fetch_attempts = list(),
   )
@@ -1193,24 +1197,57 @@ server <- function(input, output, session) {
   ## Auto-fetch timer ----
 
   # set a timestamp of the last inputs if weather is needed
-  observe({
-    req(rv$sites_ready)
-    req(need_weather())
-    # message('Auto-fetching weather data in 15 seconds...')
-    rv$fetch_timer <- now()
-  })
+  # observe({
+  #   req(rv$sites_ready)
+  #   req(need_weather())
+  #   # message('Auto-fetching weather data in 15 seconds...')
+  #   rv$fetch_timer <- now()
+  # })
 
   # force a weather fetch if it's needed and hasn't been triggered in 15 seconds
+  # observe({
+  #   req(rv$sites_ready)
+  #   req(need_weather())
+  #   timestamp <- rv$fetch_timer
+  #   elapsed <- now() - timestamp
+  #   invalidateLater(15000)
+  #   req(elapsed >= 15)
+  #   if (need_weather()) {
+  #     # message("Auto-fetching weather data...")
+  #     rv$fetch <- runif(1)
+  #   }
+  # })
+
+  # Only reset the timer when need_weather transitions FALSE → TRUE
   observe({
     req(rv$sites_ready)
     req(need_weather())
+    isolate({
+      if (!isTRUE(rv$fetch_timer_active)) {
+        rv$fetch_timer <- now()
+        rv$fetch_timer_active <- TRUE
+      }
+    })
+  })
+
+  # Clear the active flag when weather is no longer needed
+  observe({
+    if (!need_weather()) {
+      rv$fetch_timer_active <- FALSE
+    }
+  })
+
+  # Fire after 10s if still needed
+  observe({
+    req(rv$sites_ready)
+    req(rv$fetch_timer_active)
+    timeout <- 10 # seconds
     timestamp <- rv$fetch_timer
-    elapsed <- now() - timestamp
-    invalidateLater(15000)
-    req(elapsed >= 15)
+    invalidateLater(timeout * 1000)
+    req((now() - timestamp) >= timeout)
     if (need_weather()) {
-      # message("Auto-fetching weather data...")
       rv$fetch <- runif(1)
+      rv$fetch_timer_active <- FALSE
     }
   })
 

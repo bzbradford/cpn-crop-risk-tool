@@ -1224,16 +1224,16 @@ if (FALSE) {
 # Cotton planting risk ---------------------------------------------------------
 #' Cotton planting risk model. Predicts the probability of emerged stand below the yield-limiting stand population
 #' Reference: Dr. Zachary Noel, Auburn University
-#' @param Precip3day 3-day future/forecast total precipitation (mm)
-#' @param MeanMinTemp9ma 9-day moving average of daily minimum air temperatures (C)
+#' @param precip_next_3_days 3-day future/forecast total precipitation (mm)
+#' @param mean_min_temp_next_9_days 9-day future/forecast moving average of daily minimum air temperatures (C)
 #' @param pythium present, T/F or 1/0 user input
 #' @param planting_pop ~30,000 - 50,000, user input
 #' @param limiting_stand default 15,000 plants per acre
 #' @param year derive from date
 #' @returns probability of emerged stand < limiting_stand
 cotton_planting_model <- Vectorize(function(
-  Precip3day,
-  MeanMinTemp9ma,
+  precip_3day_forward,
+  mean_min_temp_9day_forward,
   pythium,
   planting_pop,
   limiting_pop,
@@ -1251,15 +1251,18 @@ cotton_planting_model <- Vectorize(function(
   mu <- -22.4611 +
     -0.3359 * py +
     0.01118 * yr +
-    -0.00750 * Precip3day +
-    0.03929 * MeanMinTemp9ma
+    -0.00750 * precip_3day_forward +
+    0.03929 * mean_min_temp_9day_forward
 
   # 5.	Perform the logit transformation to generate the proportion of emerged seedlings and the confidence interval around the prediction.
   p_emerge <- logistic(mu)
 
   # 6.	Scale the predictors on the response scale. Multiply the 1x5 X matrix shown below to get the 1x5 g matrix.
   g_mat <- (p_emerge * (1 - p_emerge)) *
-    matrix(c(1, py, yr, Precip3day, MeanMinTemp9ma), ncol = 5)
+    matrix(
+      c(1, py, yr, precip_3day_forward, mean_min_temp_9day_forward),
+      ncol = 5
+    )
 
   # 7.	Variance-Covariance matrix (VCOV) is needed to calculate the confidence intervals around the prediction. It is fixed based on the model fit and will not change based on new user input.
   # fmt: skip
@@ -1306,16 +1309,11 @@ build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
     mutate(
       date = date,
       year = year,
-      precip_3day_forward = zoo::rollsum(
-        precip_daily,
-        k = 3,
-        fill = 0,
-        align = "left"
-      ),
-      min_temp_9ma = roll_mean(temperature_min, 9),
+      precip_3day_forward = roll_sum(precip_daily, 3, "left"),
+      mean_min_temp_9day_forward = roll_mean(temperature_min, 9, "left"),
       probability = cotton_planting_model(
-        Precip3day = precip_3day_forward,
-        MeanMinTemp9ma = min_temp_9ma,
+        precip_3day_forward = precip_3day_forward,
+        mean_min_temp_9day_forward = mean_min_temp_9day_forward,
         pythium = pythium,
         planting_pop = planting_pop,
         limiting_pop = limiting_pop,
