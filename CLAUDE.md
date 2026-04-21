@@ -69,12 +69,12 @@ User defines site (lat/lon) →
 - `rv$` reactive values object in `server.R` holds all app state
 - Sites persist across sessions via browser cookies (JSON-encoded)
 - API auth token cached as `ibm_auth.rds`
-- Weather data cached per-site as `cache/*.fst` (FST format)
+- Weather data cached per-user as `cache/*.fst` (FST format)
 
 ### Async Execution
-Expensive API calls run via `future`/`promises` with 2 worker sessions to avoid blocking the UI.
+Expensive API calls run via `mirai` with 2 worker sessions to avoid blocking the UI.
 
-### Disease Models (12 total)
+### Disease Models
 Defined in `src/models.R` and documented in `docs/`:
 - **Corn**: Tar spot, Gray leaf spot, DON/Gibberella
 - **Soybean**: White mold, Frogeye
@@ -85,5 +85,5 @@ Defined in `src/models.R` and documented in `docs/`:
 ## Key Conventions
 - Indentation: 2 spaces
 - Linting configured in `.lintr.R` (line length and indentation checks disabled)
-- R 4.5.2, dependencies managed with `renv` (see `renv.lock`)
+- R 4.5.3, dependencies managed with `renv` (see `renv.lock`)
 - Test fixtures stored as `.rds` files in `tests/testthat/`

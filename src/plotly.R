@@ -349,7 +349,7 @@ build_data_plot <- function(df, sites, opts) {
     )
 
   for (col in opts$cols) {
-    col_name <- make_clean_names(col, "title")
+    col_name <- janitor::make_clean_names(col, "title")
     col_axis <- filter(col_ranges, name == col)$axis
 
     add_trace_to_plot <- function(plt, x, y, name) {
