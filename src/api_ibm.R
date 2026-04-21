@@ -487,8 +487,11 @@ fetch_weather <- function(wx, sites, start_date, end_date) {
     ibm_clean_resp() |>
     build_hourly()
 
-  wx <- bind_rows(new_wx, wx) |>
-    distinct(grid_id, datetime_utc, .keep_all = TRUE) |>
+  # Keep only new rows not already in wx
+  new_wx <- new_wx |>
+    anti_join(wx, by = c("grid_id", "datetime_utc"))
+
+  wx <- bind_rows(wx, new_wx) |>
     arrange(grid_id, datetime_utc)
 
   wx
