@@ -93,7 +93,6 @@ server <- function(input, output, session) {
   ## Write weather to cache ----
   observe({
     wx <- rv$weather
-    saved_weather <<- wx
     fname <- cache_file()
     tryCatch(
       {
@@ -375,7 +374,7 @@ server <- function(input, output, session) {
     date_range <- expanded_dates()
 
     list(
-      wx = saved_weather,
+      wx = rv$weather,
       sites = sites,
       start_date = date_range$start,
       end_date = date_range$end

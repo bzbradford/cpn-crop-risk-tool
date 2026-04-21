@@ -127,23 +127,42 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
       })
 
-      # load and complete dataset
+      # load dataset — MA/GDD are built lazily below
       observe({
         wx <- wx_data()
         if (nrow(wx$hourly) > 0) {
-          wx$ma_center <- build_ma_from_daily(wx$daily_full, "center")
-          wx$ma_right <- build_ma_from_daily(wx$daily_full, "right")
-          # d1 <- build_disease_from_ma(wx$daily_full)
-          # d2 <- build_disease_from_daily(wx$daily)
-          # wx$disease <-
-          #   left_join(d1, d2, join_by(grid_id, date)) |>
-          #   filter(date >= wx$dates$start)
-          wx$gdd <- build_gdd_from_daily(wx$daily)
           rv$data <- wx
         } else {
           rv$data <- NULL
         }
       })
+
+      # lightweight cache key shared by the three lazy reactives below
+      wx_cache_key <- reactive({
+        wx <- req(rv$data)
+        list(
+          grid_ids = sort(wx$sites$grid_id),
+          start = wx$dates$start,
+          end = wx$dates$end,
+          n_daily = nrow(wx$daily_full)
+        )
+      })
+
+      # lazy MA/GDD — computed only when selected_data() requests them
+      ma_center <- reactive({
+        build_ma_from_daily(req(rv$data)$daily_full, "center")
+      }) |>
+        bindCache(wx_cache_key())
+
+      ma_right <- reactive({
+        build_ma_from_daily(req(rv$data)$daily_full, "right")
+      }) |>
+        bindCache(wx_cache_key())
+
+      gdd <- reactive({
+        build_gdd_from_daily(req(rv$data)$daily)
+      }) |>
+        bindCache(wx_cache_key())
 
       ## selected_data // reactive ----
       selected_data <- reactive({
@@ -170,11 +189,11 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           "daily" = wx$daily,
           "ma" = switch(
             opts$ma_align,
-            "center" = wx$ma_center,
-            "right" = wx$ma_right
+            "center" = ma_center(),
+            "right" = ma_right()
           ),
           # "disease" = wx$disease,
-          "gdd" = wx$gdd
+          "gdd" = gdd()
         )
 
         req(nrow(data) > 0)
