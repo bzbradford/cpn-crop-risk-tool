@@ -50,31 +50,6 @@ test_that("hours_diff calculates difference in hours", {
   expect_equal(hours_diff(now() - days(1), now()), 24)
 })
 
-test_that("get_yday converts partial dates to day of year", {
-  result <- get_yday("jun 1", "aug 2")
-  expect_equal(length(result), 2)
-  expect_equal(result[[1]], yday(ymd(paste(year(Sys.Date()), "jun 1"))))
-  expect_equal(result[[2]], yday(ymd(paste(year(Sys.Date()), "aug 2"))))
-
-  # jun 1 should be around day 152 (varies slightly in leap years)
-  expect_true(result[[1]] >= 152 && result[[1]] <= 153)
-})
-
-test_that("check_date_overlap detects overlapping date ranges", {
-  # overlap: Apr-Jul with May-Aug
-
-  result1 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
-  expect_true(result1[["2025"]])
-
-  # no overlap: Apr-Jul with Jan-Feb
-  result2 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
-  expect_false(result2[["2025"]])
-
-  # cross-year range
-  result3 <- check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
-  expect_true(result3[["2025"]])
-})
-
 
 # Summary functions ------------------------------------------------------------
 
@@ -629,4 +604,36 @@ test_that("build_gdd_from_daily", {
     test_daily_wx |>
       build_gdd_from_daily()
   })
+})
+
+test_that("gdd_sine numerical parity — all 6 branches", {
+  # NA propagation
+  expect_true(is.na(gdd_sine(NA_real_, 20, 10)))
+  # tmax <= base → 0
+  expect_equal(gdd_sine(0, 5, 10), 0)
+  # tmin >= base → simple average
+  expect_equal(gdd_sine(15, 25, 10), 10)
+  # tmin < base, tmax <= upper → sine formula
+  expect_equal(gdd_sine(5, 25, 10), 6.089978, tolerance = 1e-6)
+  # tmax > upper, tmin >= base → upper-clamp formula
+  expect_equal(gdd_sine(15, 200, 10), 97.5, tolerance = 1e-6)
+  # tmin < base, tmax > upper → both-threshold formula
+  expect_equal(gdd_sine(5, 200, 10), 81.793794, tolerance = 1e-6)
+  # custom upper threshold
+  expect_equal(gdd_sine(5, 200, 10, upper = 100), 60.545264, tolerance = 1e-6)
+  # out-of-order tmin/tmax → same result as corrected order
+  expect_equal(gdd_sine(25, 5, 10), gdd_sine(5, 25, 10))
+})
+
+test_that("gdd_sine grid parity (base=10)", {
+  grid <- expand.grid(tmin = 0:50, tmax = 0:50)
+  grid <- grid[grid$tmax >= grid$tmin, ]
+  vals <- gdd_sine(grid$tmin, grid$tmax, 10)
+  expect_equal(length(vals), 1326)
+  expect_equal(sum(vals, na.rm = TRUE), 20743.31, tolerance = 1e-2)
+  expect_equal(
+    vals[c(100, 200, 300, 400, 500, 700, 900, 1100)],
+    c(1.061744, 4.135599, 13, 14, 8.525969, 24.5, 29.5, 22),
+    tolerance = 1e-5
+  )
 })

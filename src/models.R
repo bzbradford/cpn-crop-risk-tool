@@ -1,5 +1,38 @@
 # Models and data processing
 
+# Helper functions ----
+
+check_date_partial <- function(dpart) {
+  withCallingHandlers(
+    ymd(paste(year(today()), dpart)),
+    warning = function(w) {
+      stop("Invalid partial date format: ", dpart)
+    }
+  )
+}
+
+if (FALSE) {
+  check_date_partial("Jan 1")
+  check_date_partial("Foo 1")
+}
+
+check_date_overlap <- function(date_range, dates_partial) {
+  date_range <- as_date(date_range)
+  date_seq <- seq.Date(date_range[1], date_range[2], 1)
+  yrs <- unique(year(date_seq))
+  sapply(set_names(yrs), function(yr) {
+    dt <- ymd(paste(yr, dates_partial))
+    test_seq <- seq.Date(dt[1], dt[2])
+    any(date_seq %in% test_seq)
+  })
+}
+
+if (FALSE) {
+  check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
+  check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
+  check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
+}
+
 # Daily weather ----------------------------------------------------------------
 # daily weather data used by most models
 
@@ -31,26 +64,20 @@ build_daily <- function(hourly) {
       hours_rh_over_90 = sum(relative_humidity >= 90),
       .by = c(grid_id, date, yday, year, month, day)
     ) |>
+    arrange(grid_id, date) |>
+    group_by(grid_id) |>
     mutate(
       precip_cumulative = cumsum(precip_daily),
-      .after = precip_max_hourly,
-      .by = grid_id
-    ) |>
-    mutate(
       snow_cumulative = cumsum(snow_daily),
-      .after = snow_max_hourly,
-      .by = grid_id
-    ) |>
-    mutate(
-      # for botcast
       hot_past_5_days = rollapplyr(
         hours_temp_over_30,
-        width = 5,
-        FUN = \(x) any(x >= 4),
+        5,
+        \(x) any(x >= 4),
         partial = TRUE
       ),
       dry = (hours_rh_under_70 >= 6) & (precip_daily < 1)
-    )
+    ) |>
+    ungroup()
 
   # summarized by "date since night" eg since 8 pm the day before through 7 pm
   by_night <- hourly |>
@@ -88,14 +115,15 @@ build_daily <- function(hourly) {
 # Model definitions ----------------------------------------------------------
 
 #' @param name display name
-#' @param crop relevant crop
+#' @param crop NULL or crop name
 #' @param group name of model group eg 'field' or 'vegetable' defined in OPTS
-#' @param info model info
-#' @param doc markdown file for More Information
+#' @param info model info, HTML ok
+#' @param doc markdown file for More Information link
+#' @param risk_period NULL or length two character vector eg 'Jul 1'
+#' @param biofix NULL or day of year
 #' @param validate validation function that returns a message or NULL from params passed by risk module
 #' @param ycol column name to plot on y axis
 #' @param yrange default range for y axis
-#' @param risk_period NULL or length two character vector eg 'Jul 1'
 #' @param display_name full model name displayed in the model picker
 Model <- function(
   name,
@@ -104,38 +132,43 @@ Model <- function(
   info,
   doc,
   risk_period,
+  biofix = NULL,
   validate,
   ycol,
   yrange,
-  display_name = sprintf("%s (%s)", name, crop),
-  default_start_yday = NULL
+  display_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop))
 ) {
   args <- as.list(environment())
 
-  # check for valid group
+  # validate simple inputs
+  stopifnot(is.character(name))
+  stopifnot(is.null(crop) | is.character(crop))
+  stopifnot(is.null(info) | is.character(info))
+
+  # validate group
   if (!(group %in% OPTS$model_group_choices)) {
     stop("Invalid model group ", group)
   }
 
   # check for doc
   if (!is.null(doc)) {
-    all_docs <- list.files(
+    docs <- list.files(
       pattern = "*.md",
       recursive = TRUE
     )
-    if (!(doc %in% all_docs)) {
+    if (!(doc %in% docs)) {
       stop("Missing doc file ", doc)
     }
   }
 
   # check risk period
   if (!is.null(risk_period)) {
-    withCallingHandlers(
-      ymd(paste(year(Sys.Date()), risk_period)),
-      warning = function(w) {
-        stop("Invalid date format for risk_period: ", risk_period)
-      }
-    )
+    check_date_partial(risk_period)
+  }
+
+  # check biofix
+  if (!is.null(biofix)) {
+    stopifnot(between(biofix, 1, 365))
   }
 
   args
@@ -241,7 +274,7 @@ model_list <- list(
 
   earlyblight = Model(
     name = "Early blight",
-    crop = "Solanum",
+    crop = "Potato/Tomato",
     group = "vegetable",
     info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
     doc = "docs/early-blight.md",
@@ -253,7 +286,7 @@ model_list <- list(
 
   lateblight = Model(
     name = "Late blight",
-    crop = "Solanum",
+    crop = "Potato/Tomato",
     group = "vegetable",
     info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of disease severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md",
@@ -262,6 +295,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   alternaria = Model(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
@@ -273,6 +307,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   cercospora = Model(
     name = "Cercospora leaf spot",
     crop = "Beet",
@@ -284,6 +319,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   botrytis = Model(
     name = "Botrytis leaf blight",
     crop = "Onion",
@@ -295,6 +331,7 @@ model_list <- list(
     ycol = "severity",
     yrange = c(0, 4)
   ),
+
   ryebiomass = Model(
     name = "Winter rye biomass",
     display_name = "Winter rye biomass",
@@ -303,6 +340,7 @@ model_list <- list(
     info = "This cover crop termination model predicts biomass accumulation in overwintering rye. Start date should be set to the fall planting date and biomass predictions will be made through the end date. This model is an early prototype trained on data from Wisconsin. Actual yields will depend on additional factors not included in the model such as rye cultivar, soil type, and nitrogen inputs.",
     doc = "docs/rye-biomass.md",
     risk_period = NULL,
+    biofix = 274, # Oct 1
     validate = function(params) {
       dr <- params$date_range
       msg <- paste(
@@ -316,16 +354,21 @@ model_list <- list(
       if (length(msg) > 0) msg else NULL
     },
     ycol = "biomass",
-    yrange = c(0, 10000),
-    default_start_yday = 275
+    yrange = c(0, 10000)
+  ),
+
+  cotton_planting = Model(
+    name = "Cotton planting risk model",
+    crop = "Cotton",
+    group = "field",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, <i>Pythium</i> presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    doc = "docs/cotton-planting.md",
+    risk_period = NULL,
+    validate = NULL,
+    ycol = "probability",
+    yrange = c(0, 1)
   )
 )
-
-# set names as $slug
-model_list <- imap(model_list, function(m, slug) {
-  m$slug <- slug
-  m
-})
 
 
 # Model helpers ----------------------------------------------------------------
@@ -966,7 +1009,7 @@ risk_for_cercospora <- function(value) {
       avg7,
       total,
       risk
-    ),
+    )
   )
 }
 
@@ -1177,3 +1220,312 @@ if (FALSE) {
     build_rye_biomass() |>
     test_plot()
 }
+
+# Cotton planting risk ---------------------------------------------------------
+#' Cotton planting risk model. Predicts the probability of emerged stand below the yield-limiting stand population
+#' Reference: Dr. Zachary Noel, Auburn University
+#' @param Precip3day 3-day future/forecast total precipitation (mm)
+#' @param MeanMinTemp9ma 9-day moving average of daily minimum air temperatures (C)
+#' @param pythium present, T/F or 1/0 user input
+#' @param planting_pop ~30,000 - 50,000, user input
+#' @param limiting_stand default 15,000 plants per acre
+#' @param year derive from date
+#' @returns probability of emerged stand < limiting_stand
+cotton_planting_model <- Vectorize(function(
+  Precip3day,
+  MeanMinTemp9ma,
+  pythium,
+  planting_pop,
+  limiting_pop,
+  year
+) {
+  # captured from inputs or date
+  py <- pythium # pythyium T/F
+  pp <- planting_pop # planting population
+
+  # constants
+  yr <- year # year, derived from date
+  s_crit <- limiting_pop # yield-limiting population, emerged plants per acre
+
+  # 4.	Generate the predicted emergence from the following formula:
+  mu <- -22.4611 +
+    -0.3359 * py +
+    0.01118 * yr +
+    -0.00750 * Precip3day +
+    0.03929 * MeanMinTemp9ma
+
+  # 5.	Perform the logit transformation to generate the proportion of emerged seedlings and the confidence interval around the prediction.
+  p_emerge <- logistic(mu)
+
+  # 6.	Scale the predictors on the response scale. Multiply the 1x5 X matrix shown below to get the 1x5 g matrix.
+  g_mat <- (p_emerge * (1 - p_emerge)) *
+    matrix(c(1, py, yr, Precip3day, MeanMinTemp9ma), ncol = 5)
+
+  # 7.	Variance-Covariance matrix (VCOV) is needed to calculate the confidence intervals around the prediction. It is fixed based on the model fit and will not change based on new user input.
+  # fmt: skip
+  cov_mat <- matrix(
+    byrow = TRUE, nrow = 5,
+    data = c(
+      89.9570756007,  9.339412e-04, -4.501716e-02,  1.145290e-03,  2.718934e-02,
+      9.339412e-04,  2.248671e-02, -1.077674e-05, -2.326803e-05,  1.823261e-05,
+      -4.501716e-02, -1.077674e-05,  2.253921e-05, -6.018538e-07, -1.454077e-05,
+      1.145290e-03, -2.326803e-05, -6.018538e-07,  4.905222e-06,  1.451229e-06,
+      2.718934e-02,  1.823261e-05, -1.454077e-05,  1.451229e-06,  1.518877e-04
+    )
+  )
+
+  # 8.	Multiply the g matrix by the variance-covariance matrix (VCOV) and then by the transposed g matrix (gT). The result is the variance around the prediction.
+  var <- as.numeric(g_mat %*% cov_mat %*% t(g_mat))
+
+  # 9.	Take the square root of the variance around the prediction (Vη) to calculate the standard error around the mean prediction (SEη)
+  se <- sqrt(var)
+
+  # 10.	Compute the 95% confidence interval around the prediction by multiplying the standard error (SEη) by 1.959964 and adding or subtracting the prediction (Pemerge)
+  se_mult <- 1.959964
+  ci_upper <- p_emerge + se * se_mult
+  ci_lower <- p_emerge - se * se_mult
+
+  # 11.	Pemerge, CIupper,  CIlower are proportions. Therefore, multiply them by the planting population (PP) to convert the prediction and confidence interval to predicted number of emerged plants.
+  pred_emerge <- p_emerge * pp
+  pred_emerge_up <- ci_upper * pp
+  pred_emerge_low <- ci_lower * pp
+
+  # 12.	Calculate the probability of going below the stand threshold of 15,000 plants per acre assuming a normal distribution with the mean and standard deviation defined by the predicted mean (Pemerge) and the standard deviation defined by the standard deviation on the emerged plant scale (SD).
+  sd <- (pred_emerge_up - pred_emerge_low) / (2 * se_mult)
+  p_below <- pnorm((s_crit - pred_emerge) / sd)
+
+  p_below
+})
+
+#' build from weather
+build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
+  req(nrow(daily) > 0)
+
+  daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      year = year,
+      precip_3day_forward = zoo::rollsum(
+        precip_daily,
+        k = 3,
+        fill = 0,
+        align = "left"
+      ),
+      min_temp_9ma = roll_mean(temperature_min, 9),
+      probability = cotton_planting_model(
+        Precip3day = precip_3day_forward,
+        MeanMinTemp9ma = min_temp_9ma,
+        pythium = pythium,
+        planting_pop = planting_pop,
+        limiting_pop = limiting_pop,
+        year = year
+      ),
+      risk_from_prob(probability, 0.01, 0.2, 0.35),
+      .by = grid_id,
+      .keep = "used"
+    )
+}
+
+if (FALSE) {
+  test_daily_wx |>
+    build_cotton_planting(
+      pythium = TRUE,
+      planting_pop = 45000,
+      limiting_pop = 10000
+    ) |>
+    test_plot()
+}
+
+
+# Insect models ----------------------------------------------------------------
+
+#' Map a value onto a sine wave with minima at `start` and maxima at `peak`
+half_sine <- function(value, start, peak) {
+  # normalize the input range to [0, 1]
+  x = (value - start) / (peak - start)
+  (sin(x * pi - pi / 2) + 1) / 2
+}
+
+
+#' Map a value onto a full sine wave passing through start, peak, and end
+full_sine <- function(value, start, peak, end) {
+  case_when(
+    !between(value, start, end) ~ 0,
+    value <= peak ~ half_sine(value, start, peak),
+    value > peak ~ half_sine(-1 * value, -1 * end, -1 * peak),
+    .default = 0
+  )
+}
+
+build_insect <- function(
+  daily,
+  tmin,
+  tmax,
+  stage_key
+) {
+  req(nrow(daily) > 0)
+
+  key <- bind_rows(
+    tibble(start = 0, sev = 0, label = "Before spring emergence"),
+    stage_key
+  )
+
+  daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      freezing = roll_sum(temperature_min <= -2, 14),
+      kill = (yday(date) > 250) * (freezing > 0), # end of season kill
+      gdd_f = gdd_sine(temperature_min, temperature_max, tmin, tmax) * 1.8,
+      cum_gdd = cumsum(gdd_f),
+      .by = c(grid_id, year),
+      .keep = "used"
+    ) |>
+    left_join(key, join_by(cum_gdd >= start), multiple = "last") |>
+    mutate(
+      # severity = pmax(0, sev - freezing),
+      severity = if_else(kill == 1, pmax(0, sev - freezing), sev),
+      risk_from_severity(severity),
+      value_label = paste0(
+        sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
+        label,
+        if_else(
+          kill == 1,
+          ".\nRecent freezing temperatures may reduce insect populations.",
+          ""
+        )
+      )
+    )
+}
+
+# make sure param$start_date == biofix
+validate_biofix <- function(biofix) {
+  force(biofix)
+
+  return(function(params) {
+    sd <- params$start_date
+    if (yday(sd) != biofix) {
+      biofix_date <- make_date(year(sd)) + biofix - 1
+      paste(
+        "This model requires the start date to be",
+        format(biofix_date, "%b %d")
+      )
+    } else {
+      NULL
+    }
+  })
+}
+
+if (FALSE) {
+  validate_biofix(1)(list(start_date = today()))
+}
+
+## Insect defs -----------------------------------------------------------------
+
+Insect <- function(
+  name,
+  crop = NULL,
+  info,
+  doc,
+  biofix = 1,
+  tmin,
+  tmax = 30,
+  key
+) {
+  m <- Model(
+    name = name,
+    crop = crop,
+    group = "insect",
+    info = info,
+    doc = doc,
+    risk_period = NULL,
+    biofix = biofix,
+    validate = validate_biofix(biofix),
+    ycol = "cum_gdd",
+    yrange = c(0, NA)
+  )
+  stopifnot(tmin < tmax)
+  stopifnot(setequal(names(key), c("start", "sev", "label")))
+  m$tmin <- tmin
+  m$tmax <- tmax
+  m$key <- key
+  m
+}
+
+insect_models <- list(
+  scm = Insect(
+    name = "Seedcorn maggot",
+    crop = "Corn, bean, other",
+    info = "In Wisconsin there are typically 3-5 generations per year, with maximum risk coinciding with peak adult flight times: First (overwintering) generation flight peaks around 360 FDD, second generation flight peaks around 1080 FDD, third generation peaks around 1800 FDD. Wait 450 FDD after peak flight for larval pupation and minimum risk to crops.",
+    doc = "docs/insects/scm.md",
+    tmin = 4,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                                          ,
+         295 ,    1 , "1st gen: Low abundance and risk of damage"     ,
+         315 ,    2 , "1st gen: Medium abundance and risk of damage"  ,
+         330 ,    3 , "1st gen: High abundance and risk of damage"    ,
+         340 ,    4 , "1st gen: Peak adult flight and risk of damage" ,
+         510 ,    3 , "1st gen: High abundance and risk of damage"    ,
+         585 ,    2 , "1st gen: Medium abundance and risk of damage"  ,
+         660 ,    1 , "1st gen: Low abundance and risk of damage"     ,
+         810 ,    0 , "1st gen: Absent or very low abundance"         ,
+         990 ,    1 , "2nd gen: Low abundance and risk of damage"     ,
+        1020 ,    2 , "2nd gen: Medium abundance and risk of damage"  ,
+        1035 ,    3 , "2nd gen: High abundance and risk of damage"    ,
+        1050 ,    4 , "2nd gen: Peak adult flight and risk of damage" ,
+        1245 ,    3 , "2nd gen: High abundance and risk of damage"    ,
+        1325 ,    2 , "2nd gen: Medium abundance and risk of damage"  ,
+        1405 ,    1 , "2nd gen: Low abundance and risk of damage"     ,
+        1570 ,    0 , "2nd gen: Absent or very low abundance"         ,
+        1650 ,    1 , "3rd gen: Low abundance and risk of damage"     ,
+        1700 ,    2 , "3rd gen: Medium abundance and risk of damage"  ,
+        1725 ,    3 , "3rd gen: High abundance and risk of damage"    ,
+        1750 ,    4 , "3rd gen: Peak adult flight and risk of damage" ,
+        1985 ,    3 , "3rd gen: High abundance and risk of damage"    ,
+        2080 ,    2 , "3rd gen: Medium abundance and risk of damage"  ,
+        2175 ,    1 , "3rd gen: Low abundance and risk of damage"     ,
+        2360 ,    0 , "3rd gen: Absent or very low abundance"         ,
+    )
+  ),
+  afw = Insect(
+    "Alfalfa weevil",
+    crop = "Alfalfa",
+    info = "Alfalfa weevil egg hatch begins around 300 FDD. Light feeding damage expected during 1st and 2nd instar life stages (350-500 FDD). Heavy feeding damage expected during 3rd and 4th instar development, approx. 400-600 FDD.",
+    doc = "docs/insects/alfalfa-weevil.md",
+    tmin = 9,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                      ,
+         300 ,    1 , "Egg hatch, begin scouting" ,
+         370 ,    2 , "2nd instar larvae"         ,
+         440 ,    3 , "3rd instar larvae"         ,
+         505 ,    4 , "4th instar larvae"         ,
+         595 ,    2 , "Pupal stage, end scouting" ,
+         815 ,    1 , "Adult emergence"           ,
+        1000 ,    0 , "Adult diapause"            ,
+    )
+  ),
+  cpb = Insect(
+    "Colorado Potato Beetle",
+    crop = "Potato",
+    info = "Our Colorado potato beetle risk model was derived from 10 years of scouting data in the Central Sands and uses a base 50°F degree day model. The indicated risk score represents the estimated total abundance of adults and larvae. First adult colonization of crops is typically around 265 FDD with peak first-generation populations observed around 895 FDD. Total populations decline slightly through 1115 FDD during the period between generations. Populations peak again around 1375 FDD during second generation adult emergence and decline through the end of the season.",
+    doc = "docs/insects/cpb.md",
+    tmin = 10,
+    tmax = 30,
+    key = tribble(
+      ~start , ~sev , ~label                            ,
+         200 ,    1 , "1st gen adult colonization"      ,
+         350 ,    2 , "1st gen egg hatch"               ,
+         600 ,    3 , "1st gen peak adults"             ,
+         800 ,    4 , "1st gen peak larvae"             ,
+         935 ,    2 , "1st gen pupation"                ,
+        1100 ,    3 , "2nd gen adult emergence"         ,
+        1470 ,    4 , "2nd gen peak adults"             ,
+        1800 ,    3 , "2nd gen adult feeding continues" ,
+        1970 ,    2 , "2nd gen adults begin dispersing" ,
+        2265 ,    1 , "2nd gen adults mostly dispersed" ,
+    )
+  )
+)

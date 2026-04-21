@@ -64,8 +64,8 @@ options(shiny.fullstacktrace = FALSE)
 
 # set up background session for asynchronous tasks but not in tests
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
-  # start 2 workers
-  mirai::daemons(2)
+  # start background workers
+  mirai::daemons(4)
 
   # load required packages on workers
   mirai::everywhere({
@@ -163,11 +163,12 @@ OPTS <- lst(
     # "Model models" = "Model"
   ),
 
-  ## Model risk tab ----
+  ## risk tab ----
   model_group_choices = list(
     "Field crops" = "field",
     "Vegetable crops" = "vegetable",
-    "Cover crops" = "cover"
+    "Cover crops" = "cover",
+    "Insects" = "insect"
   ),
 
   ## plotting ----
@@ -220,7 +221,7 @@ OPTS <- lst(
 # message and print an object to the console for testing
 echo <- function(x) {
   message(deparse(substitute(x)), " <", paste(class(x), collapse = ", "), ">")
-  print(str(x))
+  str(x)
 }
 
 # display a message showing elapsed time since last timestamp
@@ -273,6 +274,19 @@ minmax <- function(x) {
   c(min(x, na.rm = TRUE), max(x, na.rm = TRUE))
 }
 
+# rounds to nearest whole multiple of y
+#' @param x number or vector
+#' @param d divisor to round to
+round_to <- function(x, d = 5) {
+  round(x / d) * d
+}
+
+#' prints to tribble format in the console for pasting
+#' @param df a data frame to convert to tribble
+print_tribble <- function(df) {
+  constructive::construct(df, opts_tbl_df("tribble"))
+}
+
 # Date/time functions ----------------------------------------------------------
 
 # calculate the difference in hours between two timestamps
@@ -283,33 +297,6 @@ hours_diff <- function(start, end) {
 # hours_diff(now(), now())
 # hours_diff(now() - hours(6), now())
 # hours_diff(now() - days(1), now())
-
-#' @param ... partial dates like 'aug 1' to convert to yday using current year
-get_yday <- function(...) {
-  args <- list(...)
-  sapply(args, function(v) {
-    paste(year(Sys.Date()), v) |>
-      ymd() |>
-      yday()
-  })
-}
-
-# get_yday("jun 1", "aug 2")
-
-check_date_overlap <- function(date_range, dates_partial) {
-  date_range <- as_date(date_range)
-  date_seq <- seq.Date(date_range[1], date_range[2], 1)
-  yrs <- unique(year(date_seq))
-  sapply(set_names(yrs), function(yr) {
-    dt <- ymd(paste(yr, dates_partial))
-    test_seq <- seq.Date(dt[1], dt[2])
-    any(date_seq %in% test_seq)
-  })
-}
-
-# check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
-# check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
-# check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
 
 # Summary functions ------------------------------------------------------------
 
@@ -505,70 +492,35 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 #' @param tmin minimum daily temperature
 #' @param tmax maximum daily temperature
 #' @param base base/lower temperature threshold
+#' @param upper upper temperature threshold
 #' @returns single sine growing degree days for one day
 gdd_sine <- function(tmin, tmax, base, upper = 150) {
-  mapply(
-    function(tmin, tmax, base) {
-      if (is.na(tmin) || is.na(tmax)) {
-        return(NA)
-      }
+  tmin_adj <- pmin(tmin, tmax)
+  tmax_adj <- pmax(tmin, tmax)
 
-      # swap min and max if in wrong order for some reason
-      if (tmin > tmax) {
-        t = tmin
-        tmin = tmax
-        tmax = t
-      }
+  avg <- (tmin_adj + tmax_adj) / 2
+  alpha <- (tmax_adj - tmin_adj) / 2
+  safe_alpha <- pmax(alpha, .Machine$double.eps)
 
-      # min and max < lower
-      if (tmax <= base) {
-        return(0)
-      }
+  base_rad <- asin(pmax(-1, pmin(1, (base - avg) / safe_alpha)))
+  upper_rad <- asin(pmax(-1, pmin(1, (upper - avg) / safe_alpha)))
 
-      average = (tmin + tmax) / 2
+  val_simple <- avg - base
+  val_sine <- (1 / pi) *
+    ((avg - base) * (pi / 2 - base_rad) + alpha * cos(base_rad))
+  val_both <- (1 / pi) *
+    ((avg - base) *
+      (upper_rad - base_rad) +
+      alpha * (cos(base_rad) - cos(upper_rad)) +
+      (upper - base) * (pi / 2 - upper_rad))
 
-      # tmin > lower = simple average gdds
-      if (tmin >= base) {
-        return(average - base)
-      }
-
-      alpha = (tmax - tmin) / 2
-
-      # min < base, max between base and upper
-      if (tmax <= upper && tmin < base) {
-        base_radians = asin((base - average) / alpha)
-        a = average - base
-        b = pi / 2 - base_radians
-        c = alpha * cos(base_radians)
-        return((1 / pi) * (a * b + c))
-      }
-
-      # max > upper and min between base and upper
-      if (tmax > upper && tmin >= base) {
-        upper_radians = asin((upper - average) / alpha)
-        a = average - base
-        b = upper_radians + pi / 2
-        c = upper - base
-        d = pi / 2 - upper_radians
-        e = alpha * cos(upper_radians)
-        return((1 / pi) * (a * b + c * d - e))
-      }
-
-      # max > upper and min < base
-      if (tmax > upper && tmin < base) {
-        base_radians = asin((base - average) / alpha)
-        upper_radians = asin((upper - average) / alpha)
-        a = average - base
-        b = upper_radians - base_radians
-        c = alpha * (cos(base_radians) - cos(upper_radians))
-        d = upper - base
-        e = pi / 2 - upper_radians
-        return((1 / pi) * ((a * b + c) + (d * e)))
-      }
-    },
-    tmin,
-    tmax,
-    base
+  dplyr::case_when(
+    is.na(tmin) | is.na(tmax) ~ NA_real_,
+    tmax_adj <= base ~ 0,
+    tmin_adj >= upper ~ upper - base, # both thresholds exceeded
+    tmin_adj >= base ~ val_simple,
+    tmax_adj <= upper ~ val_sine,
+    TRUE ~ val_both
   )
 }
 

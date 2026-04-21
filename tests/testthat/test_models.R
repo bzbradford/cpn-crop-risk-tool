@@ -15,6 +15,21 @@ test_that("build_daily", {
 
 # Model helpers ----
 
+test_that("check_date_overlap detects overlapping date ranges", {
+  # overlap: Apr-Jul with May-Aug
+
+  result1 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("May 1", "Aug 1"))
+  expect_true(result1[["2025"]])
+
+  # no overlap: Apr-Jul with Jan-Feb
+  result2 <- check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
+  expect_false(result2[["2025"]])
+
+  # cross-year range
+  result3 <- check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
+  expect_true(result3[["2025"]])
+})
+
 test_that("risk_from_prob", {
   expect_silent({
     tibble(
