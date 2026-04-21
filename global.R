@@ -7,7 +7,6 @@ suppressPackageStartupMessages({
   library(fst) # file storage
   library(httr2) # requests
   library(markdown)
-  library(zoo) # rollmean
   library(mirai) # async
 
   # shiny
@@ -301,10 +300,11 @@ hours_diff <- function(start, end) {
 # Summary functions ------------------------------------------------------------
 
 calc_sum <- function(x) {
-  if (all(is.na(x))) {
-    return(NA)
-  }
   sum(x, na.rm = TRUE)
+}
+
+calc_mean <- function(x) {
+  mean(x, na.rm = TRUE)
 }
 
 calc_min <- function(x) {
@@ -314,13 +314,6 @@ calc_min <- function(x) {
   min(x, na.rm = TRUE)
 }
 
-calc_mean <- function(x) {
-  if (all(is.na(x))) {
-    return(NA)
-  }
-  mean(x, na.rm = TRUE)
-}
-
 calc_max <- function(x) {
   if (all(is.na(x))) {
     return(NA)
@@ -328,12 +321,26 @@ calc_max <- function(x) {
   max(x, na.rm = TRUE)
 }
 
-roll_mean <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = TRUE)
+roll_mean <- function(x, width, align = "right") {
+  data.table::frollmean(
+    x,
+    width,
+    align = align,
+    has.nf = TRUE,
+    na.rm = TRUE,
+    partial = TRUE
+  )
 }
 
-roll_sum <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_sum(x), partial = TRUE)
+roll_sum <- function(x, width, align = "right") {
+  data.table::frollsum(
+    x,
+    width,
+    align = align,
+    has.nf = TRUE,
+    na.rm = TRUE,
+    partial = TRUE
+  )
 }
 
 # counts number consecutive runs of values above a threshold
