@@ -605,3 +605,35 @@ test_that("build_gdd_from_daily", {
       build_gdd_from_daily()
   })
 })
+
+test_that("gdd_sine numerical parity — all 6 branches", {
+  # NA propagation
+  expect_true(is.na(gdd_sine(NA_real_, 20, 10)))
+  # tmax <= base → 0
+  expect_equal(gdd_sine(0, 5, 10), 0)
+  # tmin >= base → simple average
+  expect_equal(gdd_sine(15, 25, 10), 10)
+  # tmin < base, tmax <= upper → sine formula
+  expect_equal(gdd_sine(5, 25, 10), 6.089978, tolerance = 1e-6)
+  # tmax > upper, tmin >= base → upper-clamp formula
+  expect_equal(gdd_sine(15, 200, 10), 97.5, tolerance = 1e-6)
+  # tmin < base, tmax > upper → both-threshold formula
+  expect_equal(gdd_sine(5, 200, 10), 81.793794, tolerance = 1e-6)
+  # custom upper threshold
+  expect_equal(gdd_sine(5, 200, 10, upper = 100), 60.545264, tolerance = 1e-6)
+  # out-of-order tmin/tmax → same result as corrected order
+  expect_equal(gdd_sine(25, 5, 10), gdd_sine(5, 25, 10))
+})
+
+test_that("gdd_sine grid parity (base=10)", {
+  grid <- expand.grid(tmin = 0:50, tmax = 0:50)
+  grid <- grid[grid$tmax >= grid$tmin, ]
+  vals <- gdd_sine(grid$tmin, grid$tmax, 10)
+  expect_equal(length(vals), 1326)
+  expect_equal(sum(vals, na.rm = TRUE), 20743.31, tolerance = 1e-2)
+  expect_equal(
+    vals[c(100, 200, 300, 400, 500, 700, 900, 1100)],
+    c(1.061744, 4.135599, 13, 14, 8.525969, 24.5, 29.5, 22),
+    tolerance = 1e-5
+  )
+})
