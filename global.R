@@ -492,70 +492,35 @@ rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
 #' @param tmin minimum daily temperature
 #' @param tmax maximum daily temperature
 #' @param base base/lower temperature threshold
+#' @param upper upper temperature threshold
 #' @returns single sine growing degree days for one day
 gdd_sine <- function(tmin, tmax, base, upper = 150) {
-  mapply(
-    function(tmin, tmax, base) {
-      if (is.na(tmin) || is.na(tmax)) {
-        return(NA)
-      }
+  tmin_adj <- pmin(tmin, tmax)
+  tmax_adj <- pmax(tmin, tmax)
 
-      # swap min and max if in wrong order for some reason
-      if (tmin > tmax) {
-        t = tmin
-        tmin = tmax
-        tmax = t
-      }
+  avg <- (tmin_adj + tmax_adj) / 2
+  alpha <- (tmax_adj - tmin_adj) / 2
+  safe_alpha <- pmax(alpha, .Machine$double.eps)
 
-      # min and max < lower
-      if (tmax <= base) {
-        return(0)
-      }
+  base_rad <- asin(pmax(-1, pmin(1, (base - avg) / safe_alpha)))
+  upper_rad <- asin(pmax(-1, pmin(1, (upper - avg) / safe_alpha)))
 
-      average = (tmin + tmax) / 2
+  val_simple <- avg - base
+  val_sine <- (1 / pi) *
+    ((avg - base) * (pi / 2 - base_rad) + alpha * cos(base_rad))
+  val_both <- (1 / pi) *
+    ((avg - base) *
+      (upper_rad - base_rad) +
+      alpha * (cos(base_rad) - cos(upper_rad)) +
+      (upper - base) * (pi / 2 - upper_rad))
 
-      # tmin > lower = simple average gdds
-      if (tmin >= base) {
-        return(average - base)
-      }
-
-      alpha = (tmax - tmin) / 2
-
-      # min < base, max between base and upper
-      if (tmax <= upper && tmin < base) {
-        base_radians = asin((base - average) / alpha)
-        a = average - base
-        b = pi / 2 - base_radians
-        c = alpha * cos(base_radians)
-        return((1 / pi) * (a * b + c))
-      }
-
-      # max > upper and min between base and upper
-      if (tmax > upper && tmin >= base) {
-        upper_radians = asin((upper - average) / alpha)
-        a = average - base
-        b = upper_radians + pi / 2
-        c = upper - base
-        d = pi / 2 - upper_radians
-        e = alpha * cos(upper_radians)
-        return((1 / pi) * (a * b + c * d - e))
-      }
-
-      # max > upper and min < base
-      if (tmax > upper && tmin < base) {
-        base_radians = asin((base - average) / alpha)
-        upper_radians = asin((upper - average) / alpha)
-        a = average - base
-        b = upper_radians - base_radians
-        c = alpha * (cos(base_radians) - cos(upper_radians))
-        d = upper - base
-        e = pi / 2 - upper_radians
-        return((1 / pi) * ((a * b + c) + (d * e)))
-      }
-    },
-    tmin,
-    tmax,
-    base
+  dplyr::case_when(
+    is.na(tmin) | is.na(tmax) ~ NA_real_,
+    tmax_adj <= base ~ 0,
+    tmin_adj >= upper ~ upper - base, # both thresholds exceeded
+    tmin_adj >= base ~ val_simple,
+    tmax_adj <= upper ~ val_sine,
+    TRUE ~ val_both
   )
 }
 

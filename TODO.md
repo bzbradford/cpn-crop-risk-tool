@@ -109,6 +109,8 @@ Legend:
 **Difficulty:** M
 **Risk:** M (need equivalence tests vs existing behaviour — already have `test_daily_wx` fixture)
 
+**[Complete]**
+
 ### B4. Cache daily weather per `(grid_id, date)` across fetches
 **Location:** `server.R` `wx_data` reactive (line ~580)
 **Problem:** When the user adds one new site, the daily build re-runs over *all* sites (including ones whose hourly data didn't change). Same for MA and GDD.
