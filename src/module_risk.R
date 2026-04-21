@@ -190,7 +190,7 @@ riskServer <- function(rv, wx_data) {
           div(
             class = "label-inline",
             style = "margin: 1rem 0;",
-            tags$label("Pythium present:", `for` = ns("pythium")),
+            tags$label(HTML("<i>Pythium</i> present:"), `for` = ns("pythium")),
             radioButtons(
               inputId = ns("pythium"),
               label = NULL,
@@ -394,7 +394,7 @@ riskServer <- function(rv, wx_data) {
         req(nrow(sites) > 1)
 
         div(
-          style = "padding: 0 1rem;",
+          style = "margin-bottom: 0.5rem;",
           class = "label-inline",
           tags$label("Show results for:", `for` = ns("show_all_sites")),
           radioButtons(
