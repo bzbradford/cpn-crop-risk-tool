@@ -274,7 +274,7 @@ model_list <- list(
 
   earlyblight = Model(
     name = "Early blight",
-    crop = "Solanum",
+    crop = "Potato/Tomato",
     group = "vegetable",
     info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
     doc = "docs/early-blight.md",
@@ -286,7 +286,7 @@ model_list <- list(
 
   lateblight = Model(
     name = "Late blight",
-    crop = "Solanum",
+    crop = "Potato/Tomato",
     group = "vegetable",
     info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of disease severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md",
@@ -361,11 +361,10 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Optimal cotton plant populations generally range from 30,000 to 55,000 plants per acre, with a target of 40,000-50,000 for maximum yield. While minimum stands can be as low as 15,000 plants per acre, 30,000 is recommended for optimal yield. Seeding rates typically range from 24,000 to 45,000+ seeds per acre, depending on row spacing and soil conditions. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, pythium presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
-    doc = NULL,
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, pythium presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
-    # biofix = 90,
     ycol = "probability",
     yrange = c(0, 1)
   )

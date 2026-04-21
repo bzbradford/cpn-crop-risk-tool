@@ -714,7 +714,7 @@ server <- function(input, output, session) {
   observeEvent(input$about, show_modal(md = "README.md"))
   observe({
     mod <- req(input$show_modal)
-    show_modal(md = mod$md, title = mod$title)
+    show_modal(md = mod$md)
   })
 
   # Site selection -------------------------------------------------------------
