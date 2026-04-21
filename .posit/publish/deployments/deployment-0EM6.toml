@@ -10,9 +10,9 @@ id = "4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 dashboard_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 direct_url = "https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/"
 logs_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs"
-deployed_at = "2026-04-21T17:37:13.342Z"
-bundle_id = "4729"
-bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4729/download"
+deployed_at = "2026-04-21T19:47:57.217Z"
+bundle_id = "4731"
+bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4731/download"
 files = [
     ".Renviron",
     ".posit/publish/Crop Risk Tool-TGSR.toml",
@@ -6237,46 +6237,4 @@ needs_compilation = "yes"
 author = "Hadley Wickham [cre] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Shawn Garbett [ctb] (ORCID: <https://orcid.org/0000-0003-4079-5621>), Jeremy Stephens [aut, ctb], Kirill Simonov [aut], Yihui Xie [ctb] (ORCID: <https://orcid.org/0000-0003-0645-5666>), Zhuoer Dong [ctb], Jeffrey Horner [ctb], reikoch [ctb], Will Beasley [ctb] (ORCID: <https://orcid.org/0000-0002-5613-5006>), Brendan O'Connor [ctb], Michael Quinn [ctb], Charlie Gao [ctb], Gregory R. Warnes [ctb], Zhian N. Kamvar [ctb]"
 maintainer = "Hadley Wickham <hadley@posit.co>"
 repository = "https://packagemanager.posit.co/cran/latest"
-
-[renv.packages.zoo]
-package = "zoo"
-version = "1.8-15"
-source = "Repository"
-date = "2025-12-15"
-title = "S3 Infrastructure for Regular and Irregular Time Series (Z's Ordered Observations)"
-"authors@r" = "c(person(given = \"Achim\", family = \"Zeileis\", role = c(\"aut\", \"cre\"), email = \"Achim.Zeileis@R-project.org\", comment = c(ORCID = \"0000-0003-0918-3766\")), person(given = \"Gabor\", family = \"Grothendieck\", role = \"aut\", email = \"ggrothendieck@gmail.com\"), person(given = c(\"Jeffrey\", \"A.\"), family = \"Ryan\", role = \"aut\", email = \"jeff.a.ryan@gmail.com\"), person(given = c(\"Joshua\", \"M.\"), family = \"Ulrich\", role = \"ctb\", email = \"josh.m.ulrich@gmail.com\"), person(given = \"Felix\", family = \"Andrews\", role = \"ctb\", email = \"felix@nfrac.org\"))"
-description = "An S3 class with methods for totally ordered indexed observations. It is particularly aimed at irregular time series of numeric vectors/matrices and factors. zoo's key design goals are independence of a particular index/date/time class and consistency with ts and base R by providing methods to extend standard generics."
-depends = [
-    "R (>= 3.1.0)",
-    "stats",
-]
-suggests = [
-    "AER",
-    "coda",
-    "chron",
-    "ggplot2 (>= 3.5.0)",
-    "mondate",
-    "scales",
-    "stinepack",
-    "strucchange",
-    "timeDate",
-    "timeSeries",
-    "tinyplot",
-    "tis",
-    "tseries",
-    "xts",
-]
-imports = [
-    "utils",
-    "graphics",
-    "grDevices",
-    "lattice (>= 0.20-27)",
-]
-license = "GPL-2 | GPL-3"
-url = "https://zoo.R-Forge.R-project.org/"
-needs_compilation = "yes"
-author = "Achim Zeileis [aut, cre] (ORCID: <https://orcid.org/0000-0003-0918-3766>), Gabor Grothendieck [aut], Jeffrey A. Ryan [aut], Joshua M. Ulrich [ctb], Felix Andrews [ctb]"
-maintainer = "Achim Zeileis <Achim.Zeileis@R-project.org>"
-repository = "https://packagemanager.posit.co/cran/latest"
-encoding = "UTF-8"
 
