@@ -180,6 +180,8 @@ Legend:
 **Difficulty:** S
 **Risk:** S
 
+[Complete]
+
 ### C3. Vectorise `validate_ll`
 **Location:** `global.R` lines 695–709
 **Problem:** `mapply(function(lat, lng) { st_point(...) |> st_sfc(...) |> st_transform(...); st_intersection(pt, poly) }, lat, lng)` builds one point at a time, transforms one at a time, intersects one at a time. For CSV uploads of 25 sites and for `parse_cookie_sites` this is 25× slower than necessary.
@@ -346,3 +348,14 @@ In `global.R` you start `mirai::daemons(2)` per R process. Those workers are sha
 - Or leave at 2 and rely on Connect spinning up more processes under load. Simpler, but individual processes feel less responsive under concurrent fetch load.
 
 Recommended: bump to 4 when you raise max-connections to 3+.
+
+
+## Other improvement ideas
+
+- Better handling of missing weather hours. Some hours may never be available from the server, so after a successful request or two, those hours should be flagged as permanently missing and not ask the user to try to download them again.
+
+- Confirm cache behavior, it should load for the user on session start, and also show the available data grids on the map.
+
+- Add option to show predictor data for models (weather variables) on the little graphs
+
+- Add Gear button to bring up settings to change plot size? Allow shrinking or hiding the map or otherwise changing the layout?

@@ -306,7 +306,9 @@ ibm_clean_resp <- function(ibm_response) {
   if (nrow(ibm_response) == 0) {
     return(tibble())
   }
-  ibm_response |>
+
+  # initial clean
+  resp <- ibm_response |>
     select(-OPTS$ibm_ignore_cols) |>
     select(
       grid_id = gridpointId,
@@ -316,11 +318,20 @@ ibm_clean_resp <- function(ibm_response) {
       everything()
     ) |>
     janitor::clean_names() |>
-    mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz"))) |>
+    mutate(across(datetime_utc, ~ parse_date_time(.x, "YmdHMSz")))
+
+  # get time zones
+  tz <- resp |>
+    distinct(grid_id, grid_lat, grid_lng) |>
     mutate(
-      time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE),
-      .after = datetime_utc
+      time_zone = lutz::tz_lookup_coords(grid_lat, grid_lng, warn = FALSE)
     ) |>
+    select(grid_id, time_zone)
+
+  # join time zones and create local timestamp and date
+  resp |>
+    left_join(tz, join_by(grid_id)) |>
+    relocate(time_zone, .after = datetime_utc) |>
     mutate(
       datetime_local = with_tz(datetime_utc, first(time_zone)),
       .by = time_zone,

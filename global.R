@@ -334,7 +334,7 @@ roll_mean <- function(x, width, align = "right") {
     align = align,
     has.nf = TRUE,
     na.rm = TRUE,
-    partial = TRUE
+    partial = !(align == "center")
   )
 }
 
@@ -345,7 +345,7 @@ roll_sum <- function(x, width, align = "right") {
     align = align,
     has.nf = TRUE,
     na.rm = TRUE,
-    partial = TRUE
+    partial = !(align == "center")
   )
 }
 
