@@ -340,6 +340,8 @@ server <- function(input, output, session) {
     }
   })
 
+  # observe(echo(sites_with_status()))
+
   ## need_weather ----
   need_weather <- reactive({
     wx <- rv$weather

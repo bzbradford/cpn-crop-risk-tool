@@ -13,10 +13,11 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   # retain attribute cols
   attr <- daily |> select(grid_id, any_of(OPTS$date_attr_cols))
 
-  # define moving average functions
+  # define moving average functions. Using zoo here for its handling of partial centered rolls
   roll_mean <- function(vec, width) {
-    rollapply(vec, width, \(x) calc_mean(x), partial = TRUE, align = align)
+    zoo::rollapply(vec, width, calc_mean, partial = TRUE, align = align)
   }
+
   fns <- c(
     "7day" = ~ roll_mean(.x, 7),
     "14day" = ~ roll_mean(.x, 14),
