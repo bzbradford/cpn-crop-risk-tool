@@ -285,7 +285,7 @@ server <- function(input, output, session) {
       sf <- sites |>
         st_as_sf(
           coords = c("lng", "lat"),
-          crs = 4326,
+          crs = crs_4326,
           remove = F
         )
 

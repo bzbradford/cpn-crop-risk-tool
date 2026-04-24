@@ -1,9 +1,10 @@
 #-- global.R --#
 
+library(sf) # GIS
+
 suppressPackageStartupMessages({
   # core
   library(tidyverse)
-  library(sf) # GIS
   library(fst) # file storage
   library(httr2) # requests
   library(markdown)
@@ -660,11 +661,21 @@ find_closest_css_color <- function(hex_color) {
 
 # Location helpers -------------------------------------------------------------
 
+# use these WKT texts for now since EPSG codes are broken on the server
+
+# EPSG 4326, WGS84
+# sf::st_crs(4326)$wkt
+crs_4326 <- "GEOGCRS[\"WGS 84\",\n    ENSEMBLE[\"World Geodetic System 1984 ensemble\",\n        MEMBER[\"World Geodetic System 1984 (Transit)\"],\n        MEMBER[\"World Geodetic System 1984 (G730)\"],\n        MEMBER[\"World Geodetic System 1984 (G873)\"],\n        MEMBER[\"World Geodetic System 1984 (G1150)\"],\n        MEMBER[\"World Geodetic System 1984 (G1674)\"],\n        MEMBER[\"World Geodetic System 1984 (G1762)\"],\n        MEMBER[\"World Geodetic System 1984 (G2139)\"],\n        MEMBER[\"World Geodetic System 1984 (G2296)\"],\n        ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n            LENGTHUNIT[\"metre\",1]],\n        ENSEMBLEACCURACY[2.0]],\n    PRIMEM[\"Greenwich\",0,\n        ANGLEUNIT[\"degree\",0.0174532925199433]],\n    CS[ellipsoidal,2],\n        AXIS[\"geodetic latitude (Lat)\",north,\n            ORDER[1],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n        AXIS[\"geodetic longitude (Lon)\",east,\n            ORDER[2],\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n    USAGE[\n        SCOPE[\"Horizontal component of 3D system.\"],\n        AREA[\"World.\"],\n        BBOX[-90,-180,90,180]],\n    ID[\"EPSG\",4326]]"
+
+# EPSG 3857 web mercator for intersecting points
+# sf::st_crs(3857)$wkt
+crs_3857 <- "PROJCRS[\"WGS 84 / Pseudo-Mercator\",\n    BASEGEOGCRS[\"WGS 84\",\n        ENSEMBLE[\"World Geodetic System 1984 ensemble\",\n            MEMBER[\"World Geodetic System 1984 (Transit)\"],\n            MEMBER[\"World Geodetic System 1984 (G730)\"],\n            MEMBER[\"World Geodetic System 1984 (G873)\"],\n            MEMBER[\"World Geodetic System 1984 (G1150)\"],\n            MEMBER[\"World Geodetic System 1984 (G1674)\"],\n            MEMBER[\"World Geodetic System 1984 (G1762)\"],\n            MEMBER[\"World Geodetic System 1984 (G2139)\"],\n            MEMBER[\"World Geodetic System 1984 (G2296)\"],\n            ELLIPSOID[\"WGS 84\",6378137,298.257223563,\n                LENGTHUNIT[\"metre\",1]],\n            ENSEMBLEACCURACY[2.0]],\n        PRIMEM[\"Greenwich\",0,\n            ANGLEUNIT[\"degree\",0.0174532925199433]],\n        ID[\"EPSG\",4326]],\n    CONVERSION[\"Popular Visualisation Pseudo-Mercator\",\n        METHOD[\"Popular Visualisation Pseudo Mercator\",\n            ID[\"EPSG\",1024]],\n        PARAMETER[\"Latitude of natural origin\",0,\n            ANGLEUNIT[\"degree\",0.0174532925199433],\n            ID[\"EPSG\",8801]],\n        PARAMETER[\"Longitude of natural origin\",0,\n            ANGLEUNIT[\"degree\",0.0174532925199433],\n            ID[\"EPSG\",8802]],\n        PARAMETER[\"False easting\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8806]],\n        PARAMETER[\"False northing\",0,\n            LENGTHUNIT[\"metre\",1],\n            ID[\"EPSG\",8807]]],\n    CS[Cartesian,2],\n        AXIS[\"easting (X)\",east,\n            ORDER[1],\n            LENGTHUNIT[\"metre\",1]],\n        AXIS[\"northing (Y)\",north,\n            ORDER[2],\n            LENGTHUNIT[\"metre\",1]],\n    USAGE[\n        SCOPE[\"Web mapping and visualisation.\"],\n        AREA[\"World between 85.06°S and 85.06°N.\"],\n        BBOX[-85.06,-180,85.06,180]],\n    ID[\"EPSG\",3857]]"
+
 # EPSG 4326 for use in Leaflet
 service_bounds <- read_rds("data/us_ca_clip.rds")
 
 # transform to EPSG 3857 web mercator for intersecting points
-service_bounds_3857 <- st_transform(service_bounds, 3857)
+service_bounds_3857 <- st_transform(service_bounds, crs = crs_3857)
 
 #' returns TRUE if location is within service boundary shapefile
 #' @param lat latitude of point
@@ -676,9 +687,9 @@ validate_ll <- function(lat, lng) {
   }
   pts <- st_sfc(
     mapply(function(lo, la) st_point(c(lo, la)), lng, lat, SIMPLIFY = FALSE),
-    crs = 4326
+    crs = crs_4326
   ) |>
-    st_transform(st_crs(service_bounds_3857))
+    st_transform(crs = crs_3857)
   as.vector(st_intersects(pts, service_bounds_3857, sparse = FALSE))
 }
 
@@ -720,7 +731,7 @@ ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
     c(lon - d, lat - d),
     c(lon - d, lat + d)
   ))
-  st_sfc(st_polygon(m), crs = 4326)
+  st_sfc(st_polygon(m), crs = crs_4326)
 }
 
 # ll_to_grid(45, -89)

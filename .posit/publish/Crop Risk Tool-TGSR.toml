@@ -14,12 +14,12 @@ files = [
     "/ui.R",
     "/src",
     "/server.R",
-    "/ibm_auth.rds",
     "/README.md",
     "/.Renviron",
     "/docs",
     "/data",
     "/www",
+    "/tests",
 ]
 title = "Crop Risk Tool"
 
