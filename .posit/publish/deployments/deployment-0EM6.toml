@@ -2,7 +2,7 @@
 "$schema" = "https://cdn.posit.co/publisher/schemas/posit-publishing-record-schema-v3.json"
 server_type = "connect"
 server_url = "https://connect.doit.wisc.edu"
-client_version = "2.0.0"
+client_version = "2.1.0"
 created_at = "2026-02-19T22:31:37.478Z"
 type = "r-shiny"
 configuration_name = "Crop Risk Tool-TGSR"
@@ -10,9 +10,9 @@ id = "4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 dashboard_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 direct_url = "https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/"
 logs_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs"
-deployed_at = "2026-04-24T02:45:16.329Z"
-bundle_id = "4759"
-bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4759/download"
+deployed_at = "2026-04-24T21:57:30.364Z"
+bundle_id = "4776"
+bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4776/download"
 files = [
     ".Renviron",
     ".posit/publish/Crop Risk Tool-TGSR.toml",
@@ -86,11 +86,10 @@ files = [
 ]
 
 [configuration]
-product_type = "connect"
 "$schema" = "https://cdn.posit.co/publisher/schemas/posit-publishing-schema-v3.json"
 type = "r-shiny"
 entrypoint = "global.R"
-validate = true
+title = "CPN Crop Risk Tool"
 files = [
     "/global.R",
     "/.posit/publish/Crop Risk Tool-TGSR.toml",
@@ -106,7 +105,8 @@ files = [
     "/www",
     "/tests",
 ]
-title = "Crop Risk Tool"
+validate = true
+product_type = "connect"
 
 [configuration.r]
 version = "4.5.3"
