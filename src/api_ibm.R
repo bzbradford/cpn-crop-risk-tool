@@ -426,7 +426,7 @@ build_hourly <- function(ibm_hourly) {
 fetch_weather <- function(wx, sites, start_date, end_date) {
   all_dates <- seq.Date(start_date, end_date, 1)
   sites <- sites |>
-    st_as_sf(coords = c("lng", "lat"), crs = 4326, remove = FALSE)
+    st_as_sf(coords = c("lng", "lat"), crs = crs_4326, remove = FALSE)
   reqs <- list()
 
   # for each site see how much weather is needed
