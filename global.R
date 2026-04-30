@@ -664,7 +664,7 @@ find_closest_css_color <- function(hex_color) {
 # Location helpers -------------------------------------------------------------
 
 # EPSG 4326 for use in Leaflet
-service_bounds <- read_rds("data/us_ca_clip.rds")
+service_bounds <- read_sf("data/us_ca_clip.fgb")
 
 # transform to EPSG 3857 web mercator for intersecting points
 service_bounds_3857 <- st_transform(service_bounds, crs = 3857)
