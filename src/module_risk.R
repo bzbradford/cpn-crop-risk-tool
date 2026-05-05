@@ -205,7 +205,7 @@ riskServer <- function(rv, wx_data) {
               style = "flex: 1;",
               sliderInput(
                 inputId = ns("planting_pop"),
-                label = "Planting population:",
+                label = "Seeding rate (seeds/acre):",
                 min = 30,
                 max = 60,
                 value = 45,
@@ -217,7 +217,7 @@ riskServer <- function(rv, wx_data) {
               style = "flex: 1;",
               sliderInput(
                 inputId = ns("limiting_pop"),
-                label = "Yield-limiting population:",
+                label = "Final stand (plants/acre):",
                 min = 10,
                 max = 30,
                 value = 20,
@@ -345,31 +345,17 @@ riskServer <- function(rv, wx_data) {
         req(rv$weather_ready)
         model <- selected_model()
         sites <- selected_sites()
-        selected_dates <- req(wx_data()$dates)
 
         # check for any warnings
         warnings <- list()
         warnings$wx <- weather_warning_for_sites(sites)
         warnings$model <- model_warning()
-
         req(length(warnings) > 0)
 
-        content <- if (length(warnings) > 1) {
-          tagList(
-            strong("Warnings:"),
-            br(),
-            tags$ul(
-              lapply(warnings, tags$li)
-            )
-          )
-        } else {
-          tagList(
-            strong("Warning:"),
-            warnings
-          )
-        }
-
-        build_warning_box(content)
+        div(
+          style = "display: flex; flex-direction: column; gap: 1rem;",
+          lapply(warnings, build_warning_box)
+        )
       })
 
       # Plot feed --------------------------------------------------------------

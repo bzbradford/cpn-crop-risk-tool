@@ -8,10 +8,6 @@ This model estimates the probability that a planting population will fall below 
 
 The model was built assuming no seed treatments were used. Utilization of seed treatments containing fungicides active against *Pythium* spp., *Rhizoctonia solani*, *Fusarium* spp., and *Thielaviopsis basicola* can support higher plant stands (Faske et al. 2025; Rothrock et al. 2012).
 
-### Model Details
-
-This model was developed by Dr. Zachary Noel, University of Auburn. The model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, pythium presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.
-
 ### References:
 
 - Adams, C., Thapa, S., and Kimura, E. 2019. Determination of a plant population density threshold for optimizing cotton lint yield: A synthesis. Field Crop. Res. 230:11-16.
