@@ -69,7 +69,7 @@ build_daily <- function(hourly) {
     mutate(
       precip_cumulative = cumsum(precip_daily),
       snow_cumulative = cumsum(snow_daily),
-      hot_past_5_days = rollapplyr(
+      hot_past_5_days = data.table::frollapply(
         hours_temp_over_30,
         5,
         \(x) any(x >= 4),
@@ -361,7 +361,7 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the yield-limiting stand, based on planting population, <i>Pythium</i> presence, minimum temperatures in the 9 days preceeding planting, and rainfall in the 3 days after planting.",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting.",
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
@@ -783,7 +783,7 @@ calc_pdays <- function(tmin, tmax) {
 risk_for_early_blight <- function(value) {
   tibble(
     total = cumsum(value),
-    avg7 = rollapplyr(value, 7, mean, partial = TRUE),
+    avg7 = data.table::frollapply(value, 7, mean, partial = TRUE),
     severity = case_when(
       total >= 400 ~
         (avg7 >= 1) +
@@ -853,7 +853,7 @@ calc_late_blight_dsv <- function(t, h) {
 #' @param value dsv from `calc_late_blight_dsv` function
 risk_for_late_blight <- function(value) {
   tibble(
-    total14 = rollapplyr(value, 14, sum, partial = TRUE),
+    total14 = data.table::frollapply(value, 14, sum, partial = TRUE),
     total = cumsum(value),
     severity = case_when(
       total14 >= 21 & total >= 30 ~ 4,
@@ -918,7 +918,7 @@ calc_alternaria_dsv <- function(temp, h) {
 #' @param value dsv from `calc_alternaria_dsv` function
 risk_for_alternaria <- function(value) {
   tibble(
-    total7 = rollapplyr(value, 7, sum, partial = TRUE),
+    total7 = data.table::frollapply(value, 7, sum, partial = TRUE),
     total = cumsum(value),
     severity = (total7 >= 5) +
       (total7 >= 10) +
@@ -991,8 +991,8 @@ calc_cercospora_div <- function(t, h) {
 #' @param value DIV from `calc_cercospora_div`
 risk_for_cercospora <- function(value) {
   tibble(
-    avg2 = rollapplyr(value, 2, mean, partial = TRUE),
-    avg7 = rollapplyr(value, 7, mean, partial = TRUE),
+    avg2 = data.table::frollapply(value, 2, mean, partial = TRUE),
+    avg7 = data.table::frollapply(value, 7, mean, partial = TRUE),
     total = cumsum(value),
     severity = case_when(
       avg7 >= 5 | avg2 >= 5.5 ~ 4,
@@ -1224,16 +1224,16 @@ if (FALSE) {
 # Cotton planting risk ---------------------------------------------------------
 #' Cotton planting risk model. Predicts the probability of emerged stand below the yield-limiting stand population
 #' Reference: Dr. Zachary Noel, Auburn University
-#' @param Precip3day 3-day future/forecast total precipitation (mm)
-#' @param MeanMinTemp9ma 9-day moving average of daily minimum air temperatures (C)
+#' @param precip_next_3_days 3-day future/forecast total precipitation (mm)
+#' @param mean_min_temp_next_9_days 9-day future/forecast moving average of daily minimum air temperatures (C)
 #' @param pythium present, T/F or 1/0 user input
 #' @param planting_pop ~30,000 - 50,000, user input
 #' @param limiting_stand default 15,000 plants per acre
 #' @param year derive from date
 #' @returns probability of emerged stand < limiting_stand
 cotton_planting_model <- Vectorize(function(
-  Precip3day,
-  MeanMinTemp9ma,
+  precip_3day_forward,
+  mean_min_temp_9day_forward,
   pythium,
   planting_pop,
   limiting_pop,
@@ -1251,15 +1251,18 @@ cotton_planting_model <- Vectorize(function(
   mu <- -22.4611 +
     -0.3359 * py +
     0.01118 * yr +
-    -0.00750 * Precip3day +
-    0.03929 * MeanMinTemp9ma
+    -0.00750 * precip_3day_forward +
+    0.03929 * mean_min_temp_9day_forward
 
   # 5.	Perform the logit transformation to generate the proportion of emerged seedlings and the confidence interval around the prediction.
   p_emerge <- logistic(mu)
 
   # 6.	Scale the predictors on the response scale. Multiply the 1x5 X matrix shown below to get the 1x5 g matrix.
   g_mat <- (p_emerge * (1 - p_emerge)) *
-    matrix(c(1, py, yr, Precip3day, MeanMinTemp9ma), ncol = 5)
+    matrix(
+      c(1, py, yr, precip_3day_forward, mean_min_temp_9day_forward),
+      ncol = 5
+    )
 
   # 7.	Variance-Covariance matrix (VCOV) is needed to calculate the confidence intervals around the prediction. It is fixed based on the model fit and will not change based on new user input.
   # fmt: skip
@@ -1306,16 +1309,11 @@ build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
     mutate(
       date = date,
       year = year,
-      precip_3day_forward = zoo::rollsum(
-        precip_daily,
-        k = 3,
-        fill = 0,
-        align = "left"
-      ),
-      min_temp_9ma = roll_mean(temperature_min, 9),
+      precip_3day_forward = roll_sum(precip_daily, 3, "left"),
+      mean_min_temp_9day_forward = roll_mean(temperature_min, 9, "left"),
       probability = cotton_planting_model(
-        Precip3day = precip_3day_forward,
-        MeanMinTemp9ma = min_temp_9ma,
+        precip_3day_forward = precip_3day_forward,
+        mean_min_temp_9day_forward = mean_min_temp_9day_forward,
         pythium = pythium,
         planting_pop = planting_pop,
         limiting_pop = limiting_pop,

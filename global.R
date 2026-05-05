@@ -1,13 +1,14 @@
 #-- global.R --#
 
+message("sf version: ", packageVersion("sf"))
+library(sf) # GIS
+
 suppressPackageStartupMessages({
   # core
   library(tidyverse)
-  library(sf) # GIS
   library(fst) # file storage
   library(httr2) # requests
   library(markdown)
-  library(zoo) # rollmean
   library(mirai) # async
 
   # shiny
@@ -42,6 +43,7 @@ if (FALSE) {
   renv::snapshot()
   renv::clean()
   renv::install("sf@1.0-24")
+  renv::install("sf")
 
   # turn warnings into errors
   options(warn = 2)
@@ -307,18 +309,18 @@ calc_sum <- function(x) {
   sum(x, na.rm = TRUE)
 }
 
-calc_min <- function(x) {
-  if (all(is.na(x))) {
-    return(NA)
-  }
-  min(x, na.rm = TRUE)
-}
-
 calc_mean <- function(x) {
   if (all(is.na(x))) {
     return(NA)
   }
   mean(x, na.rm = TRUE)
+}
+
+calc_min <- function(x) {
+  if (all(is.na(x))) {
+    return(NA)
+  }
+  min(x, na.rm = TRUE)
 }
 
 calc_max <- function(x) {
@@ -328,12 +330,26 @@ calc_max <- function(x) {
   max(x, na.rm = TRUE)
 }
 
-roll_mean <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_mean(x), partial = TRUE)
+roll_mean <- function(x, width, align = "right") {
+  data.table::frollmean(
+    x,
+    width,
+    align = align,
+    has.nf = TRUE,
+    na.rm = TRUE,
+    partial = !(align == "center")
+  )
 }
 
-roll_sum <- function(vec, width) {
-  zoo::rollapplyr(vec, width, \(x) calc_sum(x), partial = TRUE)
+roll_sum <- function(x, width, align = "right") {
+  data.table::frollsum(
+    x,
+    width,
+    align = align,
+    has.nf = TRUE,
+    na.rm = TRUE,
+    partial = !(align == "center")
+  )
 }
 
 # counts number consecutive runs of values above a threshold
@@ -648,29 +664,25 @@ find_closest_css_color <- function(hex_color) {
 # Location helpers -------------------------------------------------------------
 
 # EPSG 4326 for use in Leaflet
-service_bounds <- read_rds("data/us_ca_clip.rds")
+service_bounds <- read_sf("data/us_ca_clip.fgb")
 
 # transform to EPSG 3857 web mercator for intersecting points
-service_bounds_3857 <- st_transform(service_bounds, 3857)
+service_bounds_3857 <- st_transform(service_bounds, crs = 3857)
 
 #' returns TRUE if location is within service boundary shapefile
 #' @param lat latitude of point
 #' @param lng longitude of point
 #' @returns boolean
 validate_ll <- function(lat, lng) {
-  mapply(
-    function(lat, lng) {
-      if (!is.numeric(lat) | !is.numeric(lng)) {
-        return(FALSE)
-      }
-      pt <- st_point(c(lng, lat)) |>
-        st_sfc(crs = 4326) |>
-        st_transform(st_crs(service_bounds_3857))
-      length(st_intersection(pt, service_bounds_3857)) == 1
-    },
-    lat,
-    lng
-  )
+  if (!is.numeric(lat) || !is.numeric(lng)) {
+    return(rep(FALSE, max(length(lat), length(lng))))
+  }
+  pts <- st_sfc(
+    mapply(function(lo, la) st_point(c(lo, la)), lng, lat, SIMPLIFY = FALSE),
+    crs = 4326
+  ) |>
+    st_transform(crs = 3857)
+  as.vector(st_intersects(pts, service_bounds_3857, sparse = FALSE))
 }
 
 # validate_ll(45, -89)
