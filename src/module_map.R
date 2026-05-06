@@ -396,9 +396,7 @@ mapServer <- function(rv, map_data) {
         proxy_map |>
           clearGroup(OPTS$map_layers$grid)
 
-        # user-selected grids this session
-        grids <- map_data()$grids_with_status |>
-          filter(grid_id %in% rv$grids[["grid_id"]]) # null safe column ref
+        grids <- map_data()$grids_with_status
 
         # if any, display them
         if (nrow(grids) > 0) {

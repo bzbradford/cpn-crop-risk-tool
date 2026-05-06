@@ -328,7 +328,7 @@ riskServer <- function(rv, wx_data) {
       joined_data <- reactive({
         selected_sites() |>
           st_drop_geometry() |>
-          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) |>
+          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, timezone) |>
           left_join(
             model_data(),
             join_by(grid_id),
