@@ -554,6 +554,36 @@ if (FALSE) {
   om_wx_status(wx2)
 }
 
+#' get hourly data for sites from start to end date
+#' optionally include existing weather to identify needs
+#' @param sites list of sites that need a forecast
+om_fetch_forecast <- function(sites) {
+  message("Getting forecasts for ", nrow(sites), " sites")
+  t0 <- now()
+
+  reqs <- sites |>
+    rowwise() |>
+    mutate(req = list(om_build_forecast_req(lat, lng)))
+
+  reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
+
+  message(sprintf("Requests completed in %.4f", as.numeric(now() - t0)))
+
+  parsed <- reqs |>
+    reframe(lat, lng, om_parse_resp(resp))
+
+  if ("grid_id" %in% names(parsed)) {
+    om_build_hourly(parsed)
+  } else {
+    tibble()
+  }
+}
+
+if (FALSE) {
+  fc <- om_fetch_forecast(sites1)
+  fc
+}
+
 
 ## Unified fetch (history + forecast) ----
 
