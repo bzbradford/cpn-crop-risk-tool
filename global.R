@@ -92,27 +92,6 @@ OPTS <- lst(
   google_geocoding_key = Sys.getenv("google_geocoding_key"),
   google_places_key = Sys.getenv("google_places_key"),
 
-  ## ibm ----
-  ibm_keys = list(
-    org_id = Sys.getenv("ibm_org_id"),
-    tenant_id = Sys.getenv("ibm_tenant_id"),
-    api_key = Sys.getenv("ibm_api_key")
-  ),
-  ibm_auth_endpoint = "https://api.ibm.com/saascore/run/authentication-retrieve/api-key",
-  ibm_weather_endpoint = "https://api.ibm.com/geospatial/run/v3/wx/hod/r1/direct",
-  ibm_auth_timeout = 5,
-  ibm_req_timeout = 10,
-  ibm_chunk_size = 1000, # max hours per api call
-  ibm_ignore_cols = c(
-    "requestedLatitude",
-    "requestedLongitude",
-    "iconCode",
-    "iconCodeExtended",
-    "drivingDifficultyIndex"
-  ),
-  # how old should weather be before allowing a refresh?
-  ibm_stale_hours = 3,
-
   ## dates ----
   earliest_date = ymd("2015-1-1"),
   default_start_date = today() - months(1),
@@ -181,7 +160,7 @@ OPTS <- lst(
     "grid_id",
     "grid_lat",
     "grid_lng",
-    "time_zone",
+    "timezone",
     "date_min",
     "date_max",
     "days_expected",
@@ -196,7 +175,7 @@ OPTS <- lst(
   ),
   date_attr_cols = c(
     "datetime_utc",
-    "time_zone",
+    "timezone",
     "datetime_local",
     "date",
     "yday",
@@ -300,6 +279,22 @@ hours_diff <- function(start, end) {
 # hours_diff(now() - hours(6), now())
 # hours_diff(now() - days(1), now())
 
+#' df must have cols `date` and `datetime_local`
+add_date_cols <- function(df) {
+  df |>
+    mutate(
+      yday = yday(date),
+      year = year(date),
+      month = month(date),
+      day = day(date),
+      hour = hour(datetime_local),
+      night = !between(hour, 7, 19), # night is between 20:00 and 6:00
+      date_since_night = as_date(datetime_local + hours(4)),
+      .after = date,
+      .by = grid_id
+    )
+}
+
 # Summary functions ------------------------------------------------------------
 
 calc_sum <- function(x) {
@@ -380,10 +375,15 @@ cm_to_in <- function(x) {
   x / 2.54
 }
 
+m_to_ft <- function(x) {
+  x * 3.28084
+}
+
 mi_to_km <- function(x) {
   x * 1.609
 }
 
+# or kmh to mph
 km_to_mi <- function(x) {
   x / 1.609
 }
@@ -394,6 +394,10 @@ kmh_to_mps <- function(x) {
 
 mps_to_mph <- function(x) {
   x * 2.237
+}
+
+kPa_to_inHg <- function(x) {
+  x / 3.3864
 }
 
 mbar_to_inHg <- function(x) {
@@ -434,18 +438,36 @@ wind_dir_to_deg <- function(dirs) {
 #' List of weather variables, unit suffixes, and conversion functions
 #' all derivative columns of each of these will start with the same text
 #' e.g. temperature => temperature_min => temperature_min_30ma
-measures <- tribble(
-  ~measure                  , ~metric , ~imperial , ~conversion  ,
-  "temperature"             , "°C"    , "°F"      , c_to_f       ,
-  "dew_point"               , "°C"    , "°F"      , c_to_f       ,
-  "relative_humidity"       , "%"     , "%"       , \(x) x       , # no conversion
-  "precip"                  , "mm"    , "in"      , mm_to_in     ,
-  "snow"                    , "cm"    , "in"      , cm_to_in     ,
-  "wind_speed"              , "kmh"   , "mph"     , km_to_mi     ,
-  "wind_gust"               , "kmh"   , "mph"     , km_to_mi     ,
-  "wind_direction"          , "°"     , "°"       , \(x) x       , # no conversion
-  "pressure_mean_sea_level" , "mbar"  , "inHg"    , mbar_to_inHg ,
-  "pressure_change"         , "mbar"  , "inHg"    , mbar_to_inHg ,
+# measures <- tribble(
+#   ~measure                  , ~metric , ~imperial , ~conversion  ,
+#   "temperature"             , "°C"    , "°F"      , c_to_f       ,
+#   "dew_point"               , "°C"    , "°F"      , c_to_f       ,
+#   "relative_humidity"       , "%"     , "%"       , \(x) x       , # no conversion
+#   "precip"                  , "mm"    , "in"      , mm_to_in     ,
+#   "snow"                    , "cm"    , "in"      , cm_to_in     ,
+#   "wind_speed"              , "kmh"   , "mph"     , km_to_mi     ,
+#   "wind_gust"               , "kmh"   , "mph"     , km_to_mi     ,
+#   "wind_direction"          , "°"     , "°"       , \(x) x       , # no conversion
+#   "pressure_mean_sea_level" , "mbar"  , "inHg"    , mbar_to_inHg ,
+#   "pressure_change"         , "mbar"  , "inHg"    , mbar_to_inHg ,
+# )
+
+conversion_lookup <- tribble(
+  ~measure             , ~metric , ~imperial , ~conversion ,
+  "temperature"        , "°C"    , "°F"      , c_to_f      ,
+  "dew_point"          , "°C"    , "°F"      , c_to_f      ,
+  "relative_humidity"  , "%"     , "%"       , \(x) x      , # no conversion
+  "evapotranspiration" , "mm"    , "in"      , mm_to_in    ,
+  "precipitation"      , "mm"    , "in"      , mm_to_in    ,
+  "rain"               , "mm"    , "in"      , mm_to_in    ,
+  "snowfall"           , "cm"    , "in"      , cm_to_in    ,
+  "snow_depth"         , "m"     , "ft"      , m_to_ft     ,
+  "pressure_msl"       , "kPa"   , "inHg"    , kPa_to_inHg ,
+  "wind_speed"         , "kmh"   , "mph"     , km_to_mi    ,
+  "wind_gust"          , "kmh"   , "mph"     , km_to_mi    ,
+  "wind_direction"     , "°"     , "°"       , \(x) x      , # no conversion
+  "soil_temp"          , "°C"    , "°F"      , c_to_f      ,
+  "soil_moisture"      , "%"     , "%"       , \(x) x      , # no conversion
 )
 
 
@@ -454,8 +476,8 @@ measures <- tribble(
 #' @param df data frame from the hourly set or beyond
 #' @returns df with column data converted
 convert_measures <- function(df) {
-  for (i in seq_len(nrow(measures))) {
-    m <- measures[i, ]
+  for (i in seq_len(nrow(conversion_lookup))) {
+    m <- conversion_lookup[i, ]
     df <- mutate(df, across(starts_with(m$measure), m$conversion[[1]]))
   }
   df
@@ -463,6 +485,7 @@ convert_measures <- function(df) {
 
 # test_hourly_wx |> convert_measures()
 # test_hourly_wx |> build_daily() |> convert_measures()
+# wx |> convert_measures()
 
 #' Returns the unit name for the given column
 #' used to append unit suffix in plotly
@@ -470,7 +493,7 @@ convert_measures <- function(df) {
 #' @param unit_system
 find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
   unit_system <- match.arg(unit_system)
-  matched <- measures |>
+  matched <- conversion_lookup |>
     rowwise() |>
     filter(grepl(measure, col_name))
   if (nrow(matched) == 1) matched[[unit_system]] else ""
@@ -485,8 +508,8 @@ find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
 #' @returns df with updated column names
 rename_with_units <- function(df, unit_system = c("metric", "imperial")) {
   unit_system <- match.arg(unit_system)
-  for (i in seq_len(nrow(measures))) {
-    m <- measures[i, ]
+  for (i in seq_len(nrow(conversion_lookup))) {
+    m <- conversion_lookup[i, ]
     df <- df |>
       rename_with(
         .fn = ~ paste(.x, m[[unit_system]], sep = "_", recycle0 = TRUE),
@@ -732,12 +755,7 @@ ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
 #' @param wx hourly weather data
 #' @returns sf object of grid cell polygons
 build_grids <- function(wx) {
-  wx |>
-    distinct(grid_id, grid_lat, grid_lng, time_zone) |>
-    rowwise() |>
-    mutate(geometry = ll_to_grid(grid_lat, grid_lng)) |>
-    ungroup() |>
-    st_set_geometry("geometry")
+  om_build_grids(wx)
 }
 
 # test_hourly_wx |> build_grids()
