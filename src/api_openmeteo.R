@@ -305,69 +305,180 @@ if (FALSE) {
 
 #' Determine date range and list of dates with complete weather by grid
 #' @param wx hourly weather data from API
-om_wx_status <- function(wx) {
-  per_day <- wx |>
-    arrange(grid_id, date, datetime_utc) |>
+# om_wx_status <- function(
+#   wx,
+#   start_date = min(wx$date),
+#   end_date = max(wx$date)
+# ) {
+#   if (nrow(wx) == 0) {
+#     return(tibble())
+#   }
+
+#   per_day <- wx |>
+#     arrange(grid_id, date, datetime_local) |>
+#     summarize(
+#       tz = coalesce(first(timezone), "UTC"),
+#       hours_actual = n_distinct(datetime_utc),
+#       .by = c(grid_id, date)
+#     ) |>
+#     mutate(
+#       start_hour = ymd_h(paste(date, "00"), tz = first(tz)),
+#       end_hour = if_else(
+#         date == today(tzone = first(tz)),
+#         now(tzone = first(tz)),
+#         ymd_h(paste(date, "23"), tz = first(tz))
+#       ),
+#       hours_expected = hours_diff(start_hour, end_hour) + 1,
+#       hours_missing = pmax(0, hours_expected - hours_actual),
+#       complete = hours_missing == 0
+#     )
+
+#   complete_dates <- per_day |>
+#     filter(complete) |>
+#     summarize(dates_have = list(unique(date)), .by = grid_id)
+
+#   incomplete_dates <- per_day |>
+#     filter(!complete) |>
+#     summarize(dates_missing = list(unique(date)), .by = grid_id)
+
+#   latest_utc <- wx |>
+#     summarize(latest_datetime_utc = max(datetime_utc), .by = grid_id)
+
+#   per_day |>
+#     summarize(
+#       date_min = min(date),
+#       date_max = max(date),
+#       hours_actual = sum(hours_actual),
+#       hours_expected = sum(hours_expected),
+#       days_expected = n(),
+#       days_actual = sum(complete),
+#       .by = grid_id
+#     ) |>
+#     mutate(
+#       days_missing = days_expected - days_actual,
+#       days_missing_pct = days_missing / days_expected,
+#       hours_missing = pmax(0, hours_expected - hours_actual),
+#       hours_missing_pct = hours_missing / hours_expected
+#     ) |>
+#     left_join(latest_utc, join_by(grid_id)) |>
+#     mutate(
+#       hours_stale = if_else(
+#         date_max == today("UTC"),
+#         as.numeric(difftime(now("UTC"), latest_datetime_utc, units = "hours")),
+#         0
+#       ),
+#       needs_download = days_missing > 0 | hours_stale > 1
+#     ) |>
+#     select(-latest_datetime_utc) |>
+#     left_join(complete_dates, join_by(grid_id)) |>
+#     left_join(incomplete_dates, join_by(grid_id))
+# }
+
+#' Similar to weather_status but returns number of hours per day
+#' to check for any incomplete days
+#' @param wx hourly weather data
+#' @param tz time
+om_wx_daily_status <- function(wx) {
+  wx |>
     summarize(
-      hours_actual = n_distinct(datetime_utc),
+      tz = coalesce(first(timezone), "UTC"),
+      hours = n(),
       .by = c(grid_id, date)
     ) |>
     mutate(
-      hours_expected = if_else(date == today("UTC"), hour(now("UTC")), 24L),
-      complete = hours_actual >= hours_expected
+      start_hour = ymd_hms(paste(date, "00:20:00"), tz = first(tz)),
+      end_hour = if_else(
+        date == today(tzone = first(tz)),
+        now(tzone = tz),
+        ymd_hms(paste(date, "23:20:00"), tz = first(tz))
+      ),
+      hours_expected = hours_diff(start_hour, end_hour) + 1,
+      hours_missing = hours_expected - hours
     )
+}
 
-  complete_dates <- per_day |>
-    filter(complete) |>
-    summarize(dates_have = list(unique(date)), .by = grid_id)
 
-  latest_utc <- wx |>
-    summarize(latest_datetime_utc = max(datetime_utc), .by = grid_id)
+#' Summarize downloaded weather data by grid cell and creates sf object
+#' used to intersect site points with existing weather data
+#' @param wx hourly weather data from `ibm_clean_resp` function
+#' @param start_date start of expected date range
+#' @param end_date end of expected date range
+#' @returns tibble
+om_wx_status <- function(wx, start_date, end_date) {
+  default <- tibble(
+    grid_id = NA,
+    needs_download = TRUE
+  )
 
-  per_day |>
+  if (nrow(wx) == 0) {
+    return(default)
+  }
+
+  selected_wx <- wx |>
+    filter(between(date, start_date, end_date))
+
+  if (nrow(selected_wx) == 0) {
+    return(default)
+  }
+
+  dates_expected <- seq.Date(start_date, end_date, 1)
+  stale_timeout <- 2
+
+  # summarize for each grid
+  selected_wx |>
+    om_wx_daily_status() |>
     summarize(
+      tz = first(tz),
       date_min = min(date),
       date_max = max(date),
-      hours_actual = sum(hours_actual),
-      hours_expected = sum(hours_expected),
-      days_expected = n(),
-      days_actual = sum(complete),
-      .by = grid_id
-    ) |>
-    mutate(
-      days_missing = days_expected - days_actual,
+      time_min = min(start_hour),
+      time_max = max(end_hour),
+      days_expected = length(dates_expected),
+      days_actual = n_distinct(date),
+      days_missing = max(0, days_expected - days_actual),
       days_missing_pct = days_missing / days_expected,
-      hours_missing = pmax(0, hours_expected - hours_actual),
-      hours_missing_pct = hours_missing / hours_expected
-    ) |>
-    left_join(latest_utc, join_by(grid_id)) |>
-    mutate(
+      dates_have = list(unique(date)),
+      dates_missing = list(setdiff(dates_expected, date)),
+      days_incomplete = sum(hours_missing > stale_timeout),
+      hours_expected = sum(hours_expected),
+      hours_missing = sum(hours_missing),
+      hours_missing_pct = hours_missing / hours_expected,
       hours_stale = if_else(
-        date_max == today("UTC"),
-        as.numeric(difftime(now("UTC"), latest_datetime_utc, units = "hours")),
+        date_max == today(tzone = tz),
+        hours_diff(time_max, now(tzone = tz)),
         0
       ),
-      needs_download = days_missing > 0 | hours_stale > 1
+      stale = hours_stale > stale_timeout,
+      needs_download = stale | days_missing > 0 | days_incomplete > 0,
+      .by = grid_id
     ) |>
-    select(-latest_datetime_utc) |>
-    left_join(complete_dates, join_by(grid_id))
+    select(-tz)
 }
 
 if (FALSE) {
+  test_wx <- read_csv("dev/test_wx.csv")
   om_wx_status(wx)
+  om_grid_status(wx)
+  om_grid_status(wx, as_date("2026-1-1"), today()) |>
+    annotate_grids() |>
+    pull(dates_missing)
 }
 
 #' Build full grid status by joining grid and weather constructors
 #' @param wx hourly weather data
-om_grid_status <- function(wx) {
-  x <- om_build_grids(wx) |>
-    st_drop_geometry()
-  y <- om_wx_status(wx)
+om_grid_status <- function(
+  wx,
+  start_date = min(wx$date),
+  end_date = max(wx$date)
+) {
+  x <- om_build_grids(wx)
+  y <- om_wx_status(wx, start_date, end_date)
   left_join(x, y, join_by(grid_id))
 }
 
 if (FALSE) {
   om_grid_status(wx)
+  om_wx_status(wx)
 }
 
 
@@ -535,7 +646,6 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
 
   message(sprintf("Requests completed in %.4f", as.numeric(now() - t0)))
-  echo(reqs$resp)
 
   parsed <- reqs |>
     reframe(req_lat, req_lng, om_parse_resp(resp))
@@ -556,7 +666,7 @@ if (FALSE) {
 
 #' get hourly data for sites from start to end date
 #' optionally include existing weather to identify needs
-#' @param sites list of sites that need a forecast
+#' @param sites df of sites that need a forecast. Must have cols `lat` and `lng`
 om_fetch_forecast <- function(sites) {
   message("Getting forecasts for ", nrow(sites), " sites")
   t0 <- now()
@@ -570,18 +680,27 @@ om_fetch_forecast <- function(sites) {
   message(sprintf("Requests completed in %.4f", as.numeric(now() - t0)))
 
   parsed <- reqs |>
-    reframe(lat, lng, om_parse_resp(resp))
+    reframe(site_id = id, lat, lng, om_parse_resp(resp))
 
-  if ("grid_id" %in% names(parsed)) {
-    om_build_hourly(parsed)
-  } else {
-    tibble()
+  if (!"grid_id" %in% names(parsed)) {
+    return(tibble())
   }
+
+  site_id_lookup <- parsed |> distinct(site_id, grid_id)
+  hourly <- om_build_hourly(parsed |> select(-site_id), is_forecast = TRUE)
+
+  if (nrow(hourly) == 0) {
+    return(tibble())
+  }
+  hourly |> left_join(site_id_lookup, join_by(grid_id))
 }
 
 if (FALSE) {
   fc <- om_fetch_forecast(sites1)
   fc
+  build_daily(wx)
+
+  wx
 }
 
 
@@ -753,7 +872,8 @@ om_merge_wx <- function(wx1, wx2) {
 
   new_wx <- anti_join(wx2, wx1, join_by(grid_id, datetime_utc))
   bind_rows(wx1, new_wx) |>
-    arrange(grid_id, datetime_utc)
+    arrange(grid_id, datetime_utc) |>
+    drop_na(datetime_utc)
 }
 
 if (FALSE) {

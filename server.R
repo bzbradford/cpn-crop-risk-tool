@@ -121,8 +121,11 @@ server <- function(input, output, session) {
     # can trigger a weather fetch
     fetch = NULL,
 
-    # last forecast fetch timestamp per grid_id
+    # last forecast fetch timestamp per site_id
     forecast_fetched_at = list(),
+
+    # per-site forecast data, list keyed by site_id (as character)
+    forecasts = list(),
 
     # table storing site locations
     sites = sites_template,
@@ -250,33 +253,34 @@ server <- function(input, output, session) {
   wx_grids <- reactive({
     wx <- rv$weather
     req(nrow(wx) > 0)
-    build_grids(wx)
+    om_build_grids(wx)
   })
 
   ## grid_status ----
   # per-grid date range, completeness, and freshness
   grid_status <- reactive({
     req(nrow(rv$weather) > 0)
-    om_grid_status(rv$weather)
+    sel_dates <- selected_dates()
+
+    om_grid_status(
+      rv$weather,
+      start_date = sel_dates$start,
+      end_date = sel_dates$end
+    )
   })
 
-  ## grids_with_status ----
-  # grid polygons (sf) annotated with status columns for map rendering
-  grids_with_status <- reactive({
-    status_cols <- grid_status() |>
-      select(
-        grid_id, date_min, date_max, days_expected, days_actual, days_missing,
-        days_missing_pct, hours_expected, hours_actual, hours_missing,
-        hours_missing_pct, hours_stale, needs_download
-      )
-    wx_grids() |> left_join(status_cols, join_by(grid_id))
-  })
+  # observe({
+  #   rv$weather |> write_csv("dev/test_wx.csv")
+  #   echo(grid_status())
+  # })
 
   ## sites_with_status ----
   # sites joined to grid status via non-spatial bbox join
   sites_with_status <- reactive({
     sites <- rv$sites
-    if (nrow(sites) == 0) return(tibble())
+    if (nrow(sites) == 0) {
+      return(tibble())
+    }
     if (nrow(rv$weather) == 0) {
       return(sites |> mutate(needs_download = TRUE))
     }
@@ -288,18 +292,89 @@ server <- function(input, output, session) {
 
   ## need_weather ----
   need_weather <- function() {
-    if (nrow(rv$sites) == 0) return(FALSE)
+    if (nrow(rv$sites) == 0) {
+      return(FALSE)
+    }
     dates <- expanded_dates()
     status <- if (nrow(rv$weather) > 0) grid_status() else NULL
     reqs <- om_prep_reqs(rv$sites, dates$start, dates$end, status)
-    nrow(reqs) > 0
+    if (nrow(reqs) > 0) {
+      return(TRUE)
+    }
+    if (dates$end >= today()) {
+      fc_fetched_at <- rv$forecast_fetched_at
+      for (sid in rv$sites$id) {
+        fetched_at <- fc_fetched_at[[as.character(sid)]]
+        if (
+          is.null(fetched_at) ||
+            as.numeric(now() - fetched_at, units = "hours") > 1
+        ) {
+          return(TRUE)
+        }
+      }
+    }
+    FALSE
   }
 
   # Open-Meteo Weather Extended Task -------------------------------------------
 
-  task_get_weather <- ExtendedTask$new(function(sites, start_date, end_date, wx, fc_fetched_at) {
+  task_get_weather <- ExtendedTask$new(function(
+    sites,
+    start_date,
+    end_date,
+    wx,
+    fc_fetched_at
+  ) {
     mirai(
-      om_fetch_unified(sites, start_date, end_date, wx, fc_fetched_at),
+      {
+        start_date <- as.Date(start_date)
+        end_date <- min(as.Date(end_date), today())
+
+        # Fetch new historical data and merge with existing
+        new_wx <- om_fetch_weather(sites, start_date, end_date, wx)
+        merged_wx <- om_merge_wx(wx, new_wx)
+        # merged_wx <- if (nrow(wx) == 0) {
+        #   new_wx
+        # } else if (nrow(new_wx) == 0) {
+        #   wx
+        # } else {
+        #   bind_rows(wx, new_wx) |>
+        #     arrange(grid_id, datetime_utc) |>
+        #     distinct(grid_id, datetime_utc, .keep_all = TRUE)
+        # }
+
+        # Fetch forecasts for sites with stale or missing forecasts
+        sites_need_fc <- if (end_date >= today()) {
+          sites |>
+            filter(map_lgl(id, function(sid) {
+              fetched_at <- fc_fetched_at[[as.character(sid)]]
+              is.null(fetched_at) ||
+                as.numeric(now() - fetched_at, units = "hours") > 1
+            }))
+        } else {
+          sites[0, ]
+        }
+
+        new_fc <- list()
+        new_fc_fetched_at <- fc_fetched_at
+
+        if (nrow(sites_need_fc) > 0) {
+          fc_result <- om_fetch_forecast(sites_need_fc)
+          if (nrow(fc_result) > 0) {
+            for (sid in unique(fc_result$site_id)) {
+              key <- as.character(sid)
+              new_fc[[key]] <- fc_result |> filter(site_id == sid)
+              new_fc_fetched_at[[key]] <- now()
+            }
+          }
+        }
+
+        if (nrow(merged_wx) == 0 && length(new_fc) == 0) {
+          return(NULL)
+        }
+
+        list(wx = merged_wx, fc = new_fc, fc_fetched_at = new_fc_fetched_at)
+      },
       .GlobalEnv,
       .args = lst(sites, start_date, end_date, wx, fc_fetched_at)
     )
@@ -340,7 +415,7 @@ server <- function(input, output, session) {
 
     rv$action_nonce <- runif(1) # regenerates the action button
 
-    if (is.null(res) || is.null(res$wx)) {
+    if (is.null(res)) {
       contact_us <- sprintf(
         "<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>",
         OPTS$contact_email
@@ -351,37 +426,79 @@ server <- function(input, output, session) {
         "to report the issue."
       )
       set_status(err)
-    } else if (nrow(res$wx) > 0) {
+    } else {
       set_status()
-      rv$weather <- res$wx
+      if (!is.null(res$wx) && nrow(res$wx) > 0) {
+        rv$weather <- res$wx
+      }
+      if (length(res$fc) > 0) {
+        fc <- rv$forecasts
+        for (sid in names(res$fc)) {
+          fc[[sid]] <- res$fc[[sid]]
+        }
+        rv$forecasts <- fc
+      }
       rv$forecast_fetched_at <- res$fc_fetched_at
     }
   })
+
+  # observe(echo(rv$forecasts))
 
   # Weather data ---------------------------------------------------------------
 
   ## wx_data ----
   wx_data <- reactive({
     weather <- rv$weather
+    forecasts <- rv$forecasts
     sites <- sites_with_status()
     sel_dates <- selected_dates()
 
     req(nrow(weather) > 0, nrow(sites) > 0)
 
     fetch_start <- sel_dates$start - days(30)
-    hourly <- weather |>
+
+    historical <- weather |>
       filter(
         grid_id %in% sites$grid_id,
         between(date, fetch_start, sel_dates$end)
-      ) |>
-      arrange(grid_id, datetime_utc, is_forecast) |>
+      )
+
+    # Per-site forecasts re-tagged with the site's historical grid_id
+    site_grid_map <- sites |>
+      filter(!is.na(grid_id)) |>
+      select(site_id = id, grid_id)
+
+    fc_rows <- imap(forecasts, function(fc_data, sid) {
+      if (is.null(fc_data) || nrow(fc_data) == 0) {
+        return(NULL)
+      }
+      hist_grid <- site_grid_map |>
+        filter(site_id == as.integer(sid)) |>
+        pull(grid_id)
+      if (length(hist_grid) == 0) {
+        return(NULL)
+      }
+      fc_data |>
+        # filter(between(date, fetch_start, sel_dates$end)) |>
+        mutate(grid_id = hist_grid) |>
+        select(-any_of("site_id"))
+    }) |>
+      bind_rows()
+
+    hourly <- bind_rows(historical, fc_rows) |>
+      drop_na(datetime_utc) |>
+      arrange(grid_id, datetime_utc) |>
       distinct(grid_id, datetime_utc, .keep_all = TRUE)
 
     daily_full <- build_daily(hourly)
 
     list(
       sites = sites,
-      dates = list(start = sel_dates$start, end = sel_dates$end, today = today()),
+      dates = list(
+        start = sel_dates$start,
+        end = sel_dates$end,
+        today = today()
+      ),
       hourly = hourly |>
         filter(date >= sel_dates$start) |>
         mutate(
@@ -984,7 +1101,7 @@ server <- function(input, output, session) {
     map_data = reactive(
       list(
         grids = wx_grids(),
-        grids_with_status = grids_with_status(),
+        grids_with_status = grid_status(),
         sites_with_status = sites_with_status()
       )
     )
