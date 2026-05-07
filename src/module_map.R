@@ -400,9 +400,10 @@ mapServer <- function(rv, map_data) {
 
         # if any, display them
         if (nrow(grids) > 0) {
+          grids <- annotate_grids(grids)
           proxy_map |>
             addPolygons(
-              data = annotate_grids(grids),
+              data = grids,
               weight = 1,
               label = ~label,
               layerId = ~grid_id,

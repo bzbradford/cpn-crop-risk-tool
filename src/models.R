@@ -41,8 +41,11 @@ if (FALSE) {
 #' @returns tibble
 build_daily <- function(hourly) {
   # grid attributes to be retained
+  # historical and forecast data have different grid id/lat/lng, but coming into
+  # this function forecasts are re-tagged to the historical grid_id
   lat_lng <- hourly |>
-    distinct(grid_id, grid_lat, grid_lng)
+    select(grid_id, grid_lat, grid_lng) |>
+    distinct(grid_id, .keep_all = TRUE)
 
   # summarized by calendar date
   summary_fns <- c("min" = calc_min, "mean" = calc_mean, "max" = calc_max)
@@ -53,7 +56,10 @@ build_daily <- function(hourly) {
         c(temperature, dew_point, dew_point_depression, relative_humidity),
         summary_fns
       ),
-      across(c(precipitation, snowfall), c("daily" = calc_sum, "max_hourly" = calc_max)),
+      across(
+        c(precipitation, snowfall),
+        c("daily" = calc_sum, "max_hourly" = calc_max)
+      ),
       across(c(pressure_msl, wind_speed), summary_fns),
       wind_gust_max = calc_max(wind_gust),
       across(c(wind_direction), summary_fns),
@@ -1178,7 +1184,9 @@ build_rye_biomass <- function(daily) {
       # season = if_else(year == min(year), 1, 2),
       gdd_0C = gdd_sine(temperature_min, temperature_max, 0, 35),
       gdd_total = cumsum(gdd_0C),
-      precip_fall = cumsum(precipitation_daily * (year(date) == year(min(date)))),
+      precip_fall = cumsum(
+        precipitation_daily * (year(date) == year(min(date)))
+      ),
       biomass = predict_rye_biomass(
         plant_doy,
         precip_fall,

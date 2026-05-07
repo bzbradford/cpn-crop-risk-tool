@@ -730,35 +730,11 @@ parse_coords <- function(str) {
   coords
 }
 
-# parse_coords("45, -89")
-# parse_coords("foo")
-
-#' Creates an appropriately sized grid polygon based on centroid coordinates
-#' @param lat latitude of point
-#' @param lng longitude of point
-#' @param d decimal degree distance from center to edge of grid
-#' @returns sf object
-ll_to_grid <- function(lat, lon, d = 1 / 45.5) {
-  m <- list(rbind(
-    c(lon - d, lat + d),
-    c(lon + d, lat + d),
-    c(lon + d, lat - d),
-    c(lon - d, lat - d),
-    c(lon - d, lat + d)
-  ))
-  st_sfc(st_polygon(m), crs = 4326)
+if (FALSE) {
+  parse_coords("45, -89")
+  parse_coords("foo")
 }
 
-# ll_to_grid(45, -89)
-
-#' Creates grid polygons based on weather data grid centroid
-#' @param wx hourly weather data
-#' @returns sf object of grid cell polygons
-build_grids <- function(wx) {
-  om_build_grids(wx)
-}
-
-# test_hourly_wx |> build_grids()
 
 #' Add some more information for displaying on the map
 annotate_grids <- function(grids_with_status) {
@@ -788,17 +764,46 @@ annotate_grids <- function(grids_with_status) {
         "Total days: ",
         days_expected,
         "<br>",
-        "Missing days: ",
-        days_missing,
-        sprintf(" (%.1f%%)", 100 * days_missing_pct),
-        "<br>",
-        "Missing hours: ",
-        hours_missing,
-        sprintf(" (%.1f%%)", 100 * hours_missing_pct),
-        "<br>"
+        if_else(
+          days_missing > 0,
+          sprintf(
+            "Days missing: %s (%.1f%%)<br>",
+            days_missing,
+            100 * days_missing_pct
+          ),
+          ""
+        ),
+        if_else(
+          hours_missing > 0,
+          sprintf(
+            "Hours missing: %s (%.1f%%)<br>",
+            hours_missing,
+            100 * hours_missing_pct
+          ),
+          ""
+        )
+        # lapply(dates_missing, function(dt) {
+        #   if (length(dt) == 0) {
+        #     return(NULL)
+        #   }
+        #   print(dt)
+        #   sprintf(
+        #     "Dates missing: %s",
+        #     paste(dt, collapse = ", ") |>
+        #       str_trunc(40)
+        #   )
+        # })
       ) |>
         lapply(HTML)
     )
+}
+
+if (FALSE) {
+  om_grid_status(wx, today() - days(7)) |>
+    annotate_grids() |>
+    leaflet() |>
+    addTiles() |>
+    addPolygons(label = ~label)
 }
 
 
