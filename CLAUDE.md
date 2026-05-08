@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-An R Shiny web application for agricultural weather monitoring and crop disease risk forecasting. It fetches weather data from IBM Environmental Intelligence Suite (~3km resolution) and NOAA, processes it through meteorological pipelines, and displays crop disease risk model results on interactive maps.
+An R Shiny web application for agricultural weather monitoring and crop disease risk forecasting. It fetches weather data from Open-Meteo (backended by ECMWF IFS weather data), processes it through meteorological pipelines, and displays crop disease risk model results on interactive maps.
 
 ## Common Commands
 
@@ -38,8 +38,6 @@ renv::snapshot()
 ### Source Modules (`src/`)
 | File | Role |
 |------|------|
-| `api_ibm.R` | IBM Weather API authentication and hourly data fetching |
-| `api_noaa_forecast.R` | NOAA 7-day forecast API |
 | `api_openmeteo_forecast.R` | Open-Meteo forecast API |
 | `models.R` | Data aggregation pipeline: hourly → daily → moving averages (7/14/21/30-day) → GDD → disease risk models |
 | `module_map.R` | Leaflet map Shiny module (site markers, grid polygons, bounds) |
@@ -57,7 +55,7 @@ renv::snapshot()
 ### Data Flow
 ```
 User defines site (lat/lon) →
-  IBM API fetch (hourly weather) →
+  API fetch (hourly weather) →
     Daily summaries →
       Moving averages →
         GDD calculations →

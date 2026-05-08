@@ -212,7 +212,7 @@ OPTS <- lst(
 # message and print an object to the console for testing
 echo <- function(x) {
   message(deparse(substitute(x)), " <", paste(class(x), collapse = ", "), ">")
-  str(x)
+  print(x)
 }
 
 # display a message showing elapsed time since last timestamp

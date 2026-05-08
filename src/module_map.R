@@ -170,7 +170,7 @@ mapServer <- function(rv, map_data) {
           map <- addProviderTiles(map, basemaps[[name]], group = name)
         }
 
-        # set up the js callback for CDL layers
+        # set up the js callback for cropland data layer (CDL)
         # assume CDL is available from prev year 60 days into the year
         # assigns leaflet map object to global var 'map' so it can be accessed
         yr <- year(Sys.Date()) - ifelse(yday(Sys.Date()) > 60, 1, 2)
