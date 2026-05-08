@@ -176,8 +176,10 @@ om_parse_resp <- function(resp) {
         as_tibble() %>%
         unnest(names(.)) |>
         mutate(
-          datetime_local = ymd_hm(time, tz = json$timezone),
-          datetime_utc = with_tz(datetime_local, "UTC"),
+          # datetime_local = ymd_hm(time, tz = json$timezone),
+          # datetime_utc = with_tz(datetime_local, "UTC"),
+          datetime_utc = ymd_hm(time),
+          datetime_local = with_tz(datetime_utc, json$timezone),
           date = as_date(datetime_local),
           .after = time
         ) |>
