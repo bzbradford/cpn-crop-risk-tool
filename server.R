@@ -333,15 +333,6 @@ server <- function(input, output, session) {
         # Fetch new historical data and merge with existing
         new_wx <- om_fetch_weather(sites, start_date, end_date, wx)
         merged_wx <- om_merge_wx(wx, new_wx)
-        # merged_wx <- if (nrow(wx) == 0) {
-        #   new_wx
-        # } else if (nrow(new_wx) == 0) {
-        #   wx
-        # } else {
-        #   bind_rows(wx, new_wx) |>
-        #     arrange(grid_id, datetime_utc) |>
-        #     distinct(grid_id, datetime_utc, .keep_all = TRUE)
-        # }
 
         # Fetch forecasts for sites with stale or missing forecasts
         sites_need_fc <- if (end_date >= today()) {
@@ -485,12 +476,26 @@ server <- function(input, output, session) {
     }) |>
       bind_rows()
 
-    hourly <- bind_rows(historical, fc_rows) |>
+    # includes 30 days prior to selected date
+    hourly_full <- bind_rows(historical, fc_rows) |>
       drop_na(datetime_utc) |>
       arrange(grid_id, datetime_utc) |>
       distinct(grid_id, datetime_utc, .keep_all = TRUE)
 
-    daily_full <- build_daily(hourly)
+    daily_full <- build_daily(hourly_full)
+
+    hourly <- hourly_full |>
+      filter(date >= sel_dates$start) |>
+      group_by(grid_id) |>
+      mutate(
+        precipitation_cumulative = cumsum(precipitation),
+        .after = precipitation
+      ) |>
+      mutate(
+        snowfall_cumulative = cumsum(snowfall),
+        .after = snowfall
+      ) |>
+      ungroup()
 
     list(
       sites = sites,
@@ -499,15 +504,7 @@ server <- function(input, output, session) {
         end = sel_dates$end,
         today = today()
       ),
-      hourly = hourly |>
-        filter(date >= sel_dates$start) |>
-        mutate(
-          precipitation_cumulative = cumsum(precipitation),
-          snowfall_cumulative = cumsum(snowfall),
-          .by = grid_id
-        ) |>
-        relocate(precipitation_cumulative, .after = precipitation) |>
-        relocate(snowfall_cumulative, .after = snowfall),
+      hourly = hourly,
       daily_full = daily_full,
       daily = daily_full |> filter(date >= sel_dates$start)
     )

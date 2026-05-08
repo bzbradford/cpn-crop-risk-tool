@@ -74,18 +74,18 @@ mapServer <- function(rv, map_data) {
           return()
         }
 
-        if (!validate_ll(site$lat, site$lng)) {
-          show_toast(
-            "Invalid location",
-            text = sprintf(
-              "The location %s, %s is not valid or is outside of our service area.",
-              site$lat,
-              site$lng
-            ),
-            position = "center"
-          )
-          req(FALSE)
-        }
+        # if (!validate_ll(site$lat, site$lng)) {
+        #   show_toast(
+        #     "Invalid location",
+        #     text = sprintf(
+        #       "The location %s, %s is not valid or is outside of our service area.",
+        #       site$lat,
+        #       site$lng
+        #     ),
+        #     position = "center"
+        #   )
+        #   req(FALSE)
+        # }
 
         # if several sites already, confirm each new map click
         # value may be FALSE if cancelled or string (name of site from modal)
@@ -155,13 +155,13 @@ mapServer <- function(rv, map_data) {
           # addMapPane("counties", 410) |>
           addMapPane("grid", 502) |>
           addMapPane("sites", 503) |>
-          addPolygons(
-            data = service_bounds,
-            color = "black",
-            weight = 2,
-            fill = FALSE,
-            options = pathOptions(pane = "extent", interactive = FALSE)
-          ) |>
+          # addPolygons(
+          #   data = service_bounds,
+          #   color = "black",
+          #   weight = 2,
+          #   fill = FALSE,
+          #   options = pathOptions(pane = "extent", interactive = FALSE)
+          # ) |>
           fit_bounds(OPTS$map_bounds_wi)
 
         # add basemaps
@@ -412,6 +412,7 @@ mapServer <- function(rv, map_data) {
               opacity = 1,
               # fillColor = ~color,
               fillOpacity = 0,
+              smoothFactor = 0,
               options = pathOptions(pane = "grid")
             )
         }
