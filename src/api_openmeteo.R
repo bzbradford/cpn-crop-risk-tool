@@ -157,7 +157,9 @@ om_resp_ok <- function(resp) {
   if (resp_is_error(resp)) {
     detail <- tryCatch(resp_body_json(resp)$reason, error = \(e) NULL)
     msg <- paste(resp_status(resp), resp_status_desc(resp))
-    if (!is.null(detail)) msg <- paste0(msg, ": ", detail)
+    if (!is.null(detail)) {
+      msg <- paste0(msg, ": ", detail)
+    }
     message("HTTP error [", msg, "] => ", resp$request$url)
     return(FALSE)
   }
@@ -170,7 +172,6 @@ om_parse_json <- function(resp) {
   attr <- tibble(
     grid_lat = json$latitude,
     grid_lng = json$longitude,
-    grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng),
     elevation = json$elevation,
     timezone = json$timezone,
     tz_offset = json$timezone_abbreviation
@@ -190,7 +191,9 @@ om_parse_json <- function(resp) {
 
 #' Validate then parse a single response; returns empty tibble on any failure
 om_parse_resp <- function(resp) {
-  if (!om_resp_ok(resp)) return(tibble())
+  if (!om_resp_ok(resp)) {
+    return(tibble())
+  }
   tryCatch(
     om_parse_json(resp),
     error = function(e) {
@@ -589,22 +592,36 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
 
   message(sprintf(
     "Fetching weather: %d sites, %s to %s (%d requests)",
-    nrow(sites), start_date, end_date, nrow(reqs)
+    nrow(sites),
+    start_date,
+    end_date,
+    nrow(reqs)
   ))
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
 
-  n_ok <- sum(vapply(reqs$resp, \(r) !inherits(r, "error") && !resp_is_error(r), logical(1L)))
-  message(sprintf(
-    "Completed in %.1fs: %d/%d succeeded",
-    as.numeric(now() - t0, units = "secs"), n_ok, nrow(reqs)
+  n_ok <- sum(vapply(
+    reqs$resp,
+    \(r) !inherits(r, "error") && !resp_is_error(r),
+    logical(1L)
   ))
 
-  parsed <- reqs |>
-    reframe(req_lat, req_lng, om_parse_resp(resp))
+  message(sprintf(
+    "Completed in %.1fs: %d/%d succeeded",
+    as.numeric(now() - t0, units = "secs"),
+    n_ok,
+    nrow(reqs)
+  ))
 
-  if (!"grid_id" %in% names(parsed)) return(tibble())
-  om_build_hourly(parsed)
+  if (n_ok == 0) {
+    warning("All requests failed")
+    return(NULL)
+  }
+
+  reqs |>
+    reframe(req_lat, req_lng, om_parse_resp(resp)) |>
+    mutate(grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng)) |>
+    om_build_hourly()
 }
 
 if (FALSE) {
@@ -614,42 +631,59 @@ if (FALSE) {
   om_wx_status(wx2)
 }
 
-#' get forecast data for sites
-#' @param sites df with cols `lat`, `lng`, and `id`
-om_fetch_forecast <- function(sites) {
+#' Get forecast data for grids. Unlike `om_fetch_weather`, forecasts are fetched
+#' using the grid_id and grid centroid of the historical weather data
+#' @param grids df with cols `grid_id`, `grid_lat`, `grid_lng`
+om_fetch_forecast <- function(grids) {
   t0 <- now()
-  message("Fetching forecasts for ", nrow(sites), " sites")
+  message("Fetching forecasts for ", nrow(grids), " grids")
 
-  reqs <- sites |>
+  reqs <- grids |>
     rowwise() |>
-    mutate(req = list(om_build_forecast_req(lat, lng)))
+    mutate(req = list(om_build_forecast_req(grid_lat, grid_lng)))
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
 
-  n_ok <- sum(vapply(reqs$resp, \(r) !inherits(r, "error") && !resp_is_error(r), logical(1L)))
-  message(sprintf(
-    "Completed in %.1fs: %d/%d succeeded",
-    as.numeric(now() - t0, units = "secs"), n_ok, nrow(reqs)
+  n_ok <- sum(vapply(
+    reqs$resp,
+    \(r) !inherits(r, "error") && !resp_is_error(r),
+    logical(1L)
   ))
 
-  parsed <- reqs |>
-    reframe(site_id = id, lat, lng, om_parse_resp(resp))
+  message(sprintf(
+    "Completed in %.1fs: %d/%d succeeded",
+    as.numeric(now() - t0, units = "secs"),
+    n_ok,
+    nrow(reqs)
+  ))
 
-  if (!"grid_id" %in% names(parsed)) return(tibble())
+  if (n_ok == 0) {
+    message("All forecast requests failed")
+    return(NULL)
+  }
 
-  site_id_lookup <- parsed |> distinct(site_id, grid_id)
-  hourly <- om_build_hourly(parsed |> select(-site_id))
-  if (nrow(hourly) == 0) return(tibble())
-
-  hourly |> left_join(site_id_lookup, join_by(grid_id))
+  # use the grid_id coming in from input grids
+  reqs |>
+    reframe(grid_id, om_parse_resp(resp)) |>
+    om_build_hourly()
 }
 
 if (FALSE) {
-  fc <- om_fetch_forecast(sites1)
-  fc
-  build_daily(wx)
+  sites1 <- load_sites("dev/hars-aars-msn.csv")
 
+  wx <- om_fetch_weather(sites1, today() - days(1), today())
   wx
+
+  fc <- om_build_grids(wx) |>
+    om_fetch_forecast()
+  fc
+
+  build_daily(wx)
+  build_daily(fc)
+
+  # should match
+  unique(wx$grid_id)
+  unique(fc$grid_id)
 }
 
 

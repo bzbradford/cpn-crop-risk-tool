@@ -1,6 +1,6 @@
 ## Crop Risk and Weather Forecasting Tool
 
-This app is designed to provide an easy interface to view and download hourly weather data for any point in the United States, and Canada below the 60°N latitude. Data is derived from a subscription to [IBM's Environmental Intelligence Suite](https://www.ibm.com/products/environmental-intelligence), with a spatial resolution of ~0.044 decimal degree (approximately 5 km E/W). 14-day hourly forecasts are sourced from [OpenMeteo](https://open-meteo.com).
+This app is designed as a decision support tool featuring plant disease and growth models and insect phenology models, with a focus on providing model outputs and color-coded risk or action interpretations. Users may also directly view and download the underlying hourly weather data, or daily/moving average/growing degree-day data derived from it. All historical and 16-day hourly forecast data is sourced from [Open-Meteo](https://open-meteo.com/en/docs), with a spatial resolution of ~9 km. Open-Meteo is backended by the [ECMWF Integrated Forecasting System](https://www.ecmwf.int/en/forecasts/documentation-and-support/changes-ecmwf-model), which provides global coverage.
 
 ### How to use the app
 
@@ -11,14 +11,16 @@ This app is designed to provide an easy interface to view and download hourly we
 
 ### Weather datasets
 
-Hourly weather parameters include:
+Hourly weather measures include:
 
 - Air temperature
 - Dew point
 - Relative humidity
-- Precipitation and snow accumulation
+- Precipitation (rain + snowfall)
+- Snowfall and snow depth
 - Wind speed and direction
 - Atmospheric pressure
+- Soil temperature and moisture
 
 In addition to hourly weather, derived datasets are generated including:
 
@@ -45,7 +47,7 @@ For each hourly weather parameter, the minimum, mean, and maximum value are gene
 
 #### Moving averages
 
-7, 14, 21, and 30-day moving averages are calculated for each daily value using the `roll_apply` function from the `zoo` package. Either centered or right-aligned (trailing) moving average types are available.
+7, 14, 21, and 30-day moving averages are calculated for each daily value. Either centered or right-aligned (trailing) moving average types are available.
 
 #### Growing degree days
 
@@ -56,11 +58,12 @@ The single sine method is used to calculate growing degree days from daily minim
 Most values can be shown in either imperial or metric units.
 
 - Temperature and dew point: °C or °F
-- Relative humidity: %
-- Precipitation (rain/melted snow): mm or in
-- Snow accumulation: cm or in
-- Atmospheric pressure: mbar or inHg
-- Wind speed: km/h or mph
+- Relative humidity and soil moisture: %
+- Precipitation (rain/melted snowfall) and evapotranspiration: mm or in
+- Snowfall: cm or in
+- Snow depth: m or ft
+- Atmospheric pressure: kPa or inHg
+- Wind speed and gust: km/h or mph
 - Wind direction: compass degrees (N=0°, E=90°, etc.)
 - Growing degree day base/upper thresholds and accumulations are always in Fahrenheit Degree Days. Conversion to Celsius Degree Days may be accomplished by dividing by 1.8.
 
