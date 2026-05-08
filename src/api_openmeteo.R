@@ -68,6 +68,7 @@ openmeteo_vars <- vctrs::vec_c(
   # "weather_code",
 )
 
+# make sure all of these are in the conversion lookup table
 stopifnot(
   setdiff(names(openmeteo_vars), conversion_lookup$measure) |>
     length() ==
@@ -210,8 +211,7 @@ if (FALSE) {
 
 #' Creates the working hourly weather dataset from parsed openmeteo response
 #' @param wx hourly weather data from `parse_openmeteo` function
-#' @param is_forecast tag rows as forecast (TRUE) or history (FALSE)
-om_build_hourly <- function(wx, is_forecast = FALSE) {
+om_build_hourly <- function(wx) {
   if (nrow(wx) == 0) {
     return(tibble())
   }
@@ -229,7 +229,6 @@ om_build_hourly <- function(wx, is_forecast = FALSE) {
       date,
       all_of(openmeteo_vars)
     ) |>
-    mutate(is_forecast = is_forecast, .after = date) |>
     mutate(
       dew_point_depression = abs(temperature - dew_point),
       .after = dew_point
@@ -255,124 +254,73 @@ if (FALSE) {
 
 ## Grid and status helpers ----
 
-#' identify unique grids from weather data returned by API
-#' @param wx weather data from API, used to construct distinct weather grids
-#' @param dx half grid dim in x (lng) direction
-#' @param dy half grid dim in y (lat) direction
-#' @param eps precision used for rounding centroid coordinates
-om_build_grids <- function(wx, dx = 0.07, dy = 0.035, eps = 0.0025) {
+#' Determine grid size from Open Meteo response centroid coordinates
+#' Assumes data comes from ECMWF IFS which uses an O1280 grid
+#' @param lat grid centroid latitude vector
+#' @param lng grid centroid longitude vector
+get_o1280_cells <- function(grid_lat, grid_lng) {
+  N <- 1280
+  d_lat <- 180 / (2 * N) # constant latitudinal step (~0.0703125)
+
+  # identify the latitude ring index (j)
+  # j = 0 is the first ring below the North Pole
+  j <- floor((90 - grid_lat) / d_lat)
+  j <- pmax(0, pmin(j, (2 * N) - 1))
+
+  # calculate latitude boundaries
+  ymax <- 90 - (j * d_lat)
+  ymin <- 90 - ((j + 1) * d_lat)
+
+  # determine longitude spacing for each ring
+  # k is the distance from the NEAREST pole (1 to N)
+  k <- pmin(j + 1, (2 * N) - j)
+  n_lng <- 20 + 4 * (k - 1)
+  d_lng <- 360 / n_lng
+
+  # find the longitude index (i) and center
+  i <- round(grid_lng / d_lng)
+  c_lng <- i * d_lng
+
+  # calculate longitude boundaries (center +/- half-width)
+  xmin <- c_lng - (d_lng / 2)
+  xmax <- c_lng + (d_lng / 2)
+
+  # construct polygons using WKT
+  wkt_vec <- sprintf(
+    "POLYGON((%.5f %.5f, %.5f %.5f, %.5f %.5f, %.5f %.5f, %.5f %.5f))",
+    xmin,
+    ymin,
+    xmax,
+    ymin,
+    xmax,
+    ymax,
+    xmin,
+    ymax,
+    xmin,
+    ymin
+  )
+
+  tibble(
+    xmin = xmin,
+    xmax = xmax,
+    ymin = ymin,
+    ymax = ymax,
+    geometry = st_as_sfc(wkt_vec, crs = 4326)
+  )
+}
+
+#' Builds unique grids from downloaded weather data
+#' @param wx weather data from `om_parse_resp` or `build_hourly`
+om_build_grids <- function(wx) {
   tz_lookup <- wx |> distinct(grid_id, timezone)
 
   wx |>
-    distinct(grid_lat, grid_lng, grid_id) |>
-    mutate(
-      cx = round_to(grid_lng, eps),
-      cy = round_to(grid_lat, eps),
-      xmin = cx - dx,
-      xmax = cx + dx,
-      ymin = cy - dy,
-      ymax = cy + dy
-    ) |>
-    mutate(
-      geometry = sprintf(
-        "POLYGON((%.4f %.4f, %.4f %.4f, %.4f %.4f, %.4f %.4f, %.4f %.4f))",
-        xmin,
-        ymax,
-        xmax,
-        ymax,
-        xmax,
-        ymin,
-        xmin,
-        ymin,
-        xmin,
-        ymax
-      )
-    ) |>
-    st_as_sf(wkt = "geometry", crs = 4326) |>
+    distinct(grid_id, grid_lat, grid_lng) |>
+    mutate(get_o1280_cells(grid_lat, grid_lng)) |>
+    st_as_sf() |>
     left_join(tz_lookup, join_by(grid_id))
 }
 
-if (FALSE) {
-  om_build_grids(wx)
-
-  wx |>
-    om_build_grids() |>
-    leaflet() |>
-    addTiles() |>
-    addPolygons()
-}
-
-
-#' Determine date range and list of dates with complete weather by grid
-#' @param wx hourly weather data from API
-# om_wx_status <- function(
-#   wx,
-#   start_date = min(wx$date),
-#   end_date = max(wx$date)
-# ) {
-#   if (nrow(wx) == 0) {
-#     return(tibble())
-#   }
-
-#   per_day <- wx |>
-#     arrange(grid_id, date, datetime_local) |>
-#     summarize(
-#       tz = coalesce(first(timezone), "UTC"),
-#       hours_actual = n_distinct(datetime_utc),
-#       .by = c(grid_id, date)
-#     ) |>
-#     mutate(
-#       start_hour = ymd_h(paste(date, "00"), tz = first(tz)),
-#       end_hour = if_else(
-#         date == today(tzone = first(tz)),
-#         now(tzone = first(tz)),
-#         ymd_h(paste(date, "23"), tz = first(tz))
-#       ),
-#       hours_expected = hours_diff(start_hour, end_hour) + 1,
-#       hours_missing = pmax(0, hours_expected - hours_actual),
-#       complete = hours_missing == 0
-#     )
-
-#   complete_dates <- per_day |>
-#     filter(complete) |>
-#     summarize(dates_have = list(unique(date)), .by = grid_id)
-
-#   incomplete_dates <- per_day |>
-#     filter(!complete) |>
-#     summarize(dates_missing = list(unique(date)), .by = grid_id)
-
-#   latest_utc <- wx |>
-#     summarize(latest_datetime_utc = max(datetime_utc), .by = grid_id)
-
-#   per_day |>
-#     summarize(
-#       date_min = min(date),
-#       date_max = max(date),
-#       hours_actual = sum(hours_actual),
-#       hours_expected = sum(hours_expected),
-#       days_expected = n(),
-#       days_actual = sum(complete),
-#       .by = grid_id
-#     ) |>
-#     mutate(
-#       days_missing = days_expected - days_actual,
-#       days_missing_pct = days_missing / days_expected,
-#       hours_missing = pmax(0, hours_expected - hours_actual),
-#       hours_missing_pct = hours_missing / hours_expected
-#     ) |>
-#     left_join(latest_utc, join_by(grid_id)) |>
-#     mutate(
-#       hours_stale = if_else(
-#         date_max == today("UTC"),
-#         as.numeric(difftime(now("UTC"), latest_datetime_utc, units = "hours")),
-#         0
-#       ),
-#       needs_download = days_missing > 0 | hours_stale > 1
-#     ) |>
-#     select(-latest_datetime_utc) |>
-#     left_join(complete_dates, join_by(grid_id)) |>
-#     left_join(incomplete_dates, join_by(grid_id))
-# }
 
 #' Similar to weather_status but returns number of hours per day
 #' to check for any incomplete days
@@ -435,14 +383,12 @@ om_wx_status <- function(wx, start_date, end_date) {
       time_max = max(end_hour),
       days_expected = length(dates_expected),
       days_actual = n_distinct(date),
+      days_incomplete = sum(hours_missing > stale_timeout),
       days_missing = max(0, days_expected - days_actual),
-      days_missing_pct = days_missing / days_expected,
       dates_have = list(unique(date)),
       dates_missing = list(setdiff(dates_expected, date)),
-      days_incomplete = sum(hours_missing > stale_timeout),
       hours_expected = sum(hours_expected),
       hours_missing = sum(hours_missing),
-      hours_missing_pct = hours_missing / hours_expected,
       hours_stale = if_else(
         date_max == today(tzone = tz),
         hours_diff(time_max, now(tzone = tz)),
@@ -687,7 +633,7 @@ om_fetch_forecast <- function(sites) {
   }
 
   site_id_lookup <- parsed |> distinct(site_id, grid_id)
-  hourly <- om_build_hourly(parsed |> select(-site_id), is_forecast = TRUE)
+  hourly <- om_build_hourly(parsed |> select(-site_id))
 
   if (nrow(hourly) == 0) {
     return(tibble())
@@ -701,158 +647,6 @@ if (FALSE) {
   build_daily(wx)
 
   wx
-}
-
-
-## Unified fetch (history + forecast) ----
-
-#' Fetch historical and forecast weather in one parallel batch
-#' @param sites sites df with `lat` and `lng` cols
-#' @param start_date start of requested date range
-#' @param end_date end of requested date range
-#' @param wx existing weather tibble (empty tibble if none)
-#' @param fc_fetched_at named list keyed by grid_id, value = POSIXct of last forecast fetch
-#' @param fc_stale_hours hours before a forecast is considered stale and re-fetched
-om_fetch_unified <- function(
-  sites,
-  start_date,
-  end_date,
-  wx = tibble(),
-  fc_fetched_at = list(),
-  fc_stale_hours = 1
-) {
-  t0 <- now()
-  start_date <- as.Date(start_date)
-  end_date <- min(as.Date(end_date), today())
-
-  grids <- if (nrow(wx) == 0) NULL else om_grid_status(wx)
-
-  # 1. History requests
-  hist_reqs <- om_prep_reqs(sites, start_date, end_date, grids)
-
-  # 2. Forecast requests (only if end_date >= today)
-  fc_reqs <- tibble()
-  if (end_date >= today()) {
-    fc_coords <- if (!is.null(grids)) {
-      om_join_grids(sites, grids) |>
-        mutate(
-          req_lat = coalesce(grid_lat, lat),
-          req_lng = coalesce(grid_lng, lng),
-          gid = sprintf("%.3f,%.3f", req_lat, req_lng)
-        ) |>
-        distinct(req_lat, req_lng, gid)
-    } else {
-      sites |>
-        distinct(req_lat = lat, req_lng = lng) |>
-        mutate(gid = sprintf("%.3f,%.3f", req_lat, req_lng))
-    }
-
-    fc_coords <- fc_coords |>
-      rowwise() |>
-      filter(
-        is.null(fc_fetched_at[[gid]]) ||
-          as.numeric(difftime(now(), fc_fetched_at[[gid]], units = "hours")) >
-            fc_stale_hours
-      ) |>
-      ungroup()
-
-    if (nrow(fc_coords) > 0) {
-      fc_reqs <- fc_coords |>
-        rowwise() |>
-        mutate(req = list(om_build_forecast_req(req_lat, req_lng))) |>
-        ungroup()
-    }
-  }
-
-  n_hist <- nrow(hist_reqs)
-  n_fc <- nrow(fc_reqs)
-
-  if (n_hist == 0 && n_fc == 0) {
-    message("No requests needed")
-    return(list(wx = wx, fc_fetched_at = fc_fetched_at))
-  }
-
-  message(sprintf("Fetching %s history + %s forecast requests", n_hist, n_fc))
-
-  # 3. Combine and perform all requests in one parallel batch
-  all_reqs <- bind_rows(
-    if (n_hist > 0) mutate(hist_reqs, .is_fc = FALSE) else NULL,
-    if (n_fc > 0) mutate(fc_reqs, .is_fc = TRUE) else NULL
-  )
-
-  all_reqs$resp <- req_perform_parallel(all_reqs$req, on_error = "continue")
-
-  message(sprintf(
-    "Requests completed in %.2f s",
-    as.numeric(difftime(now(), t0, units = "secs"))
-  ))
-
-  # 4. Parse history responses
-  new_hist <- if (n_hist > 0) {
-    filter(all_reqs, !.is_fc) |>
-      reframe(req_lat, req_lng, om_parse_resp(resp)) |>
-      om_build_hourly(is_forecast = FALSE)
-  } else {
-    tibble()
-  }
-
-  # 5. Parse forecast responses
-  new_fc <- if (n_fc > 0) {
-    filter(all_reqs, .is_fc) |>
-      reframe(req_lat, req_lng, om_parse_resp(resp)) |>
-      om_build_hourly(is_forecast = TRUE)
-  } else {
-    tibble()
-  }
-
-  # 6. Merge into existing wx
-  refreshed_grids <- if (nrow(new_fc) > 0) {
-    unique(new_fc$grid_id)
-  } else {
-    character(0)
-  }
-
-  merged <- wx
-
-  # Drop stale forecast rows for grids that just got a fresh forecast
-  if (
-    length(refreshed_grids) > 0 &&
-      nrow(merged) > 0 &&
-      "is_forecast" %in% names(merged)
-  ) {
-    merged <- merged |> filter(!(is_forecast & grid_id %in% refreshed_grids))
-  }
-
-  # Add new history rows (anti-join avoids duplicates)
-  if (nrow(new_hist) > 0) {
-    merged <- om_merge_wx(merged, new_hist)
-  }
-
-  # Append new forecast rows
-  if (nrow(new_fc) > 0) {
-    merged <- bind_rows(merged, new_fc) |> arrange(grid_id, datetime_utc)
-  }
-
-  # 7. Update forecast fetch timestamps for refreshed grids
-  updated_fc_fetched_at <- fc_fetched_at
-  for (gid in refreshed_grids) {
-    updated_fc_fetched_at[[gid]] <- now()
-  }
-
-  list(wx = merged, fc_fetched_at = updated_fc_fetched_at)
-}
-
-if (FALSE) {
-  res <- om_fetch_unified(sites1, today() - days(1), today())
-  om_wx_status(res$wx)
-  res2 <- om_fetch_unified(
-    sites1,
-    today() - days(3),
-    today() + days(7),
-    res$wx,
-    res$fc_fetched_at
-  )
-  # second call should skip all requests
 }
 
 
