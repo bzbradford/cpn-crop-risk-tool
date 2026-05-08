@@ -6,22 +6,31 @@ source("../../global.R", chdir = TRUE)
 
 # save a response example for tests
 if (FALSE) {
-  # two sites, semi-overlapping 2-month windows
-  test_ibm_response <- bind_rows(
-    ibm_create_reqs(
-      lat = 45,
-      lng = -89,
-      dates_need = seq.Date(ymd("2025-5-1"), ymd("2025-7-1"))
-    ) |>
-      get_ibm(),
-    ibm_create_reqs(
-      lat = 50,
-      lng = -90,
-      dates_need = seq.Date(ymd("2025-6-1"), ymd("2025-8-1"))
-    ) |>
-      get_ibm(),
+  test_sites <- load_sites("tests/testthat/example-sites.csv")
+
+  test_hourly_wx <- om_fetch_weather(
+    test_sites,
+    ymd("2025-1-1"),
+    ymd("2025-12-31")
   )
-  saveRDS(test_ibm_response, "tests/testthat/test_ibm_response.rds")
+  saveRDS(test_hourly_wx, "tests/testthat/test_hourly_wx.rds")
+
+  # two sites, semi-overlapping 2-month windows
+  # test_ibm_response <- bind_rows(
+  #   ibm_create_reqs(
+  #     lat = 45,
+  #     lng = -89,
+  #     dates_need = seq.Date(ymd("2025-5-1"), ymd("2025-7-1"))
+  #   ) |>
+  #     get_ibm(),
+  #   ibm_create_reqs(
+  #     lat = 50,
+  #     lng = -90,
+  #     dates_need = seq.Date(ymd("2025-6-1"), ymd("2025-8-1"))
+  #   ) |>
+  #     get_ibm(),
+  # )
+  # saveRDS(test_ibm_response, "tests/testthat/test_ibm_response.rds")
 
   # two sites, full year
   test_hourly_wx <- fetch_weather(
