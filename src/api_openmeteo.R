@@ -146,62 +146,65 @@ if (FALSE) {
 
 ## Parse response ----
 
-#' handle valid response from open meteo
-#' @param resp a response
-om_parse_resp <- function(resp) {
-  if (resp_is_error(resp)) {
-    message("HTTP ERROR ==> ", resp$request$url)
-    warning(
-      "Request failed with status ",
-      resp_status(resp),
-      ": ",
-      resp_status_desc(resp)
-    )
-    return(tibble())
+# Validate a response from req_perform_parallel. Handles both error conditions
+# (network failures/timeouts) and HTTP error statuses. Returns FALSE and emits
+# a diagnostic message on any failure; TRUE if safe to parse.
+om_resp_ok <- function(resp) {
+  if (inherits(resp, "error")) {
+    message("Network error: ", conditionMessage(resp))
+    return(FALSE)
   }
+  if (resp_is_error(resp)) {
+    detail <- tryCatch(resp_body_json(resp)$reason, error = \(e) NULL)
+    msg <- paste(resp_status(resp), resp_status_desc(resp))
+    if (!is.null(detail)) msg <- paste0(msg, ": ", detail)
+    message("HTTP error [", msg, "] => ", resp$request$url)
+    return(FALSE)
+  }
+  TRUE
+}
 
+# Parse a validated response into a tidy tibble (assumes resp passed om_resp_ok)
+om_parse_json <- function(resp) {
+  json <- resp_body_json(resp)
+  attr <- tibble(
+    grid_lat = json$latitude,
+    grid_lng = json$longitude,
+    grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng),
+    elevation = json$elevation,
+    timezone = json$timezone,
+    tz_offset = json$timezone_abbreviation
+  )
+  hourly <- json$hourly |>
+    as_tibble() %>%
+    unnest(names(.)) |>
+    mutate(
+      datetime_utc = ymd_hm(time),
+      datetime_local = with_tz(datetime_utc, json$timezone),
+      date = as_date(datetime_local),
+      .after = time
+    ) |>
+    select(-time)
+  bind_cols(attr, hourly)
+}
+
+#' Validate then parse a single response; returns empty tibble on any failure
+om_parse_resp <- function(resp) {
+  if (!om_resp_ok(resp)) return(tibble())
   tryCatch(
-    {
-      json <- resp_body_json(resp)
-      attr <- tibble(
-        grid_lat = json$latitude,
-        grid_lng = json$longitude,
-        grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng),
-        elevation = json$elevation,
-        timezone = json$timezone,
-        tz_offset = json$timezone_abbreviation
-      )
-
-      hourly <- json$hourly |>
-        as_tibble() %>%
-        unnest(names(.)) |>
-        mutate(
-          # datetime_local = ymd_hm(time, tz = json$timezone),
-          # datetime_utc = with_tz(datetime_local, "UTC"),
-          datetime_utc = ymd_hm(time),
-          datetime_local = with_tz(datetime_utc, json$timezone),
-          date = as_date(datetime_local),
-          .after = time
-        ) |>
-        select(-time)
-
-      bind_cols(attr, hourly)
-    },
+    om_parse_json(resp),
     error = function(e) {
-      message("Parsing response failed: ", e$message)
+      message("Parse failed: ", e$message)
       tibble()
     }
   )
 }
 
 if (FALSE) {
-  # historical weather
   req <- om_build_req(45, -89, today() - days(1), today(), "temperature_2m")
   resp <- req_perform(req)
   om_parse_resp(resp)
-  range(df$datetime_local)
 
-  # forecast
   om_build_forecast_req(45, -89) |>
     req_perform() |>
     om_parse_resp() |>
@@ -576,33 +579,32 @@ if (FALSE) {
 #' optionally include existing weather to identify needs
 om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
   t0 <- now()
-  grids <- if (nrow(wx) == 0) {
-    NULL
-  } else {
-    om_grid_status(wx)
-  }
+  grids <- if (nrow(wx) > 0) om_grid_status(wx) else NULL
   reqs <- om_prep_reqs(sites, start_date, end_date, grids)
 
+  if (nrow(reqs) == 0) {
+    message("No new data needed")
+    return(wx)
+  }
+
   message(sprintf(
-    "Getting weather for %s sites from %s to %s with %s requests",
-    nrow(sites),
-    start_date,
-    end_date,
-    nrow(reqs)
+    "Fetching weather: %d sites, %s to %s (%d requests)",
+    nrow(sites), start_date, end_date, nrow(reqs)
   ))
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
 
-  message(sprintf("Requests completed in %.4f", as.numeric(now() - t0)))
+  n_ok <- sum(vapply(reqs$resp, \(r) !inherits(r, "error") && !resp_is_error(r), logical(1L)))
+  message(sprintf(
+    "Completed in %.1fs: %d/%d succeeded",
+    as.numeric(now() - t0, units = "secs"), n_ok, nrow(reqs)
+  ))
 
   parsed <- reqs |>
     reframe(req_lat, req_lng, om_parse_resp(resp))
 
-  if ("grid_id" %in% names(parsed)) {
-    om_build_hourly(parsed)
-  } else {
-    tibble()
-  }
+  if (!"grid_id" %in% names(parsed)) return(tibble())
+  om_build_hourly(parsed)
 }
 
 if (FALSE) {
@@ -612,12 +614,11 @@ if (FALSE) {
   om_wx_status(wx2)
 }
 
-#' get hourly data for sites from start to end date
-#' optionally include existing weather to identify needs
-#' @param sites df of sites that need a forecast. Must have cols `lat` and `lng`
+#' get forecast data for sites
+#' @param sites df with cols `lat`, `lng`, and `id`
 om_fetch_forecast <- function(sites) {
-  message("Getting forecasts for ", nrow(sites), " sites")
   t0 <- now()
+  message("Fetching forecasts for ", nrow(sites), " sites")
 
   reqs <- sites |>
     rowwise() |>
@@ -625,21 +626,21 @@ om_fetch_forecast <- function(sites) {
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
 
-  message(sprintf("Requests completed in %.4f", as.numeric(now() - t0)))
+  n_ok <- sum(vapply(reqs$resp, \(r) !inherits(r, "error") && !resp_is_error(r), logical(1L)))
+  message(sprintf(
+    "Completed in %.1fs: %d/%d succeeded",
+    as.numeric(now() - t0, units = "secs"), n_ok, nrow(reqs)
+  ))
 
   parsed <- reqs |>
     reframe(site_id = id, lat, lng, om_parse_resp(resp))
 
-  if (!"grid_id" %in% names(parsed)) {
-    return(tibble())
-  }
+  if (!"grid_id" %in% names(parsed)) return(tibble())
 
   site_id_lookup <- parsed |> distinct(site_id, grid_id)
   hourly <- om_build_hourly(parsed |> select(-site_id))
+  if (nrow(hourly) == 0) return(tibble())
 
-  if (nrow(hourly) == 0) {
-    return(tibble())
-  }
   hourly |> left_join(site_id_lookup, join_by(grid_id))
 }
 
