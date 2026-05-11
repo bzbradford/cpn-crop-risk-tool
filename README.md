@@ -5,9 +5,8 @@ This app is designed as a decision support tool featuring plant disease and grow
 ### How to use the app
 
 1.  **Define one or more sites of interest.** Sites can be added by uploading a CSV from the sidebar, by clicking on the map, by searching for a place name in the search bar at the lower left of the map, or by entering GPS coordinates in the search bar at the lower right of the map. Your site list can be saved to a CSV, but it is also saved in a browser cookie and restored when revisiting the app, unless the cookie has been deleted.
-2.  **Fetch weather data.** Once you have one more sites defined, click the big "Fetch Weather" button to load data from the IBM service. If you have already downloaded data there may be some data available in the app, but it may be missing some recent weather data. Weather fetching will also occur automatically after a delay.
-3.  **View crop risk model results.** Use the "Crop risk models" tab to select a crop and risk model to display in the charts feed and on the map.
-4.  **Explore weather data.** Use the "Charts and data" tab to explore hourly, daily, and other derived weather variables on a chart. This weather data can also be downloaded from this tab.
+2.  **View crop risk model results.** Use the "Crop risk models" tab to select a crop and risk model to display in the charts feed and on the map.
+3.  **Explore weather data.** Use the "Charts and data" tab to explore hourly, daily, and other derived weather variables on a chart. This weather data can also be downloaded from this tab.
 
 ### Weather datasets
 

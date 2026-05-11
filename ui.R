@@ -60,13 +60,13 @@ ui <- fluidPage(
       ),
       div(
         style = "margin-top: 1rem;",
-        uiOutput("action_ui") |>
-          withSpinner(
-            type = 8,
-            size = .5,
-            proxy.height = 70,
-            caption = "Please wait..."
-          ),
+        # uiOutput("action_ui") |>
+        #   withSpinner(
+        #     type = 8,
+        #     size = .5,
+        #     proxy.height = 70,
+        #     caption = "Please wait..."
+        #   ),
         uiOutput("status_ui")
       )
     ),

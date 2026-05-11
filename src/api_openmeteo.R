@@ -260,42 +260,80 @@ if (FALSE) {
 }
 
 
-## Grid and status helpers ----
+## Grid cell generator ----
 
 #' Determine grid size from Open Meteo response centroid coordinates
 #' Assumes data comes from ECMWF IFS which uses an O1280 grid
-#' @param lat grid centroid latitude vector
-#' @param lng grid centroid longitude vector
+
+# Build the O1280 grid geometry once, cache in package env / memoise / .GlobalEnv
+.o1280_cache <- new.env(parent = emptyenv())
+.build_o1280 <- function(N = 1280) {
+  if (!is.null(.o1280_cache$gauss_lats)) {
+    return(invisible())
+  }
+
+  # generate Gauss-Legendre nodes
+  gq <- statmod::gauss.quad(2 * N, kind = "legendre")
+  # nodes are in [-1, 1] ascending; flip to descending so index 1 = ring nearest N pole
+  nodes <- rev(gq$nodes)
+  gauss_lats <- asin(nodes) * 180 / pi # length 2N, descending
+
+  # Cell latitude edges: midpoints of adjacent Gaussian lats, with +/-90 at the caps.
+  # edges[j]   = north edge of ring j
+  # edges[j+1] = south edge of ring j
+  edges <- c(90, 0.5 * (gauss_lats[-length(gauss_lats)] + gauss_lats[-1]), -90)
+
+  .o1280_cache$N <- N
+  .o1280_cache$gauss_lats <- gauss_lats
+  .o1280_cache$edges <- edges
+  # Pre-sort descending edges into ascending negatives for fast findInterval
+  .o1280_cache$neg_edges_asc <- -edges
+  invisible()
+}
+
+#' Bounding boxes for O1280 grid cells given centroid lat/lng
+#'
+#' @param grid_lat,grid_lng Numeric vectors of equal length (degrees). These
+#'   are the centroids returned by Open-Meteo's ECMWF endpoint.
+#' @return A tibble with xmin/xmax/ymin/ymax, ring index, and an sfc geometry
+#'   column in EPSG:4326.
 get_o1280_cells <- function(grid_lat, grid_lng) {
-  N <- 1280
-  d_lat <- 180 / (2 * N) # constant latitudinal step (~0.0703125)
+  stopifnot(length(grid_lat) == length(grid_lng))
+  .build_o1280()
+  N <- .o1280_cache$N
+  gauss_lats <- .o1280_cache$gauss_lats
+  edges <- .o1280_cache$edges
 
-  # identify the latitude ring index (j)
-  # j = 0 is the first ring below the North Pole
-  j <- floor((90 - grid_lat) / d_lat)
-  j <- pmax(0, pmin(j, (2 * N) - 1))
+  # Snap each input lat to its ring index (1-based in R).
+  # edges is descending: edges[j] > center[j] > edges[j+1].
+  # findInterval on -edges (ascending) gives j directly.
+  j <- findInterval(-grid_lat, .o1280_cache$neg_edges_asc, all.inside = TRUE)
+  j <- pmin(pmax(j, 1L), 2L * N)
 
-  # calculate latitude boundaries
-  ymax <- 90 - (j * d_lat)
-  ymin <- 90 - ((j + 1) * d_lat)
-
-  # determine longitude spacing for each ring
-  # k is the distance from the NEAREST pole (1 to N)
-  k <- pmin(j + 1, (2 * N) - j)
-  n_lng <- 20 + 4 * (k - 1)
+  # k = ring distance from nearest pole (1..N)
+  k <- pmin(j, 2L * N - j + 1L)
+  n_lng <- 20L + 4L * (k - 1L)
   d_lng <- 360 / n_lng
 
-  # find the longitude index (i) and center
-  i <- round(grid_lng / d_lng)
-  c_lng <- i * d_lng
+  # Latitude edges (exact)
+  ymax <- edges[j]
+  ymin <- edges[j + 1L]
 
-  # calculate longitude boundaries (center +/- half-width)
-  xmin <- c_lng - (d_lng / 2)
-  xmax <- c_lng + (d_lng / 2)
+  # Snap incoming lon to nearest ring longitude center. Rings start at lon = 0;
+  # centers are i * d_lng for i = 0..n_lng-1. Normalize input to [0, 360) first.
+  lng_pos <- (grid_lng %% 360 + 360) %% 360
+  i <- round(lng_pos / d_lng) %% n_lng
+  lon_c <- i * d_lng
+  # Back to [-180, 180]
+  lon_c <- ifelse(lon_c > 180, lon_c - 360, lon_c)
 
-  # construct polygons using WKT
+  xmin <- lon_c - d_lng / 2
+  xmax <- lon_c + d_lng / 2
+
+  # Build polygons. NB: cells that straddle the antimeridian (xmin < -180 or
+  # xmax > 180) will need splitting if you care about rendering; flag here.
   wkt_vec <- sprintf(
-    "POLYGON((%.5f %.5f, %.5f %.5f, %.5f %.5f, %.5f %.5f, %.5f %.5f))",
+    "POLYGON((%.10f %.10f, %.10f %.10f, %.10f %.10f, %.10f %.10f, %.10f %.10f))",
     xmin,
     ymin,
     xmax,
@@ -309,6 +347,10 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
   )
 
   tibble(
+    # ring = j,
+    # n_lng = n_lng,
+    # lat_c = gauss_lats[j],
+    # lon_c = lon_c,
     xmin = xmin,
     xmax = xmax,
     ymin = ymin,
@@ -320,7 +362,7 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
 #' Builds unique grids from downloaded weather data
 #' @param wx weather data from `om_parse_resp` or `build_hourly`
 om_build_grids <- function(wx) {
-  tz_lookup <- wx |> distinct(grid_id, timezone)
+  tz_lookup <- wx |> distinct(grid_id, timezone, elevation)
 
   wx |>
     distinct(grid_id, grid_lat, grid_lng) |>
@@ -329,6 +371,13 @@ om_build_grids <- function(wx) {
     left_join(tz_lookup, join_by(grid_id))
 }
 
+if (FALSE) {
+  test_wx <- read_csv("dev/test_wx.csv")
+  om_build_grids(test_wx)
+}
+
+
+## Grid and status helpers ----
 
 #' Similar to weather_status but returns number of hours per day
 #' to check for any incomplete days
@@ -342,11 +391,11 @@ om_wx_daily_status <- function(wx) {
       .by = c(grid_id, date)
     ) |>
     mutate(
-      start_hour = ymd_hms(paste(date, "00:20:00"), tz = first(tz)),
+      start_hour = ymd_hms(paste(date, "00:00:00"), tz = first(tz)),
       end_hour = if_else(
         date == today(tzone = first(tz)),
         now(tzone = tz),
-        ymd_hms(paste(date, "23:20:00"), tz = first(tz))
+        ymd_hms(paste(date, "23:00:00"), tz = first(tz))
       ),
       hours_expected = hours_diff(start_hour, end_hour) + 1,
       hours_missing = hours_expected - hours
@@ -381,8 +430,17 @@ om_wx_status <- function(wx, start_date, end_date) {
   stale_timeout <- 2
 
   # summarize for each grid
-  selected_wx |>
-    om_wx_daily_status() |>
+  daily <- selected_wx |>
+    om_wx_daily_status()
+
+  dates_have <- daily |>
+    filter(hours_missing == 0) |>
+    summarize(
+      dates_have = list(unique(date)),
+      .by = grid_id
+    )
+
+  daily |>
     summarize(
       tz = first(tz),
       date_min = min(date),
@@ -393,10 +451,10 @@ om_wx_status <- function(wx, start_date, end_date) {
       days_actual = n_distinct(date),
       days_incomplete = sum(hours_missing > stale_timeout),
       days_missing = max(0, days_expected - days_actual),
-      dates_have = list(unique(date)),
       dates_missing = list(setdiff(dates_expected, date)),
       hours_expected = sum(hours_expected),
       hours_missing = sum(hours_missing),
+      hours_actual = hours_expected - hours_missing,
       hours_stale = if_else(
         date_max == today(tzone = tz),
         hours_diff(time_max, now(tzone = tz)),
@@ -406,14 +464,15 @@ om_wx_status <- function(wx, start_date, end_date) {
       needs_download = stale | days_missing > 0 | days_incomplete > 0,
       .by = grid_id
     ) |>
-    select(-tz)
+    select(-tz) |>
+    left_join(dates_have, join_by(grid_id))
 }
 
 if (FALSE) {
   test_wx <- read_csv("dev/test_wx.csv")
-  om_wx_status(wx)
-  om_grid_status(wx)
-  om_grid_status(wx, as_date("2026-1-1"), today()) |>
+  om_wx_status(test_wx)
+  om_grid_status(test_wx)
+  om_grid_status(test_wx, as_date("2026-1-1"), today()) |>
     annotate_grids() |>
     pull(dates_missing)
 }
@@ -536,20 +595,15 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
 
   # if there already is some weather data, match sites to grids
   df <- if (!is.null(grids)) {
-    sites |>
-      om_join_grids(grids) |>
-      mutate(
-        req_lat = coalesce(grid_lat, lat),
-        req_lng = coalesce(grid_lng, lng)
-      ) |>
+    joined <- om_join_grids(sites, grids)
+    joined |>
       reframe(
         om_build_chunks(start_date, end_date, unlist(dates_have)),
-        .by = c(req_lat, req_lng)
+        .by = c(lat, lng)
       )
   } else {
     sites |>
       distinct(lat, lng) |>
-      select(req_lat = lat, req_lng = lng) |>
       mutate(
         start_date = !!start_date,
         end_date = !!end_date,
@@ -562,8 +616,8 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
     rowwise() |>
     mutate(
       req = list(om_build_req(
-        lat = req_lat,
-        lng = req_lng,
+        lat = lat,
+        lng = lng,
         start = start_date,
         end = end_date
       ))
@@ -619,7 +673,7 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
   }
 
   reqs |>
-    reframe(req_lat, req_lng, om_parse_resp(resp)) |>
+    reframe(lat, lng, om_parse_resp(resp)) |>
     mutate(grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng)) |>
     om_build_hourly()
 }
@@ -693,17 +747,9 @@ if (FALSE) {
 #' @param wx1 existing weather data frame
 #' @param wx2 new weather to merge onto existing
 om_merge_wx <- function(wx1, wx2) {
-  if (nrow(wx1) == 0) {
-    return(wx2)
-  }
-
-  if (nrow(wx2) == 0) {
-    return(wx1)
-  }
-
-  new_wx <- anti_join(wx2, wx1, join_by(grid_id, datetime_utc))
-  bind_rows(wx1, new_wx) |>
+  bind_rows(wx1, wx2) |>
     arrange(grid_id, datetime_utc) |>
+    distinct(grid_id, datetime_utc, .keep_all = TRUE) |>
     drop_na(datetime_utc)
 }
 

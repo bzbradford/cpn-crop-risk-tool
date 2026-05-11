@@ -62,7 +62,7 @@ mapServer <- function(rv, map_data) {
 
         fit_bounds(
           bounds = bounds,
-          options = list(padding = c(100, 100), maxZoom = 10)
+          options = list(padding = c(100, 100), maxZoom = 14)
         )
       }
 
@@ -393,17 +393,34 @@ mapServer <- function(rv, map_data) {
       ## Show user weather data grids ----
       # will only show grids that the user has interacted with in the session
       observe({
-        proxy_map |>
-          clearGroup(OPTS$map_layers$grid)
-
-        grids <- map_data()$grids_with_status
-
-        # if any, display them
+        # display any cached weather data for user
+        grids <- req(map_data()$grids_with_status)
         if (nrow(grids) > 0) {
           grids <- annotate_grids(grids)
           proxy_map |>
+            clearGroup(OPTS$map_layers$grid) |>
             addPolygons(
               data = grids,
+              weight = 0.5,
+              label = ~label,
+              layerId = ~grid_id,
+              group = OPTS$map_layers$grid,
+              color = "grey",
+              opacity = 0.25,
+              # fillColor = ~color,
+              fillOpacity = 0,
+              options = pathOptions(pane = "grid")
+            )
+        }
+
+        # display grids linked to sites more prominently
+        sites <- req(map_data()$sites_with_status)
+        if (nrow(sites) > 0) {
+          sites <- annotate_grids(sites) |>
+            st_as_sf()
+          proxy_map |>
+            addPolygons(
+              data = sites,
               weight = 1,
               label = ~label,
               layerId = ~grid_id,
@@ -411,8 +428,8 @@ mapServer <- function(rv, map_data) {
               color = ~color,
               opacity = 1,
               # fillColor = ~color,
+              # fillOpacity = 0.025,
               fillOpacity = 0,
-              smoothFactor = 0,
               options = pathOptions(pane = "grid")
             )
         }

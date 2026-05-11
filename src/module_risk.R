@@ -320,15 +320,21 @@ riskServer <- function(rv, wx_data) {
           }
         }
 
-        sites
+        sites |>
+          st_drop_geometry() |>
+          select(
+            id,
+            name,
+            lat,
+            lng,
+            any_of(OPTS$grid_attr_cols)
+          )
       })
 
       ## joined_data - reactive ----
       # join model data to sites list
       joined_data <- reactive({
         selected_sites() |>
-          st_drop_geometry() |>
-          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, timezone) |>
           left_join(
             model_data(),
             join_by(grid_id),
@@ -348,7 +354,7 @@ riskServer <- function(rv, wx_data) {
 
         # check for any warnings
         warnings <- list()
-        warnings$wx <- weather_warning_for_sites(sites)
+        # warnings$wx <- weather_warning_for_sites(sites)
         warnings$model <- model_warning()
         req(length(warnings) > 0)
 
@@ -509,8 +515,7 @@ riskServer <- function(rv, wx_data) {
           )
 
           sites <- selected_sites() |>
-            st_drop_geometry() |>
-            select(id:days_missing)
+            mutate(across(where(is.POSIXct), ~ format(.x, "%Y-%m-%d %H:%M:%S")))
 
           write_excel_csv(header, file, na = "", col_names = FALSE)
           tibble(line = c("", "=== Site list ===")) |>
