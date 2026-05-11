@@ -49,7 +49,7 @@ if (FALSE) {
   options(warn = 2)
 
   # disable forecasts for testing
-  options(forecast = FALSE)
+  # options(cpn_forecast = FALSE)
 
   # Run unit tests
   testthat::test_dir("tests/testthat")
@@ -97,6 +97,7 @@ OPTS <- lst(
   default_start_date = today() - months(1),
 
   ## map ----
+  lat_lng_eps = 1e-4, # decimal precision
   map_bounds_wi = list(
     lat1 = 42.4,
     lat2 = 47.1,
@@ -133,7 +134,7 @@ OPTS <- lst(
   ),
   max_sites = 25,
   validation_sites_ready = "No sites selected, click on the map or load sites in the sidebar.",
-  validation_weather_ready = "No weather data downloaded yet for the selected dates. Click 'Fetch Weather' to download.",
+  validation_weather_ready = "No weather data downloaded yet for the selected dates.",
 
   ## data tab ----
   data_type_choices = list(
@@ -177,12 +178,9 @@ OPTS <- lst(
     "days_actual",
     "days_incomplete",
     "days_missing",
-    "dates_have",
-    "dates_missing",
     "hours_expected",
     "hours_actual",
-    "hours_missing",
-    "geometry"
+    "hours_missing"
   ),
   date_attr_cols = c(
     "datetime_utc",
@@ -750,14 +748,12 @@ if (FALSE) {
 annotate_grids <- function(grids_with_status) {
   grids_with_status |>
     mutate(
-      title = if_else(
-        needs_download,
-        "Weather grid (download required)",
-        "Weather grid"
-      ),
       color = if_else(needs_download, "orange", "darkgreen"),
       label = paste0(
-        sprintf("<b>%s</b><br>", title),
+        "<b>Weather grid</b><br>",
+        sprintf("Centroid: %.4f, %.4f<br>", grid_lat, grid_lng),
+        sprintf("Latitude: %.4f to %.4f<br>", ymin, ymax),
+        sprintf("Longitude: %.4f to %.4f<br>", xmin, xmax),
         sprintf("Earliest date: %s<br>", date_min),
         sprintf("Latest date: %s<br>", date_max),
         if_else(
@@ -925,17 +921,16 @@ build_warning_box <- function(content) {
 }
 
 #' @param sites sites df with needs_download column
-weather_warning_for_sites <- function(sites) {
-  if (nrow(sites) > 0 & any(sites[["needs_download"]])) {
-    span(
-      ifelse(nrow(sites) == 1, "This site is", "One or more sites are"),
-      "missing data based on your date selections. Press",
-      strong("Fetch weather"),
-      "on the sidebar to download any missing data."
-    )
-  }
-}
-
+# weather_warning_for_sites <- function(sites) {
+#   if (nrow(sites) > 0 & any(sites[["needs_download"]])) {
+#     span(
+#       ifelse(nrow(sites) == 1, "This site is", "One or more sites are"),
+#       "missing data based on your date selections. Press",
+#       strong("Fetch weather"),
+#       "on the sidebar to download any missing data."
+#     )
+#   }
+# }
 
 # Site constructor -------------------------------------------------------------
 
@@ -948,7 +943,12 @@ sites_template <- tibble(
 
 # Site constructor
 Site <- function(name, lat, lng, id = 999) {
-  as.list(environment())
+  list(
+    id = id,
+    name = name,
+    lat = round_to(lat, OPTS$lat_lng_eps),
+    lng = round_to(lng, OPTS$lat_lng_eps)
+  )
 }
 
 # Site("foo", 1, 2)

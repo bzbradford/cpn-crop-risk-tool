@@ -144,7 +144,7 @@ server <- function(input, output, session) {
     map_fit_sites_cmd = NULL,
 
     # error message displayed under fetch button
-    status_msg = NULL,
+    status = NULL,
 
     # fetch timer
     fetch_timer = now(),
@@ -152,13 +152,23 @@ server <- function(input, output, session) {
   )
 
   ## rv$status helper ----
-  set_status <- function(msg = NULL, type = c("error", "info")) {
-    rv$status <- if (is.null(msg)) {
-      NULL
+  set_status <- function(msg = NULL) {
+    rv$status <- list(
+      msg = msg %||% "Everything up to date.",
+      type = "info"
+    )
+  }
+
+  set_error <- function(msg = NULL) {
+    rv$status = if (is.null(msg)) {
+      list(
+        msg = "Everything up to date.",
+        type = "info"
+      )
     } else {
       list(
         msg = msg,
-        type = match.arg(type)
+        type = "error"
       )
     }
   }
@@ -181,20 +191,7 @@ server <- function(input, output, session) {
     }
   })
 
-  ## rv$start_date ----
-  observe({
-    req(rv$dates_valid)
-    rv$start_date <- req(input$start_date)
-    rv$end_date <- req(input$end_date)
-  })
-
-  # update start date input
-  observe({
-    new_start_date <- req(rv$start_date_setter)
-    updateDateInput(inputId = "start_date", value = new_start_date)
-  })
-
-  ## rv$dates_valid ----
+  ## validate_dates ----
   validate_dates <- function(start, end) {
     if (length(c(start, end)) < 2) {
       return("Must provide start and end dates.")
@@ -208,14 +205,24 @@ server <- function(input, output, session) {
     NULL
   }
 
+  ## set rv$start_date and rv$end_date ----
   observe({
     start <- input$start_date
     end <- input$end_date
-    req(!is.null(start) & !is.null(end))
+    err <- validate_dates(start, end)
+    if (is.null(err)) {
+      rv$start_date <- start
+      rv$end_date <- end
+      set_error()
+    } else {
+      set_error(err)
+    }
+  })
 
-    msg <- validate_dates(start, end)
-    set_status(msg)
-    rv$dates_valid <- !is_truthy(msg)
+  # update start date input from model module to handle biofixes
+  observe({
+    new_start_date <- req(rv$start_date_setter)
+    updateDateInput(inputId = "start_date", value = new_start_date)
   })
 
   ## rv$map_risk_data ----
@@ -232,10 +239,9 @@ server <- function(input, output, session) {
   ## selected_dates ----
   # will block fetch button if invalid dates selected
   selected_dates <- reactive({
-    dates <- list(
-      start = req(rv$start_date),
-      end = req(rv$end_date)
-    )
+    start <- req(rv$start_date)
+    end <- req(rv$end_date)
+    dates <- list(start = start, end = end)
   })
 
   ## expanded_dates ----
@@ -290,7 +296,7 @@ server <- function(input, output, session) {
   # observe(echo(sites_with_status()))
 
   ## need_weather ----
-  need_weather <- function() {
+  need_weather <- reactive({
     if (nrow(rv$sites) == 0) {
       return(FALSE)
     }
@@ -298,11 +304,11 @@ server <- function(input, output, session) {
     status <- if (nrow(rv$weather) > 0) grid_status() else NULL
     reqs <- om_prep_reqs(rv$sites, dates$start, dates$end, status)
     nrow(reqs) > 0
-  }
+  })
 
   # Open-Meteo Weather Extended Task -------------------------------------------
 
-  task_get_weather <- ExtendedTask$new(function(
+  task_weather <- ExtendedTask$new(function(
     sites,
     start_date,
     end_date,
@@ -313,71 +319,94 @@ server <- function(input, output, session) {
         start_date <- as.Date(start_date)
         end_date <- min(as.Date(end_date), today())
         new_wx <- om_fetch_weather(sites, start_date, end_date, wx)
-        merged_wx <- om_merge_wx(wx, new_wx)
-        if (nrow(merged_wx) == 0) {
-          return(NULL)
-        }
-        merged_wx
+        om_merge_wx(wx, new_wx)
       },
       .GlobalEnv,
       .args = lst(sites, start_date, end_date, wx)
     )
   })
 
-  ## Invoke weather request ----
-  invoke_get_weather <- function() {
-    set_status()
-    req(task_get_weather$status() != "running")
-    req(need_weather())
-
-    dates <- expanded_dates()
-    disable("fetch")
-    runjs("$('#fetch').html('Downloading weather...')")
-    task_get_weather$invoke(
-      rv$sites,
-      dates$start,
-      dates$end,
-      rv$weather
-    )
-  }
-
-  # fetch on button click
-  observeEvent(input$fetch, {
-    invoke_get_weather()
+  observe({
+    message(paste("task_weather:", task_weather$status()))
   })
 
-  # fetch on program trigger
-  observeEvent(rv$fetch, {
-    invoke_get_weather()
+  ## Invoke weather request ----
+
+  ## Non-external version of weather fetch for testing
+  # observe({
+  #   req(rv$sites_ready)
+  #   sites <- rv$sites
+  #   dates <- expanded_dates()
+  #   start_date <- as.Date(dates$start)
+  #   end_date <- min(as.Date(dates$end), today())
+
+  #   isolate({
+  #     cur_wx <- rv$weather
+  #     new_wx <- om_fetch_weather(sites, start_date, end_date, cur_wx)
+  #     merged_wx <- om_merge_wx(cur_wx, new_wx)
+  #     if (!identical(cur_wx, merged_wx)) {
+  #       rv$weather <- merged_wx
+  #     }
+  #   })
+  # })
+
+  observe({
+    req(rv$sites_ready)
+    req(need_weather())
+    sites <- req(sites_with_status())
+    sites_need <- sites |>
+      filter(needs_download) |>
+      select(id, name, lat, lng)
+    req(nrow(sites_need) > 0)
+    dates <- expanded_dates()
+    start_date <- as.Date(dates$start)
+    end_date <- min(as.Date(dates$end), today())
+
+    req(task_weather$status() %in% c("initial", "success"))
+
+    isolate({
+      task_weather$invoke(
+        sites_need,
+        dates$start,
+        dates$end,
+        rv$weather
+      )
+    })
+  })
+
+  # handle weather fetch error
+  observe({
+    status <- req(task_weather$status())
+    req(status == "error")
+    err <- task_weather$result()
+    err_msg <- sprintf("Error <%s>: %s", class(err), conditionMessage(err))
+    contact_us <- sprintf(
+      "<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>",
+      OPTS$contact_email
+    )
+    user_msg <- paste(
+      err_msg,
+      "<br>",
+      "If the problem persists, ",
+      contact_us,
+      " to report the issue."
+    )
+    warning(err_msg)
+    set_error(user_msg)
   })
 
   ## Handle weather request response ----
   observe({
-    req(task_get_weather$status() == "success")
-    res <- task_get_weather$result()
-
-    rv$action_nonce <- runif(1)
-
-    if (is.null(res)) {
-      contact_us <- sprintf(
-        "<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>",
-        OPTS$contact_email
-      )
-      err <- HTML(
-        "Failed to get weather data from Open-Meteo. Please try again. If the problem persists",
-        contact_us,
-        "to report the issue."
-      )
-      set_status(err)
-    } else {
-      set_status()
+    req(task_weather$status() == "success")
+    res <- task_weather$result()
+    if (!identical(rv$weather, res)) {
       rv$weather <- res
     }
   })
 
   # Forecast ExtendedTask -------------------------------------------------------
 
-  task_get_forecast <- ExtendedTask$new(function(grids) {
+  task_forecast <- ExtendedTask$new(function(grids) {
     mirai(
       {
         om_fetch_forecast(grids)
@@ -387,6 +416,10 @@ server <- function(input, output, session) {
     )
   })
 
+  observe({
+    message(paste("task_forecast:", task_forecast$status()))
+  })
+
   ## Invoke forecast fetch ----
   observe({
     sites <- req(sites_with_status())
@@ -394,7 +427,7 @@ server <- function(input, output, session) {
       drop_na(grid_id)
 
     req(nrow(grids) > 0)
-    req(task_get_forecast$status() != "running")
+    req(task_forecast$status() != "running")
 
     already_fetched <- names(rv$forecasts)
     grids_df <- sf::st_drop_geometry(grids) |>
@@ -402,13 +435,13 @@ server <- function(input, output, session) {
       filter(!grid_id %in% already_fetched)
 
     req(nrow(grids_df) > 0)
-    task_get_forecast$invoke(grids_df)
+    task_forecast$invoke(grids_df)
   })
 
   ## Handle forecast response ----
   observe({
-    req(task_get_forecast$status() == "success")
-    result <- task_get_forecast$result()
+    req(task_forecast$status() == "success")
+    result <- task_forecast$result()
     req(!is.null(result), nrow(result) > 0)
 
     fc <- rv$forecasts
@@ -416,6 +449,18 @@ server <- function(input, output, session) {
       fc[[gid]] <- result |> filter(grid_id == gid)
     }
     rv$forecasts <- fc
+  })
+
+  ## User-facing status message ----
+  observe({
+    wx_task <- task_weather$status()
+    fc_task <- task_forecast$status()
+    status <- case_when(
+      wx_task == "running" ~ "Getting weather...",
+      fc_task == "running" ~ "Getting forecasts...",
+      TRUE ~ "Everything up to date."
+    )
+    set_status(status)
   })
 
   # Weather data ---------------------------------------------------------------
@@ -437,7 +482,7 @@ server <- function(input, output, session) {
       )
 
     fc_list <- rv$forecasts
-    fc_data <- if (length(fc_list) > 0) {
+    fc_data <- if (sel_dates$end == today() & length(fc_list) > 0) {
       sel_fc <- bind_rows(fc_list) |>
         filter(grid_id %in% sites$grid_id)
     } else {
@@ -928,7 +973,7 @@ server <- function(input, output, session) {
 
   ## date_btns_ui ----
   output$date_btns_ui <- renderUI({
-    cur_dates <- as.Date(c(rv$start_date, rv$end_date))
+    cur_dates <- as.Date(c(input$start_date, input$end_date))
     presets <- date_presets()
 
     div(
@@ -936,7 +981,11 @@ server <- function(input, output, session) {
       lapply(names(presets), function(name) {
         value <- presets[[name]]
         label <- snakecase::to_sentence_case(name)
-        selected <- setequal(cur_dates, value)
+        selected <- if (length(cur_dates) < 2) {
+          FALSE
+        } else {
+          setequal(cur_dates, value)
+        }
         build_date_btn(
           name,
           label,
@@ -961,84 +1010,27 @@ server <- function(input, output, session) {
 
   # Fetch weather button ----------------------------------------------------
 
-  ## Auto-fetch timer ----
-
-  # set a timestamp of the last inputs if weather is needed
-  # observe({
-  #   req(rv$sites_ready)
-  #   req(need_weather())
-  #   # message('Auto-fetching weather data in 15 seconds...')
-  #   rv$fetch_timer <- now()
-  # })
-
-  # force a weather fetch if it's needed and hasn't been triggered in 15 seconds
-  # observe({
-  #   req(rv$sites_ready)
-  #   req(need_weather())
-  #   timestamp <- rv$fetch_timer
-  #   elapsed <- now() - timestamp
-  #   invalidateLater(15000)
-  #   req(elapsed >= 15)
-  #   if (need_weather()) {
-  #     # message("Auto-fetching weather data...")
-  #     rv$fetch <- runif(1)
-  #   }
-  # })
-
-  # Only reset the timer when need_weather transitions FALSE → TRUE
-  observe({
-    req(rv$sites_ready)
-    req(need_weather())
-    isolate({
-      if (!isTRUE(rv$fetch_timer_active)) {
-        rv$fetch_timer <- now()
-        rv$fetch_timer_active <- TRUE
-      }
-    })
-  })
-
-  # Clear the active flag when weather is no longer needed
-  observe({
-    if (!need_weather()) {
-      rv$fetch_timer_active <- FALSE
-    }
-  })
-
-  # Fire after 10s if still needed
-  observe({
-    req(rv$sites_ready)
-    req(rv$fetch_timer_active)
-    timeout <- 10 # seconds
-    timestamp <- rv$fetch_timer
-    invalidateLater(timeout * 1000)
-    req((now() - timestamp) >= timeout)
-    if (need_weather()) {
-      rv$fetch <- runif(1)
-      rv$fetch_timer_active <- FALSE
-    }
-  })
-
   ## action_ui ----
-  output$action_ui <- renderUI({
-    btn <- function(msg, ...) {
-      div(class = "submit-btn", actionButton("fetch", msg, ...))
-    }
+  # output$action_ui <- renderUI({
+  #   btn <- function(msg, ...) {
+  #     div(class = "submit-btn", actionButton("fetch", msg, ...))
+  #   }
 
-    # used to promt button to regenerate
-    rv$action_nonce
+  #   # used to promt button to regenerate
+  #   rv$action_nonce
 
-    # control button appearance
-    if (nrow(rv$sites) == 0) {
-      return(btn("No sites selected", disabled = TRUE))
-    }
-    if (!rv$dates_valid) {
-      return(btn("Invalid date selection", disabled = TRUE))
-    }
-    if (need_weather()) {
-      return(btn("Fetch weather"))
-    }
-    btn("Everything up to date", class = "btn-primary", disabled = TRUE)
-  })
+  #   # control button appearance
+  #   if (nrow(rv$sites) == 0) {
+  #     return(btn("No sites selected", disabled = TRUE))
+  #   }
+  #   if (!rv$dates_valid) {
+  #     return(btn("Invalid date selection", disabled = TRUE))
+  #   }
+  #   if (need_weather()) {
+  #     return(btn("Fetch weather"))
+  #   }
+  #   btn("Everything up to date", class = "btn-primary", disabled = TRUE)
+  # })
 
   ## status_ui ----
 
@@ -1047,12 +1039,11 @@ server <- function(input, output, session) {
     status <- req(rv$status)
     msg <- req(status$msg)
     div(
-      class = ifelse(
-        status$type == "error",
-        "shiny-output-error",
-        ""
-      ),
-      style = "margin-top: 5px; padding: 10px;",
+      style = if (status$type == "error") {
+        "margin-top: 1rem; padding: 5px 10px; border: 1px solid red; border-radius: 5px; background: rgb(255, 225, 225); color: red;"
+      } else {
+        "margin-top: 1rem; padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;"
+      },
       msg
     )
   })

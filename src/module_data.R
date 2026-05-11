@@ -234,7 +234,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           # shown if more than one site
           uiOutput(ns("plot_sites_ui")),
           # warning if there is missing data
-          uiOutput(ns("weather_missing_ui")),
+          # uiOutput(ns("weather_missing_ui")),
           # main plot area
           div(
             class = "plotly-container",
@@ -317,54 +317,13 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       })
 
       ## weather_missing_ui ----
-      output$weather_missing_ui <- renderUI({
-        sites <- wx_data()$sites
-        req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
-
-        weather_warning_for_sites(sites) |>
-          build_warning_box()
-      })
-
-      ## plot_sites_ui ----
-      # plot_sites_choices <- reactive({
+      # output$weather_missing_ui <- renderUI({
       #   sites <- wx_data()$sites
-      #   req(nrow(sites) > 1)
-      #
-      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-      # }) |>
-      #   debounce(1000)
+      #   req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
 
-      output$plot_sites_ui <- renderUI({
-        # choices <- plot_sites_choices()
-
-        sites <- wx_data()$sites
-        req(nrow(sites) > 1)
-
-        choices <- set_names(
-          sites$id,
-          sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
-        )
-        selected <- isolate(input$plot_sites) %||% selected_site()
-
-        checkboxGroupInput(
-          inputId = ns("plot_sites"),
-          label = "Sites to display",
-          choices = choices,
-          selected = selected,
-          inline = TRUE
-        )
-      })
-
-      ## change selection ----
-      observe({
-        selected <- selected_site()
-
-        updateCheckboxGroupInput(
-          session,
-          inputId = "plot_sites",
-          selected = selected
-        )
-      })
+      #   weather_warning_for_sites(sites) |>
+      #     build_warning_box()
+      # })
 
       ## plot_cols - reactive ----
       plot_cols <- reactive({
@@ -425,8 +384,49 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # reset on button press
       observe(reset_plot_cols()) |> bindEvent(input$reset_plot_cols)
 
-      ## data_plot - renderPlotly ----
-      output$data_plot <- renderPlotly({
+      ## plot_sites_ui ----
+      # plot_sites_choices <- reactive({
+      #   sites <- wx_data()$sites
+      #   req(nrow(sites) > 1)
+      #
+      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
+      # }) |>
+      #   debounce(1000)
+
+      output$plot_sites_ui <- renderUI({
+        # choices <- plot_sites_choices()
+
+        sites <- wx_data()$sites
+        req(nrow(sites) > 1)
+
+        choices <- set_names(
+          sites$id,
+          sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
+        )
+        selected <- isolate(input$plot_sites) %||% selected_site()
+
+        checkboxGroupInput(
+          inputId = ns("plot_sites"),
+          label = "Sites to display",
+          choices = choices,
+          selected = selected,
+          inline = TRUE
+        )
+      })
+
+      ## change selection ----
+      observe({
+        selected <- selected_site()
+
+        updateCheckboxGroupInput(
+          session,
+          inputId = "plot_sites",
+          selected = selected
+        )
+      })
+
+      ## plot_data ----
+      plot_data <- reactive({
         df <- selected_data()
         sites <- wx_data()$sites
         dates <- wx_data()$dates
@@ -446,20 +446,27 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           cols = req(input$plot_cols),
           unit_system = ifelse(input$metric, "metric", "imperial"),
           site_ids = unique(df$site_id),
-          show_forecast = input$forecast,
-          filename = download_filename()$plot
+          show_forecast = input$forecast
         )
 
         # if multiple sites filter by the ones selected in the UI
         if (opts$multi_site) {
           opts$selected_ids <- req(input$plot_sites)
           df <- filter(df, site_id %in% opts$selected_ids)
+          sites <- filter(sites, id %in% opts$selected_ids)
         }
 
         req(nrow(df) > 0)
         req(all(opts$cols %in% names(df)))
 
-        build_data_plot(df, sites, opts)
+        list(df = df, sites = sites, opts = opts)
+      })
+
+      ## data_plot - renderPlotly ----
+      output$data_plot <- renderPlotly({
+        data <- plot_data()
+        data$opts$filename <- download_filename()$plot
+        build_data_plot(data$df, data$sites, data$opts)
       })
 
       # Download button ----
@@ -467,11 +474,12 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## download_data - reactive ----
       download_data <- reactive({
         unit_system <- if_else(input$metric, "metric", "imperial")
-        selected_data() |>
+        data <- plot_data()
+        data$df |>
           rename_with_units(unit_system) |>
           mutate(across(
-            any_of(c("datetime_utc", "datetime_local")),
-            as.character
+            where(is.POSIXct),
+            ~ format(.x, "%Y-%m-%d %H:%M:%S")
           )) |>
           janitor::clean_names("big_camel")
       })
@@ -481,8 +489,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       download_filename <- reactive({
         type <- req(input$data_type)
         wx <- wx_data()
-        sites <- wx$sites
+        # sites <- wx$sites
         dates <- wx$dates
+        data <- plot_data()
+        sites <- data$sites
         name_str <- invert(OPTS$data_type_choices)[[type]]
         site_str <- ifelse(
           nrow(sites) == 1,
