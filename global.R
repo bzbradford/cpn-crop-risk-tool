@@ -43,7 +43,7 @@ if (FALSE) {
   renv::snapshot()
   renv::clean()
   renv::install("sf@1.0-24")
-  renv::install("sf")
+  renv::install("terra@1.9-11")
 
   # turn warnings into errors
   options(warn = 2)
@@ -695,7 +695,7 @@ find_closest_css_color <- function(hex_color) {
 # Location helpers -------------------------------------------------------------
 
 # EPSG 4326 for use in Leaflet
-service_bounds <- read_sf("data/us_ca_clip.fgb")
+service_bounds <- readRDS("data/us_ca_clip.rds")
 
 # transform to EPSG 3857 web mercator for intersecting points
 service_bounds_3857 <- st_transform(service_bounds, crs = 3857)
