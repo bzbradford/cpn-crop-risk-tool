@@ -415,9 +415,12 @@ mapServer <- function(rv, map_data) {
 
         # display grids linked to sites more prominently
         sites <- req(map_data()$sites_with_status)
-        if (nrow(sites) > 0) {
-          sites <- annotate_grids(sites) |>
-            st_as_sf()
+        linked_sites <- sites |>
+          drop_na(grid_id)
+        if (nrow(linked_sites) > 0) {
+          sites <- linked_sites |>
+            st_as_sf() |>
+            annotate_grids()
           proxy_map |>
             addPolygons(
               data = sites,
