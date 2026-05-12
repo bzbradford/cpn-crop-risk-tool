@@ -425,7 +425,11 @@ om_wx_daily_status <- function(wx) {
 #' @param start_date start of expected date range
 #' @param end_date end of expected date range
 #' @returns tibble
-om_wx_status <- function(wx, start_date, end_date) {
+om_wx_status <- function(
+  wx,
+  start_date = min(wx$date),
+  end_date = max(wx$date)
+) {
   default <- tibble(
     grid_id = NA,
     needs_download = TRUE

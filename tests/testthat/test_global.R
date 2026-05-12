@@ -459,27 +459,10 @@ test_that("parse_coords works", {
   expect_error(parse_coords("abc, def"), "Failed to parse coordinates")
 })
 
-test_that("ll_to_grid works", {
-  g <- ll_to_grid(45, -89)
-  expect_length(g, 1)
-  expect_s3_class(g, "sfc_POLYGON")
-})
-
-test_that("build_grids works", {
-  wx <- test_hourly_wx
-  g <- wx |> build_grids()
-
-  # should have 1 row per grid
-  expect_equal(length(unique(wx$grid_id)), nrow(g))
-
-  # should be sf
-  expect_s3_class(g, "sf")
-})
-
 test_that("annotate_grids works", {
   expect_silent({
-    grids <- test_hourly_wx |> build_grids()
-    status <- test_hourly_wx |> weather_status()
+    grids <- test_hourly_wx |> om_build_grids()
+    status <- test_hourly_wx |> om_wx_status()
 
     left_join(grids, status, join_by(grid_id)) |>
       annotate_grids() |>
