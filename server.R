@@ -142,9 +142,9 @@ server <- function(input, output, session) {
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
 
-    # fetch timer
-    fetch_timer = now(),
-    fetch_timer_active = FALSE,
+    # debounce: track last fetch attempt to break feedback loops
+    last_fetch_key = NULL,
+    last_fetch_time = NULL,
   )
 
   ## rv$sites_ready ----
@@ -297,18 +297,20 @@ server <- function(input, output, session) {
   # observe(echo(sites_with_status()))
 
   ## need_weather ----
+  # single source of truth with the task trigger: read needs_download off
+  # sites_with_status (which itself uses needs_download from grid_status).
   need_weather <- reactive({
-    if (nrow(rv$sites) == 0) {
+    sites <- sites_with_status()
+    if (is.null(sites) || nrow(sites) == 0) {
       return(FALSE)
     }
-    dates <- expanded_dates()
-    status <- if (nrow(rv$weather) > 0) grid_status() else NULL
-    reqs <- om_prep_reqs(rv$sites, dates$start, dates$end, status)
-    nrow(reqs) > 0
+    any(sites$needs_download, na.rm = TRUE)
   })
 
   # Open-Meteo Weather Extended Task -------------------------------------------
 
+  # caller is responsible for clamping end_date to local today() before invoking;
+  # don't re-clamp here because the worker's system TZ may differ from the user's.
   task_weather <- ExtendedTask$new(function(
     sites,
     start_date,
@@ -317,9 +319,12 @@ server <- function(input, output, session) {
   ) {
     mirai(
       {
-        start_date <- as.Date(start_date)
-        end_date <- min(as.Date(end_date), today())
-        new_wx <- om_fetch_weather(sites, start_date, end_date, wx)
+        new_wx <- om_fetch_weather(
+          sites,
+          as.Date(start_date),
+          as.Date(end_date),
+          wx
+        )
         om_merge_wx(wx, new_wx)
       },
       .GlobalEnv,
@@ -363,22 +368,31 @@ server <- function(input, output, session) {
     start_date <- as.Date(dates$start)
     end_date <- min(as.Date(dates$end), today())
 
-    # echo(sites_need)
-    # reqs <- om_prep_reqs(
-    #   sites_need,
-    #   dates$start,
-    #   dates$end,
-    #   om_grid_status(rv$weather)
-    # )
-    # echo(reqs)
-
     req(task_weather$status() %in% c("initial", "success"))
+
+    # Debounce: bail if the same (sites, dates) was fetched in the last 30s.
+    # Defense against feedback loops where post-fetch state still reads as
+    # needing weather.
+    fetch_key <- paste(
+      paste(sort(sites_need$id), collapse = ","),
+      start_date,
+      end_date,
+      sep = "|"
+    )
+    recent <- identical(rv$last_fetch_key, fetch_key) &&
+      !is.null(rv$last_fetch_time) &&
+      as.numeric(now() - rv$last_fetch_time, units = "secs") < 30
+    if (recent) {
+      return()
+    }
+    rv$last_fetch_key <- fetch_key
+    rv$last_fetch_time <- now()
 
     isolate({
       task_weather$invoke(
         sites_need,
-        dates$start,
-        dates$end,
+        start_date,
+        end_date,
         rv$weather
       )
     })

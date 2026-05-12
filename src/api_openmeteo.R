@@ -180,12 +180,15 @@ om_parse_json <- function(resp) {
     timezone = json$timezone,
     tz_offset = json$timezone_abbreviation
   )
+  # Open-Meteo with timezone=auto returns bare local-time strings (no offset),
+  # so we must parse with the location's tz; ymd_hm() without tz defaults to UTC
+  # and would shift every timestamp by utc_offset_seconds.
   hourly <- json$hourly |>
     as_tibble() %>%
     unnest(names(.)) |>
     mutate(
-      datetime_utc = ymd_hm(time),
-      datetime_local = with_tz(datetime_utc, json$timezone),
+      datetime_local = ymd_hm(time, tz = json$timezone),
+      datetime_utc = with_tz(datetime_local, "UTC"),
       date = as_date(datetime_local),
       .after = time
     ) |>
@@ -395,6 +398,8 @@ om_wx_daily_status <- function(wx) {
   wx |>
     summarize(
       tz = coalesce(first(timezone), "UTC"),
+      time_min = min(datetime_utc),
+      time_max = max(datetime_utc),
       hours = n(),
       .by = c(grid_id, date)
     ) |>
@@ -406,7 +411,10 @@ om_wx_daily_status <- function(wx) {
         ymd_hms(paste(date, "23:00:00"), tz = first(tz))
       ),
       hours_expected = hours_diff(start_hour, end_hour) + 1,
-      hours_missing = hours_expected - hours
+      # clamp to 0: archive can return forecast hours past now() for today,
+      # so `hours` may exceed `hours_expected`. Negative "missing" would
+      # otherwise exclude today from dates_have and cause a refetch loop.
+      hours_missing = pmax(0, hours_expected - hours)
     )
 }
 
@@ -435,14 +443,15 @@ om_wx_status <- function(wx, start_date, end_date) {
   }
 
   dates_expected <- seq.Date(start_date, end_date, 1)
-  stale_timeout <- 2
+  max_hours_missing <- 2
 
   # summarize for each grid
   daily <- selected_wx |>
     om_wx_daily_status()
 
+  # dates we don't need to refetch: those with at most max_hours_missing gap
   dates_have <- daily |>
-    filter(hours_missing == 0) |>
+    filter(hours_missing <= max_hours_missing) |>
     summarize(
       dates_have = list(unique(date)),
       .by = grid_id
@@ -453,23 +462,24 @@ om_wx_status <- function(wx, start_date, end_date) {
       tz = first(tz),
       date_min = min(date),
       date_max = max(date),
-      time_min = min(start_hour),
-      time_max = max(end_hour),
+      time_min = min(time_min),
+      time_max = max(time_max),
       days_expected = length(dates_expected),
       days_actual = n_distinct(date),
-      days_incomplete = sum(hours_missing > stale_timeout),
+      days_incomplete = sum(hours_missing > max_hours_missing),
       days_missing = max(0, days_expected - days_actual),
       dates_missing = list(setdiff(dates_expected, date)),
       hours_expected = sum(hours_expected),
       hours_missing = sum(hours_missing),
       hours_actual = hours_expected - hours_missing,
+      # clamp to 0: archive includes forecast hours past now() for today, so
+      # time_max can be ahead of now(); negative "stale" would be misleading.
       hours_stale = if_else(
         date_max == today(tzone = tz),
-        hours_diff(time_max, now(tzone = tz)),
-        0
+        pmax(0L, hours_diff(time_max, now(tzone = tz))),
+        0L
       ),
-      stale = hours_stale > stale_timeout,
-      needs_download = stale | days_missing > 0 | days_incomplete > 0,
+      needs_download = days_missing > 0 | days_incomplete > 0,
       .by = grid_id
     ) |>
     select(-tz) |>
