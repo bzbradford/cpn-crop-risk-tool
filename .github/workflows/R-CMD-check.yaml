@@ -21,11 +21,16 @@ jobs:
           sudo apt-get install -y \
             cmake \
             gdal-bin \
+            libabsl-dev \
             libcurl4-openssl-dev \
             libfontconfig1-dev \
             libfreetype6-dev \
             libgdal-dev \
+            libgeos-dev \
             libpng-dev \
+            libproj-dev \
+            libsqlite3-dev \
+            libssl-dev \
             libudunits2-dev \
             libx11-dev \
             pandoc
