@@ -106,9 +106,11 @@ om_build_req <- function(
 }
 
 if (FALSE) {
-  om_build_req(45, -89, today() - days(1), today()) |>
-    req_perform() |>
-    resp_body_json()
+  resp <- om_build_req(45, -89, today() - days(1), today()) |>
+    req_perform()
+  resp_body_json(resp)
+  om_resp_ok(resp)
+  om_parse_json(resp)
 }
 
 
@@ -138,9 +140,11 @@ om_build_forecast_req <- function(
 }
 
 if (FALSE) {
-  om_build_forecast_req(45, -89) |>
-    req_perform() |>
-    resp_body_json()
+  resp <- om_build_forecast_req(45, -89) |>
+    req_perform()
+  resp_body_json(resp)
+  om_resp_ok(resp)
+  om_parse_json(resp)
 }
 
 
@@ -210,18 +214,22 @@ if (FALSE) {
 
   om_build_forecast_req(45, -89) |>
     req_perform() |>
-    om_parse_resp() |>
-    view()
+    om_parse_resp()
 }
 
 
 ## Format response ----
 
 #' Creates the working hourly weather dataset from parsed openmeteo response
-#' @param wx hourly weather data from `parse_openmeteo` function
+#' @param wx hourly weather data from `parse_openmeteo` function. If it does not
+#'   have a grid_id column one will be generated
 om_build_hourly <- function(wx) {
   if (nrow(wx) == 0) {
     return(tibble())
+  }
+
+  if (!("grid_id") %in% names(wx)) {
+    wx <- mutate(wx, grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng))
   }
 
   wx |>
@@ -674,7 +682,6 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
 
   reqs |>
     reframe(lat, lng, om_parse_resp(resp)) |>
-    mutate(grid_id = sprintf("%.3f,%.3f", grid_lat, grid_lng)) |>
     om_build_hourly()
 }
 
