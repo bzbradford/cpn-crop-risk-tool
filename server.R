@@ -363,6 +363,15 @@ server <- function(input, output, session) {
     start_date <- as.Date(dates$start)
     end_date <- min(as.Date(dates$end), today())
 
+    # echo(sites_need)
+    # reqs <- om_prep_reqs(
+    #   sites_need,
+    #   dates$start,
+    #   dates$end,
+    #   om_grid_status(rv$weather)
+    # )
+    # echo(reqs)
+
     req(task_weather$status() %in% c("initial", "success"))
 
     isolate({

@@ -6,14 +6,17 @@ source("../../global.R", chdir = TRUE)
 
 # save a response example for tests
 if (FALSE) {
+  # load 3 example sites
   test_sites <- load_sites("tests/testthat/example-sites.csv")
 
+  # get and store weather data for testing
   test_hourly_wx <- om_fetch_weather(
     test_sites,
     ymd("2025-1-1"),
     ymd("2025-12-31")
   )
   saveRDS(test_hourly_wx, "tests/testthat/test_hourly_wx.rds")
+  test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 
   # two sites, semi-overlapping 2-month windows
   # test_ibm_response <- bind_rows(
@@ -46,7 +49,6 @@ if (FALSE) {
   saveRDS(test_hourly_wx, "tests/testthat/test_hourly_wx.rds")
 }
 
-# load example ibm response data for tests
-test_ibm_response <- readRDS("test_ibm_response.rds")
+# load example weather data for tests
 test_hourly_wx <- readRDS("test_hourly_wx.rds")
 test_daily_wx <- build_daily(test_hourly_wx)
