@@ -752,8 +752,8 @@ annotate_grids <- function(grids_with_status) {
       label = paste0(
         "<b>Weather grid</b><br>",
         sprintf("Centroid: %.4f, %.4f<br>", grid_lat, grid_lng),
-        sprintf("Latitude: %.4f to %.4f<br>", ymin, ymax),
-        sprintf("Longitude: %.4f to %.4f<br>", xmin, xmax),
+        # sprintf("Latitude: %.4f to %.4f<br>", ymin, ymax),
+        # sprintf("Longitude: %.4f to %.4f<br>", xmin, xmax),
         sprintf("Earliest date: %s<br>", date_min),
         sprintf("Latest date: %s<br>", date_max),
         if_else(
