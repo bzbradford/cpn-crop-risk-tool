@@ -44,6 +44,8 @@ if (FALSE) {
   renv::clean()
   renv::install("sf@1.0-24")
   renv::install("terra@1.9-11")
+  renv::settings$ignored.packages("watcher", persist = TRUE)
+  renv::install("watcher")
 
   # turn warnings into errors
   options(warn = 2)
@@ -87,10 +89,6 @@ OPTS <- lst(
   app_header_color = "#00693c",
   app_header_badge = "cpn-badge.png",
   contact_email = "bbradford@wisc.edu",
-
-  ## google ----
-  google_geocoding_key = Sys.getenv("google_geocoding_key"),
-  google_places_key = Sys.getenv("google_places_key"),
 
   ## dates ----
   earliest_date = ymd("2015-1-1"),
@@ -204,6 +202,13 @@ OPTS <- lst(
   plot_ignore_cols = c(site_attr_cols, grid_attr_cols, date_attr_cols),
 )
 
+# add keys unless testing
+if (!identical(Sys.getenv("TESTTHAT"), "true")) {
+  OPTS$open_meteo_key <- Sys.getenv("open_meteo_key")
+  OPTS$google_geocoding_key <- Sys.getenv("google_geocoding_key")
+  OPTS$google_places_key <- Sys.getenv("google_places_key")
+}
+
 
 # Utility functions ------------------------------------------------------------
 
@@ -275,6 +280,14 @@ round_to <- function(x, d = 5) {
 print_tribble <- function(df) {
   constructive::construct(df, opts_tbl_df("tribble"))
 }
+
+#' create and insert cumulative count after a column
+add_cumsum <- function(df, col) {
+  newcol <- paste0(col, "_cumulative")
+  mutate(df, !!newcol := cumsum(.data[[col]]), .after = !!col)
+}
+
+# test_hourly_wx |> add_cumsum("precipitation") |> pull(precipitation_cumulative)
 
 # Date/time functions ----------------------------------------------------------
 
@@ -446,36 +459,23 @@ wind_dir_to_deg <- function(dirs) {
 #' List of weather variables, unit suffixes, and conversion functions
 #' all derivative columns of each of these will start with the same text
 #' e.g. temperature => temperature_min => temperature_min_30ma
-# measures <- tribble(
-#   ~measure                  , ~metric , ~imperial , ~conversion  ,
-#   "temperature"             , "°C"    , "°F"      , c_to_f       ,
-#   "dew_point"               , "°C"    , "°F"      , c_to_f       ,
-#   "relative_humidity"       , "%"     , "%"       , \(x) x       , # no conversion
-#   "precip"                  , "mm"    , "in"      , mm_to_in     ,
-#   "snow"                    , "cm"    , "in"      , cm_to_in     ,
-#   "wind_speed"              , "kmh"   , "mph"     , km_to_mi     ,
-#   "wind_gust"               , "kmh"   , "mph"     , km_to_mi     ,
-#   "wind_direction"          , "°"     , "°"       , \(x) x       , # no conversion
-#   "pressure_mean_sea_level" , "mbar"  , "inHg"    , mbar_to_inHg ,
-#   "pressure_change"         , "mbar"  , "inHg"    , mbar_to_inHg ,
-# )
-
 conversion_lookup <- tribble(
-  ~measure             , ~metric , ~imperial , ~conversion ,
-  "temperature"        , "°C"    , "°F"      , c_to_f      ,
-  "dew_point"          , "°C"    , "°F"      , c_to_f      ,
-  "relative_humidity"  , "%"     , "%"       , \(x) x      , # no conversion
-  "evapotranspiration" , "mm"    , "in"      , mm_to_in    ,
-  "precipitation"      , "mm"    , "in"      , mm_to_in    ,
-  "rain"               , "mm"    , "in"      , mm_to_in    ,
-  "snowfall"           , "cm"    , "in"      , cm_to_in    ,
-  "snow_depth"         , "m"     , "ft"      , m_to_ft     ,
-  "pressure_msl"       , "kPa"   , "inHg"    , kPa_to_inHg ,
-  "wind_speed"         , "kmh"   , "mph"     , km_to_mi    ,
-  "wind_gust"          , "kmh"   , "mph"     , km_to_mi    ,
-  "wind_direction"     , "°"     , "°"       , \(x) x      , # no conversion
-  "soil_temp"          , "°C"    , "°F"      , c_to_f      ,
-  "soil_moisture"      , "%"     , "%"       , \(x) x      , # no conversion
+  ~measure               , ~metric , ~imperial , ~conversion  ,
+  "temperature"          , "°C"    , "°F"      , c_to_f       ,
+  "dew_point_depression" , "°C"    , "°F"      , \(x) x * 1.8 , # C to F without offset
+  "dew_point"            , "°C"    , "°F"      , c_to_f       ,
+  "relative_humidity"    , "%"     , "%"       , \(x) x       , # no conversion
+  "evapotranspiration"   , "mm"    , "in"      , mm_to_in     ,
+  "precipitation"        , "mm"    , "in"      , mm_to_in     ,
+  "rain"                 , "mm"    , "in"      , mm_to_in     ,
+  "snowfall"             , "cm"    , "in"      , cm_to_in     ,
+  "snow_depth"           , "m"     , "ft"      , m_to_ft      ,
+  "pressure_msl"         , "kPa"   , "inHg"    , kPa_to_inHg  ,
+  "wind_speed"           , "kmh"   , "mph"     , km_to_mi     ,
+  "wind_gust"            , "kmh"   , "mph"     , km_to_mi     ,
+  "wind_direction"       , "°"     , "°"       , \(x) x       , # no conversion
+  "soil_temp"            , "°C"    , "°F"      , c_to_f       ,
+  "soil_moisture"        , "%"     , "%"       , \(x) x       , # no conversion
 )
 
 
@@ -484,9 +484,17 @@ conversion_lookup <- tribble(
 #' @param df data frame from the hourly set or beyond
 #' @returns df with column data converted
 convert_measures <- function(df) {
+  converted_cols <- character(0)
   for (i in seq_len(nrow(conversion_lookup))) {
     m <- conversion_lookup[i, ]
-    df <- mutate(df, across(starts_with(m$measure), m$conversion[[1]]))
+    eligible <- setdiff(
+      names(df)[startsWith(names(df), m$measure)],
+      converted_cols
+    )
+    if (length(eligible) > 0) {
+      df <- mutate(df, across(all_of(eligible), m$conversion[[1]]))
+      converted_cols <- c(converted_cols, eligible)
+    }
   }
   df
 }

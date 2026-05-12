@@ -96,6 +96,7 @@ riskServer <- function(rv, wx_data) {
         end_date <- rv$end_date
         start_year <- year(end_date) - (biofix > yday(end_date))
         start_date <- make_date(start_year) + biofix - 1
+        rv$start_date_setter <- NULL
         rv$start_date_setter <- start_date
       })
 

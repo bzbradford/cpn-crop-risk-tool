@@ -409,6 +409,13 @@ td.tbl-coords {
   font-size: smaller;
 }
 
+.app-status__msg {
+  width: 100%;
+  display: inline-flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .input-invalid input.form-control {
   border-color: #d9534f;
   background-color: #fdecea;
