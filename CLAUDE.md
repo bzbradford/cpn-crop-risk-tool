@@ -1,32 +1,8 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
 ## Project Overview
 
-An R Shiny web application for agricultural weather monitoring and crop disease risk forecasting. It fetches weather data from Open-Meteo (backended by ECMWF IFS weather data), processes it through meteorological pipelines, and displays crop disease risk model results on interactive maps.
-
-## Common Commands
-
-```r
-# Run the app
-shiny::runApp()
-
-# Run all tests
-testthat::test_dir("tests/testthat")
-
-# Run a single test file
-testthat::test_file("tests/testthat/test-models.R")
-
-# Lint the codebase
-lintr::lint_dir()
-
-# Restore R environment from lockfile
-renv::restore()
-
-# Snapshot updated dependencies
-renv::snapshot()
-```
+An R Shiny web application for agricultural weather monitoring and crop disease risk forecasting. It fetches weather data from Open-Meteo (backended by ECMWF IFS weather data), processes it through meteorological pipelines, and displays crop disease risk model results on interactive maps and charts.
 
 ## Architecture
 
@@ -38,8 +14,8 @@ renv::snapshot()
 ### Source Modules (`src/`)
 | File | Role |
 |------|------|
-| `api_openmeteo_forecast.R` | Open-Meteo forecast API |
-| `models.R` | Data aggregation pipeline: hourly → daily → moving averages (7/14/21/30-day) → GDD → disease risk models |
+| `api_openmeteo.R` | Open-Meteo historical and forecast API |
+| `models.R` | Data aggregation pipeline: hourly → daily → disease risk models |
 | `module_map.R` | Leaflet map Shiny module (site markers, grid polygons, bounds) |
 | `module_risk.R` | Crop risk display Shiny module (model selection, results, warnings) |
 | `module_data.R` | Data explorer/downloader tab module |
@@ -53,35 +29,28 @@ renv::snapshot()
 - `style.css` — Application styles
 
 ### Data Flow
-```
-User defines site (lat/lon) →
-  API fetch (hourly weather) →
-    Daily summaries →
-      Moving averages →
-        GDD calculations →
-          Disease model predictions →
-            Plotly charts + leaflet map grid
-```
+1. User defines sites (lat/lon) by map click, csv load, or browser cookie
+2. Historical weather fetch per site from Open-Meteo, cached as per-user .fst files. Invoked via mirai in ExtendedTask.
+3. Forecast fetch for each unique historical weather data grid attached to a site. Invoked via mirai in ExtendedTask.
+4. Historical and forecast data merged and sent to modules
+5. Crop risk module builds each model from daily weather on demand
+6. Data explorer module builds and displays hourly/daily/moving average/GDD
 
 ### State Management
 - `rv$` reactive values object in `server.R` holds all app state
 - Sites persist across sessions via browser cookies (JSON-encoded)
-- API auth token cached as `ibm_auth.rds`
-- Weather data cached per-user as `cache/*.fst` (FST format)
 
-### Async Execution
-Expensive API calls run via `mirai` with 2 worker sessions to avoid blocking the UI.
-
-### Disease Models
+### Disease and Insect Models
 Defined in `src/models.R` and documented in `docs/`:
 - **Corn**: Tar spot, Gray leaf spot, DON/Gibberella
 - **Soybean**: White mold, Frogeye
 - **Wheat**: Wheat scab
 - **Vegetables**: Early blight, Late blight (potato/tomato), Alternaria/Cercospora (carrot), Cercospora (beet), Botrytis (onion)
 - **Cover crops**: Winter rye biomass
+- **Insect models**: Calculated from GDD
 
 ## Key Conventions
 - Indentation: 2 spaces
-- Linting configured in `.lintr.R` (line length and indentation checks disabled)
 - R 4.5.3, dependencies managed with `renv` (see `renv.lock`)
 - Test fixtures stored as `.rds` files in `tests/testthat/`
+- Update CLAUDE.md after any major revisions as needed to maintain accuracy

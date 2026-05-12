@@ -1,7 +1,0 @@
-linters <- linters_with_defaults(
-  object_usage_linter = NULL,
-  line_length_linter = NULL,
-  commented_code_linter = NULL,
-  indentation_linter = NULL
-)
-encoding <- "UTF-8"

@@ -134,7 +134,6 @@ server <- function(input, output, session) {
     # last good date values
     start_date = OPTS$default_start_date,
     end_date = today(),
-    dates_valid = TRUE,
     start_date_setter = NULL,
 
     # sidebar site upload UI
@@ -143,35 +142,10 @@ server <- function(input, output, session) {
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
 
-    # error message displayed under fetch button
-    status = NULL,
-
     # fetch timer
     fetch_timer = now(),
     fetch_timer_active = FALSE,
   )
-
-  ## rv$status helper ----
-  set_status <- function(msg = NULL) {
-    rv$status <- list(
-      msg = msg %||% "Everything up to date.",
-      type = "info"
-    )
-  }
-
-  set_error <- function(msg = NULL) {
-    rv$status = if (is.null(msg)) {
-      list(
-        msg = "Everything up to date.",
-        type = "info"
-      )
-    } else {
-      list(
-        msg = msg,
-        type = "error"
-      )
-    }
-  }
 
   ## rv$sites_ready ----
   # update sites_ready but only if different than existing value
@@ -192,30 +166,57 @@ server <- function(input, output, session) {
   })
 
   ## validate_dates ----
+  # returns NULL if valid, else list(msg, start_invalid, end_invalid)
   validate_dates <- function(start, end) {
-    if (length(c(start, end)) < 2) {
-      return("Must provide start and end dates.")
+    start_missing <- length(start) == 0
+    end_missing <- length(end) == 0
+    if (start_missing || end_missing) {
+      return(list(
+        msg = "Please provide both start and end dates.",
+        start_invalid = start_missing,
+        end_invalid = end_missing
+      ))
     }
     if (start > end) {
-      return("Start date must be before end date.")
+      return(list(
+        msg = "Start date must be before end date.",
+        start_invalid = TRUE,
+        end_invalid = TRUE
+      ))
     }
     if ((end - start) > years(1)) {
-      return("Date range must be less than 1 year")
+      return(list(
+        msg = "Date range must be less than 1 year.",
+        start_invalid = TRUE,
+        end_invalid = TRUE
+      ))
     }
     NULL
   }
 
+  ## date_error ----
+  date_error <- reactive(validate_dates(input$start_date, input$end_date))
+
+  ## highlight invalid date inputs ----
+  observe({
+    err <- date_error()
+    toggleCssClass(
+      id = "start_date",
+      class = "input-invalid",
+      condition = !is.null(err) && isTRUE(err$start_invalid)
+    )
+    toggleCssClass(
+      id = "end_date",
+      class = "input-invalid",
+      condition = !is.null(err) && isTRUE(err$end_invalid)
+    )
+  })
+
   ## set rv$start_date and rv$end_date ----
   observe({
-    start <- input$start_date
-    end <- input$end_date
-    err <- validate_dates(start, end)
-    if (is.null(err)) {
-      rv$start_date <- start
-      rv$end_date <- end
-      set_error()
-    } else {
-      set_error(err)
+    if (is.null(date_error())) {
+      rv$start_date <- input$start_date
+      rv$end_date <- input$end_date
     }
   })
 
@@ -374,25 +375,20 @@ server <- function(input, output, session) {
     })
   })
 
-  # handle weather fetch error
-  observe({
-    status <- req(task_weather$status())
-    req(status == "error")
+  ## weather_error ----
+  # user-facing message from a failed weather task, NULL otherwise
+  weather_error <- reactive({
+    if (task_weather$status() != "error") {
+      return(NULL)
+    }
     err <- task_weather$result()
-    err_msg <- sprintf("Error <%s>: %s", class(err), conditionMessage(err))
-    contact_us <- sprintf(
-      "<a href='mailto:%s?subject=CPN Tool problem'>contact us</a>",
-      OPTS$contact_email
-    )
-    user_msg <- paste(
-      err_msg,
-      "<br>",
-      "If the problem persists, ",
-      contact_us,
-      " to report the issue."
-    )
-    warning(err_msg)
-    set_error(user_msg)
+    sprintf("Error <%s>: %s", class(err)[1], conditionMessage(err))
+  })
+
+  # log weather errors to the server console
+  observe({
+    err <- req(weather_error())
+    warning(err)
   })
 
   ## Handle weather request response ----
@@ -451,16 +447,32 @@ server <- function(input, output, session) {
     rv$forecasts <- fc
   })
 
-  ## User-facing status message ----
-  observe({
-    wx_task <- task_weather$status()
-    fc_task <- task_forecast$status()
-    status <- case_when(
-      wx_task == "running" ~ "Getting weather...",
-      fc_task == "running" ~ "Getting forecasts...",
-      TRUE ~ "Everything up to date."
-    )
-    set_status(status)
+  ## user_status ----
+  # unified, priority-ordered status (drives status_ui)
+  user_status <- reactive({
+    err <- date_error()
+    if (!is.null(err)) {
+      return(list(type = "error", msg = err$msg, show_contact = FALSE))
+    }
+    wx_err <- weather_error()
+    if (!is.null(wx_err)) {
+      return(list(type = "error", msg = wx_err, show_contact = TRUE))
+    }
+    if (task_weather$status() == "running") {
+      return(list(
+        type = "info",
+        msg = "Getting weather...",
+        show_contact = FALSE
+      ))
+    }
+    if (task_forecast$status() == "running") {
+      return(list(
+        type = "info",
+        msg = "Getting forecasts...",
+        show_contact = FALSE
+      ))
+    }
+    list(type = "info", msg = "Everything up to date.", show_contact = FALSE)
   })
 
   # Weather data ---------------------------------------------------------------
@@ -1010,41 +1022,24 @@ server <- function(input, output, session) {
 
   # Fetch weather button ----------------------------------------------------
 
-  ## action_ui ----
-  # output$action_ui <- renderUI({
-  #   btn <- function(msg, ...) {
-  #     div(class = "submit-btn", actionButton("fetch", msg, ...))
-  #   }
-
-  #   # used to promt button to regenerate
-  #   rv$action_nonce
-
-  #   # control button appearance
-  #   if (nrow(rv$sites) == 0) {
-  #     return(btn("No sites selected", disabled = TRUE))
-  #   }
-  #   if (!rv$dates_valid) {
-  #     return(btn("Invalid date selection", disabled = TRUE))
-  #   }
-  #   if (need_weather()) {
-  #     return(btn("Fetch weather"))
-  #   }
-  #   btn("Everything up to date", class = "btn-primary", disabled = TRUE)
-  # })
-
   ## status_ui ----
 
-  # reports to user if there's a problem with weather fetching
+  # reports app status / problems to the user
   output$status_ui <- renderUI({
-    status <- req(rv$status)
-    msg <- req(status$msg)
-    div(
-      style = if (status$type == "error") {
-        "margin-top: 1rem; padding: 5px 10px; border: 1px solid red; border-radius: 5px; background: rgb(255, 225, 225); color: red;"
-      } else {
-        "margin-top: 1rem; padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;"
-      },
-      msg
+    status <- user_status()
+    contact <- if (isTRUE(status$show_contact)) {
+      tags$div(
+        class = "app-status__contact",
+        HTML(sprintf(
+          "If the problem persists, <a href='mailto:%s?subject=CPN Tool problem'>contact us</a> to report the issue.",
+          OPTS$contact_email
+        ))
+      )
+    }
+    tags$div(
+      class = paste0("app-status app-status--", status$type),
+      tags$div(class = "app-status__msg", HTML(status$msg)),
+      contact
     )
   })
 

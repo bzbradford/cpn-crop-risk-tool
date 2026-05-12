@@ -388,6 +388,37 @@ td.tbl-coords {
   gap: 10px;
 }
 
+/*--- STATUS / VALIDATION ---*/
+
+.app-status {
+  margin-top: 1rem;
+  padding: 5px 10px;
+  border: 1px solid lightsteelblue;
+  border-radius: 5px;
+  background: white;
+}
+
+.app-status--error {
+  border-color: #d9534f;
+  background: #fdecea;
+  color: #a94442;
+}
+
+.app-status__contact {
+  margin-top: 5px;
+  font-size: smaller;
+}
+
+.input-invalid input.form-control {
+  border-color: #d9534f;
+  background-color: #fdecea;
+}
+
+.input-invalid input.form-control:focus {
+  border-color: #d9534f;
+  box-shadow: 0 0 0 0.2rem rgba(217, 83, 79, 0.25);
+}
+
 /*--- LEAFLET ---*/
 
 /* draw above leaflet control */
