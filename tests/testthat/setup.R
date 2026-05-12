@@ -19,6 +19,8 @@ if (FALSE) {
   test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 }
 
-# load example weather data for tests
+#' Load example data for tests
+#' Note working directory for tests is relative to tests/testthat
+test_sites <- load_sites("example-sites.csv")
 test_hourly_wx <- readRDS("test_hourly_wx.rds")
 test_daily_wx <- build_daily(test_hourly_wx)
