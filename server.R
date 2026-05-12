@@ -1,119 +1,8 @@
 #--- main server ---#
 
 server <- function(input, output, session) {
-  # Startup and cookie handling ------------------------------------------------
-
-  # cookie has .userId and .sites keys
-  read_cookie <- function() {
-    runjs("sendCookieToShiny();")
-  }
-
-  # set the .sites key on the cookie
-  set_cookie <- function(sites) {
-    sites_json <- jsonlite::toJSON(sites)
-    runjs(str_glue("updateCookie({{sites: {sites_json}}})"))
-  }
-
-  # clear out the .sites key on the cookie
-  clear_cookie <- function() {
-    set_cookie(tibble())
-  }
-
-  ## Initialize cookie ----
-  # on startup read cookie data then start cookie writer
-  observe({
-    read_cookie()
-
-    cookie_writer <- observe({
-      sites <- rv$sites
-      set_cookie(sites)
-    })
-  })
-
-  ## Parse sites from cookie ----
-  observeEvent(input$cookie, {
-    cookie <- req(input$cookie)
-    cookie_sites <- req(cookie$sites)
-    sites <- parse_cookie_sites(cookie_sites)
-    req(sites)
-
-    rv$sites <- sites
-    rv$selected_site <- first(sites$id)
-    rv$map_cmd <- "fit_sites"
-
-    showNotification(paste(
-      "Loaded",
-      nrow(sites),
-      ifelse(nrow(sites) == 1, "site", "sites"),
-      "from a previous session."
-    ))
-
-    # trigger weather fetch after a second
-    delay(1000, {
-      rv$fetch <- runif(1)
-    })
-  })
-
-  # based on user ID which is set by javascript on the client
-  cache_file <- reactive({
-    cookie <- req(input$cookie)
-
-    tryCatch(
-      {
-        user_id <- cookie[["userId"]]
-        req(length(user_id) > 0)
-        get_cache_file(user_id)
-      },
-      error = function(e) {
-        message("Failed to read user ID from cookie: ", e)
-        echo(cookie)
-      }
-    )
-  })
-
-  # observe(echo(cache_file()))
-
-  ## Read cached weather ----
-  observe({
-    fname <- cache_file()
-    req(file.exists(fname))
-
-    tryCatch(
-      {
-        wx <- read_fst(fname) |> as_tibble()
-        if (!("precipitation" %in% names(wx))) {
-          message("Cache schema mismatch (pre-OM schema), discarding: ", fname)
-          file.remove(fname)
-        } else {
-          rv$weather <- wx
-        }
-      },
-      error = function(e) {
-        message("Failed to read cache file '", fname, "'")
-        file.remove(fname)
-      }
-    )
-  }) |>
-    bindEvent(cache_file())
-
-  ## Write weather to cache ----
-  observe({
-    wx <- rv$weather
-    fname <- cache_file()
-    tryCatch(
-      {
-        write_fst(wx, fname, compress = 99)
-      },
-      error = function(e) {
-        message("Could not write cache file '", fname, "': ", e)
-      }
-    )
-  }) |>
-    bindEvent(rv$weather)
-
   # Reactive values ------------------------------------------------------------
 
-  ## rv ----
   rv <- reactiveValues(
     weather = tibble(),
     weather_ready = FALSE,
@@ -132,8 +21,10 @@ server <- function(input, output, session) {
     selected_site = 1,
 
     # last good date values
-    start_date = OPTS$default_start_date,
-    end_date = today(),
+    start_date = NULL,
+    end_date = NULL,
+
+    # will invoke an update to input$start_date if set
     start_date_setter = NULL,
 
     # sidebar site upload UI
@@ -142,10 +33,12 @@ server <- function(input, output, session) {
     # tell the map module to zoom to sites
     map_fit_sites_cmd = NULL,
 
-    # debounce: track last fetch attempt to break feedback loops
+    # debounce: track last weather fetch attempt to break feedback loops
     last_fetch_key = NULL,
     last_fetch_time = NULL,
   )
+
+  # Reactives and rv handlers --------------------------------------------------
 
   ## rv$sites_ready ----
   # update sites_ready but only if different than existing value
@@ -235,8 +128,6 @@ server <- function(input, output, session) {
     rv$map_risk_data <- NULL
   })
 
-  # Reactives ------------------------------------------------------------------
-
   ## selected_dates ----
   # will block fetch button if invalid dates selected
   selected_dates <- reactive({
@@ -307,6 +198,112 @@ server <- function(input, output, session) {
     any(sites$needs_download, na.rm = TRUE)
   })
 
+  # Startup and cookie handling ------------------------------------------------
+
+  # cookie has .userId and .sites keys
+  read_cookie <- function() {
+    runjs("sendCookieToShiny();")
+  }
+
+  # set the .sites key on the cookie
+  set_cookie <- function(sites) {
+    sites_json <- jsonlite::toJSON(sites)
+    runjs(str_glue("updateCookie({{sites: {sites_json}}})"))
+  }
+
+  # clear out the .sites key on the cookie
+  clear_cookie <- function() {
+    set_cookie(tibble())
+  }
+
+  ## Initialize cookie ----
+  # on startup read cookie data then start cookie writer
+  observe({
+    read_cookie()
+
+    cookie_writer <- observe({
+      sites <- rv$sites
+      set_cookie(sites)
+    })
+  })
+
+  ## Parse sites from cookie ----
+  observeEvent(input$cookie, {
+    cookie <- req(input$cookie)
+    cookie_sites <- req(cookie$sites)
+    sites <- parse_cookie_sites(cookie_sites)
+    req(sites)
+
+    rv$sites <- sites
+    rv$selected_site <- first(sites$id)
+    rv$map_cmd <- "fit_sites"
+
+    showNotification(paste(
+      "Loaded",
+      nrow(sites),
+      ifelse(nrow(sites) == 1, "site", "sites"),
+      "from a previous session."
+    ))
+
+    # trigger weather fetch after a second
+    delay(1000, {
+      rv$fetch <- runif(1)
+    })
+  })
+
+  # based on user ID which is set by javascript on the client
+  cache_file <- reactive({
+    cookie <- req(input$cookie)
+
+    tryCatch(
+      {
+        user_id <- cookie[["userId"]]
+        req(length(user_id) > 0)
+        get_cache_file(user_id)
+      },
+      error = function(e) {
+        message("Failed to read user ID from cookie: ", e)
+        echo(cookie)
+      }
+    )
+  })
+
+  # observe(echo(cache_file()))
+
+  ## Read cached weather ----
+  observe({
+    fname <- cache_file()
+    req(file.exists(fname))
+
+    tryCatch(
+      {
+        wx <- read_fst(fname) |> as_tibble()
+        build_daily(wx) # make sure it'll work
+        rv$weather <- wx
+      },
+      error = function(e) {
+        message("Failed to read cache file '", fname, "'")
+        file.remove(fname)
+      }
+    )
+  }) |>
+    bindEvent(cache_file())
+
+  ## Write weather to cache ----
+  observe({
+    wx <- rv$weather
+    fname <- cache_file()
+    tryCatch(
+      {
+        write_fst(wx, fname, compress = 99)
+      },
+      error = function(e) {
+        message("Could not write cache file '", fname, "': ", e)
+      }
+    )
+  }) |>
+    bindEvent(rv$weather)
+
   # Open-Meteo Weather Extended Task -------------------------------------------
 
   # caller is responsible for clamping end_date to local today() before invoking;
@@ -332,9 +329,9 @@ server <- function(input, output, session) {
     )
   })
 
-  observe({
-    message(paste("task_weather:", task_weather$status()))
-  })
+  # observe({
+  #   message(paste("task_weather:", task_weather$status()))
+  # })
 
   ## Invoke weather request ----
 
@@ -435,9 +432,9 @@ server <- function(input, output, session) {
     )
   })
 
-  observe({
-    message(paste("task_forecast:", task_forecast$status()))
-  })
+  # observe({
+  #   message(paste("task_forecast:", task_forecast$status()))
+  # })
 
   ## Invoke forecast fetch ----
   observe({
@@ -454,6 +451,15 @@ server <- function(input, output, session) {
       filter(!grid_id %in% already_fetched)
 
     req(nrow(grids_df) > 0)
+
+    # populate each pending forecast slot to prevent retry loop
+    for (i in seq_len(nrow(grids_df))) {
+      gid <- slice(grids_df, i)[["grid_id"]]
+      if (is.null(rv$forecasts[[gid]])) {
+        rv$forecasts[[gid]] <- NULL
+      }
+    }
+
     task_forecast$invoke(grids_df)
   })
 
@@ -468,34 +474,6 @@ server <- function(input, output, session) {
       fc[[gid]] <- result |> filter(grid_id == gid)
     }
     rv$forecasts <- fc
-  })
-
-  ## user_status ----
-  # unified, priority-ordered status (drives status_ui)
-  user_status <- reactive({
-    err <- date_error()
-    if (!is.null(err)) {
-      return(list(type = "error", msg = err$msg, show_contact = FALSE))
-    }
-    wx_err <- weather_error()
-    if (!is.null(wx_err)) {
-      return(list(type = "error", msg = wx_err, show_contact = TRUE))
-    }
-    if (task_weather$status() == "running") {
-      return(list(
-        type = "info",
-        msg = "Getting weather...",
-        show_contact = FALSE
-      ))
-    }
-    if (task_forecast$status() == "running") {
-      return(list(
-        type = "info",
-        msg = "Getting forecasts...",
-        show_contact = FALSE
-      ))
-    }
-    list(type = "info", msg = "Everything up to date.", show_contact = FALSE)
   })
 
   # Weather data ---------------------------------------------------------------
@@ -533,17 +511,15 @@ server <- function(input, output, session) {
     daily_full <- build_daily(hourly_full)
 
     hourly <- hourly_full |>
+      filter(date >= sel_dates$start)
+
+    # drop pre-fetch dates and rebuild cumulative counts
+    daily <- daily_full |>
       filter(date >= sel_dates$start) |>
-      group_by(grid_id) |>
-      mutate(
-        precipitation_cumulative = cumsum(precipitation),
-        .after = precipitation
-      ) |>
-      mutate(
-        snowfall_cumulative = cumsum(snowfall),
-        .after = snowfall
-      ) |>
-      ungroup()
+      add_cumsum("evapotranspiration_daily") |>
+      add_cumsum("precipitation_daily") |>
+      add_cumsum("rain_daily") |>
+      add_cumsum("snowfall_daily")
 
     list(
       sites = sites,
@@ -554,7 +530,7 @@ server <- function(input, output, session) {
       ),
       hourly = hourly,
       daily_full = daily_full,
-      daily = daily_full |> filter(date >= sel_dates$start)
+      daily = daily
     )
   })
 
@@ -1043,13 +1019,55 @@ server <- function(input, output, session) {
     }
   })
 
-  # Fetch weather button ----------------------------------------------------
+  # Status ----------------------------------------------------
+
+  ## user_status ----
+  # unified, priority-ordered status (drives status_ui)
+  status_msg <- reactive({
+    Status <- function(type, msg, contact = FALSE) {
+      icon <- if (type == "error") {
+        icon("x")
+      } else if (str_detect(msg, "Getting")) {
+        icon("hourglass")
+      } else {
+        icon("check")
+      }
+      lst(type, msg, icon, contact)
+    }
+
+    # check for date error
+    date_err <- date_error()
+    if (!is.null(date_err)) {
+      return(Status("error", date_err$msg))
+    }
+
+    # check for weather error
+    wx_err <- weather_error()
+    if (!is.null(wx_err)) {
+      return(Status("error", wx_err, contact = TRUE))
+    }
+
+    # if weather running
+    if (task_weather$status() == "running") {
+      return(Status("info", "Getting weather..."))
+    }
+
+    # if forecast running
+    if (task_forecast$status() == "running") {
+      return(Status("info", "Getting forecasts..."))
+    }
+
+    Status("info", "Everything up to date.")
+  })
 
   ## status_ui ----
 
   # reports app status / problems to the user
   output$status_ui <- renderUI({
-    status <- user_status()
+    # wait for initial load to complete and default dates to be set
+    req(rv$start_date, rv$end_date)
+
+    status <- status_msg()
     contact <- if (isTRUE(status$show_contact)) {
       tags$div(
         class = "app-status__contact",
@@ -1061,7 +1079,11 @@ server <- function(input, output, session) {
     }
     tags$div(
       class = paste0("app-status app-status--", status$type),
-      tags$div(class = "app-status__msg", HTML(status$msg)),
+      tags$div(
+        class = "app-status__msg",
+        HTML(status$msg),
+        status$icon
+      ),
       contact
     )
   })

@@ -27,16 +27,18 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 
   # apply moving average functions to each primary data column
   ma <- daily |>
-    select(-hours) |>
     mutate(
       across(
         starts_with(c(
           "temperature",
           "dew_point",
           "relative_humidity",
-          "wind",
+          "evapotranspiration",
+          "precip",
+          "snow",
           "pressure",
-          "hours"
+          "wind",
+          "soil"
         )),
         fns
       ),
@@ -145,7 +147,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           grid_ids = sort(wx$sites$grid_id),
           start = wx$dates$start,
           end = wx$dates$end,
-          n_daily = nrow(wx$daily_full)
+          n_daily = nrow(wx$daily)
         )
       })
 

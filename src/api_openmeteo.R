@@ -50,9 +50,9 @@ openmeteo_vars <- vctrs::vec_c(
   # "surface_pressure",
   wind_speed = "wind_speed_10m",
   # "wind_speed_100m",
+  wind_gust = "wind_gusts_10m",
   wind_direction = "wind_direction_10m",
   # "wind_direction_100m",
-  wind_gust = "wind_gusts_10m",
   # "cloud_cover",
   # "cloud_cover_low",
   # "cloud_cover_mid",
@@ -90,7 +90,8 @@ om_build_req <- function(
   end,
   vars = openmeteo_vars
 ) {
-  url <- "https://archive-api.open-meteo.com/v1/archive"
+  # url <- "https://archive-api.open-meteo.com/v1/archive"
+  url <- "https://customer-archive-api.open-meteo.com/v1/archive"
   request(url) |>
     req_url_query(
       latitude = lat,
@@ -99,6 +100,7 @@ om_build_req <- function(
       end_date = end,
       timezone = "auto",
       hourly = vars,
+      apikey = OPTS$open_meteo_key,
       .multi = "comma"
     ) |>
     req_timeout(10) |>
@@ -125,7 +127,8 @@ om_build_forecast_req <- function(
   vars = openmeteo_vars,
   days = 16
 ) {
-  url <- "https://api.open-meteo.com/v1/forecast"
+  # url <- "https://api.open-meteo.com/v1/forecast"
+  url <- "https://customer-api.open-meteo.com/v1/forecast"
   request(url) |>
     req_url_query(
       latitude = lat,
@@ -133,6 +136,7 @@ om_build_forecast_req <- function(
       forecast_days = days,
       timezone = "auto",
       hourly = vars,
+      apikey = OPTS$open_meteo_key,
       .multi = "comma"
     ) |>
     req_timeout(10) |>
@@ -142,6 +146,7 @@ om_build_forecast_req <- function(
 if (FALSE) {
   resp <- om_build_forecast_req(45, -89) |>
     req_perform()
+  resp$request$url
   resp_body_json(resp)
   om_resp_ok(resp)
   om_parse_json(resp)
@@ -249,9 +254,10 @@ om_build_hourly <- function(wx) {
       all_of(openmeteo_vars)
     ) |>
     mutate(
-      dew_point_depression = abs(temperature - dew_point),
+      dew_point_depression = pmax(0, temperature - dew_point),
       .after = dew_point
     ) |>
+    mutate(soil_moisture = soil_moisture * 100) |>
     add_date_cols() |>
     arrange(grid_lat, grid_lng, datetime_local)
 }
@@ -400,7 +406,7 @@ om_wx_daily_status <- function(wx) {
       tz = coalesce(first(timezone), "UTC"),
       time_min = min(datetime_utc),
       time_max = max(datetime_utc),
-      hours = n(),
+      hours_actual = n(),
       .by = c(grid_id, date)
     ) |>
     mutate(
@@ -414,7 +420,7 @@ om_wx_daily_status <- function(wx) {
       # clamp to 0: archive can return forecast hours past now() for today,
       # so `hours` may exceed `hours_expected`. Negative "missing" would
       # otherwise exclude today from dates_have and cause a refetch loop.
-      hours_missing = pmax(0, hours_expected - hours)
+      hours_missing = pmax(0, hours_expected - hours_actual)
     )
 }
 

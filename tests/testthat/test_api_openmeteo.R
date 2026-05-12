@@ -41,7 +41,10 @@ test_that("openmeteo_vars names are all in conversion_lookup", {
 test_that("om_build_req composes archive URL with expected query params", {
   req <- om_build_req(45, -89, "2026-05-01", "2026-05-04")
   expect_s3_class(req, "httr2_request")
-  expect_match(req$url, "^https://archive-api\\.open-meteo\\.com/v1/archive")
+  expect_match(
+    req$url,
+    "^https://customer-archive-api\\.open-meteo\\.com/v1/archive"
+  )
   expect_match(req$url, "latitude=45")
   expect_match(req$url, "longitude=-89")
   expect_match(req$url, "start_date=2026-05-01")
@@ -55,7 +58,7 @@ test_that("om_build_req composes archive URL with expected query params", {
 
 test_that("om_build_forecast_req hits forecast endpoint with forecast_days", {
   req <- om_build_forecast_req(45, -89, days = 7)
-  expect_match(req$url, "^https://api\\.open-meteo\\.com/v1/forecast")
+  expect_match(req$url, "^https://customer-api\\.open-meteo\\.com/v1/forecast")
   expect_match(req$url, "forecast_days=7")
   expect_match(req$url, "latitude=45")
   expect_match(req$url, "longitude=-89")
@@ -93,7 +96,9 @@ test_that("om_parse_json builds a tidy tibble with expected columns", {
       names(parsed)
   ))
   # parsed time cols
-  expect_true(all(c("datetime_local", "datetime_utc", "date") %in% names(parsed)))
+  expect_true(all(
+    c("datetime_local", "datetime_utc", "date") %in% names(parsed)
+  ))
   expect_false("time" %in% names(parsed))
   # at least one requested variable is present (renaming happens later)
   expect_true("temperature_2m" %in% names(parsed))
@@ -142,8 +147,15 @@ test_that("om_build_hourly returns empty tibble for empty input", {
 test_that("om_build_hourly produces the canonical hourly schema", {
   out <- om_parse_resp(example_resp) |> om_build_hourly()
   expected_cols <- c(
-    "grid_id", "grid_lat", "grid_lng", "elevation", "timezone", "tz_offset",
-    "datetime_utc", "datetime_local", "date",
+    "grid_id",
+    "grid_lat",
+    "grid_lng",
+    "elevation",
+    "timezone",
+    "tz_offset",
+    "datetime_utc",
+    "datetime_local",
+    "date",
     names(openmeteo_vars),
     "dew_point_depression"
   )
@@ -170,7 +182,9 @@ test_that("get_o1280_cells returns cells whose bbox contains the centroid", {
   lngs <- c(-89.02173, 0, 100, -179.5)
   cells <- get_o1280_cells(lats, lngs)
   expect_equal(nrow(cells), length(lats))
-  expect_true(all(c("xmin", "xmax", "ymin", "ymax", "geometry") %in% names(cells)))
+  expect_true(all(
+    c("xmin", "xmax", "ymin", "ymax", "geometry") %in% names(cells)
+  ))
   # centroids fall within their assigned bbox
   expect_true(all(lats >= cells$ymin & lats <= cells$ymax))
   expect_true(all(lngs >= cells$xmin & lngs <= cells$xmax))
@@ -198,20 +212,29 @@ test_that("om_build_grids returns one sf row per unique grid_id", {
     nrow(grids),
     length(unique(test_hourly_wx$grid_id))
   )
-  expect_true(all(c("grid_id", "timezone", "elevation", "geometry") %in% names(grids)))
+  expect_true(all(
+    c("grid_id", "timezone", "elevation", "geometry") %in% names(grids)
+  ))
 })
 
 test_that("om_wx_daily_status reports hours per grid-date", {
   daily <- om_wx_daily_status(test_hourly_wx)
   expect_s3_class(daily, "tbl_df")
-  expect_true(all(c(
-    "grid_id", "date", "hours", "hours_expected", "hours_missing"
-  ) %in% names(daily)))
+  expect_true(all(
+    c(
+      "grid_id",
+      "date",
+      "hours_actual",
+      "hours_expected",
+      "hours_missing"
+    ) %in%
+      names(daily)
+  ))
   # hours_missing was clamped at >= 0
   expect_true(all(daily$hours_missing >= 0))
   # most complete (non-today) days should report 24 hours
   full_days <- daily |> filter(date < today())
-  expect_true(median(full_days$hours) == 24)
+  expect_true(median(full_days$hours_actual) == 24)
 })
 
 test_that("om_wx_status returns the default sentinel for empty input", {
@@ -223,17 +246,31 @@ test_that("om_wx_status returns the default sentinel for empty input", {
 test_that("om_wx_status summarizes coverage per grid", {
   out <- om_wx_status(test_hourly_wx)
   expect_s3_class(out, "tbl_df")
-  expect_true(all(c(
-    "grid_id", "date_min", "date_max", "days_expected", "days_actual",
-    "days_missing", "hours_expected", "hours_missing", "needs_download",
-    "dates_have"
-  ) %in% names(out)))
+  expect_true(all(
+    c(
+      "grid_id",
+      "date_min",
+      "date_max",
+      "days_expected",
+      "days_actual",
+      "days_missing",
+      "hours_expected",
+      "hours_missing",
+      "needs_download",
+      "dates_have"
+    ) %in%
+      names(out)
+  ))
   expect_equal(nrow(out), length(unique(test_hourly_wx$grid_id)))
 })
 
 test_that("om_wx_status flags needs_download when dates outside fixture range requested", {
   far_future <- today() + days(30)
-  out <- om_wx_status(test_hourly_wx, start_date = far_future, end_date = far_future)
+  out <- om_wx_status(
+    test_hourly_wx,
+    start_date = far_future,
+    end_date = far_future
+  )
   # no rows in selected_wx for that future date -> default sentinel
   expect_true(all(out$needs_download))
 })
@@ -273,12 +310,25 @@ test_that("om_build_chunks returns the entire range when no existing dates", {
 
 test_that("om_build_chunks splits missing dates into contiguous runs", {
   out <- om_build_chunks(
-    "2026-01-01", "2026-01-15",
-    as.Date(c("2026-01-02", "2026-01-03", "2026-01-07", "2026-01-08", "2026-01-09"))
+    "2026-01-01",
+    "2026-01-15",
+    as.Date(c(
+      "2026-01-02",
+      "2026-01-03",
+      "2026-01-07",
+      "2026-01-08",
+      "2026-01-09"
+    ))
   )
   expect_equal(nrow(out), 3)
-  expect_equal(out$start_date, as.Date(c("2026-01-01", "2026-01-04", "2026-01-10")))
-  expect_equal(out$end_date,   as.Date(c("2026-01-01", "2026-01-06", "2026-01-15")))
+  expect_equal(
+    out$start_date,
+    as.Date(c("2026-01-01", "2026-01-04", "2026-01-10"))
+  )
+  expect_equal(
+    out$end_date,
+    as.Date(c("2026-01-01", "2026-01-06", "2026-01-15"))
+  )
   expect_equal(out$days, c(1, 3, 6))
 })
 

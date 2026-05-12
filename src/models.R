@@ -51,18 +51,23 @@ build_daily <- function(hourly) {
   summary_fns <- c("min" = calc_min, "mean" = calc_mean, "max" = calc_max)
   by_date <- hourly |>
     summarize(
-      hours = n(),
       across(
-        c(temperature, dew_point, dew_point_depression, relative_humidity),
+        c(
+          temperature,
+          dew_point,
+          dew_point_depression,
+          relative_humidity
+        ),
         summary_fns
       ),
+      evapotranspiration_daily = calc_sum(evapotranspiration),
       across(
-        c(precipitation, snowfall),
+        c(precipitation, rain, snowfall),
         c("daily" = calc_sum, "max_hourly" = calc_max)
       ),
-      across(c(pressure_msl, wind_speed), summary_fns),
+      across(c(snow_depth, pressure_msl, wind_speed), summary_fns),
       wind_gust_max = calc_max(wind_gust),
-      across(c(wind_direction), summary_fns),
+      across(c(wind_direction, soil_temp, soil_moisture), summary_fns),
       hours_temp_over_20 = sum(temperature >= 20),
       hours_temp_over_30 = sum(temperature >= 30),
       hours_rh_under_70 = sum(relative_humidity < 70),
@@ -72,9 +77,11 @@ build_daily <- function(hourly) {
     ) |>
     arrange(grid_id, date) |>
     group_by(grid_id) |>
+    add_cumsum("evapotranspiration_daily") |>
+    add_cumsum("precipitation_daily") |>
+    add_cumsum("rain_daily") |>
+    add_cumsum("snowfall_daily") |>
     mutate(
-      precipitation_cumulative = cumsum(precipitation_daily),
-      snowfall_cumulative = cumsum(snowfall_daily),
       hot_past_5_days = data.table::frollapply(
         hours_temp_over_30,
         5,
@@ -109,7 +116,6 @@ build_daily <- function(hourly) {
 
   # assemble the data
   by_date |>
-    filter((hours >= 12) | (date == today())) |>
     left_join(by_night, join_by(grid_id, date == date_since_night)) |>
     left_join(lat_lng, join_by(grid_id)) |>
     relocate(grid_lat, grid_lng, .after = grid_id) |>
