@@ -40,39 +40,31 @@ ui <- fluidPage(
   div(
     class = "main",
 
+    # left sidebar
     div(
       class = "column sidebar-col",
-      h2("Site selection", style = "margin-bottom: 1rem;"),
+      h2("Site selection"),
       div(
+        style = "margin-top: 1rem; min-height: 150px;",
         uiOutput("site_help_ui"),
-        div(
-          style = "max-height: 400px; overflow: auto;",
-          DTOutput("sites_dt"),
-        ),
+        uiOutput("sites_list", style = "max-height: 400px; overflow: auto;"),
         uiOutput("site_btns"),
         uiOutput("file_upload_ui")
       ),
+
       h2("Weather data", style = "margin-top: 2rem;"),
-      uiOutput("date_select_ui"),
       div(
-        style = "margin-top: 1rem;",
-        uiOutput("date_btns_ui")
+        style = "min-height: 150px",
+        uiOutput("date_select_ui"),
+        uiOutput("date_btns_ui", style = "margin-top: 1rem;"),
       ),
-      div(
-        style = "margin-top: 1rem;",
-        uiOutput("action_ui") |>
-          withSpinner(
-            type = 8,
-            size = .5,
-            proxy.height = 70,
-            caption = "Please wait..."
-          ),
-        uiOutput("status_ui")
-      )
+      uiOutput("status_ui", style = "margin-top: 1rem;")
     ),
 
+    # center map
     div(class = "column map-col", mapUI()),
 
+    # right UI
     div(
       class = "column data-col",
       tabsetPanel(

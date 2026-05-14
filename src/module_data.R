@@ -27,16 +27,18 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 
   # apply moving average functions to each primary data column
   ma <- daily |>
-    select(-hours) |>
     mutate(
       across(
         starts_with(c(
           "temperature",
           "dew_point",
           "relative_humidity",
-          "wind",
+          "evapotranspiration",
+          "precip",
+          "snow",
           "pressure",
-          "hours"
+          "wind",
+          "soil"
         )),
         fns
       ),
@@ -49,7 +51,10 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   bind_cols(attr, ma)
 }
 
-# test_hourly_wx |> build_daily() |> build_ma_from_daily()
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_ma_from_daily()
+}
+
 
 ## Build all GDDs ----
 #' Generate various growing degree day models with and without an 86F upper threshold
@@ -89,23 +94,43 @@ build_gdd_from_daily <- function(daily) {
     )
 }
 
-# test_hourly_wx |> build_daily() |> build_gdd_from_daily()
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_gdd_from_daily()
+}
 
-# Data UI ----------------------------------------------------------------------
+
+# Static UI --------------------------------------------------------------------
+
 dataUI <- function() {
   ns <- NS("data")
   div(
-    # class = "tab-content",
     div(
-      em(
-        "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
-      )
+      style = "margin-top: 1rem; padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;",
+
+      "Explore and download hourly, daily, moving average, or growing degree day data for your sites. Values may be shown in either metric or imperial units.",
+
+      # metric/forecast switches
+      uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
     ),
-    uiOutput(ns("main_ui"), fill = "container"),
+
+    # dataset selector
+    uiOutput(ns("data_type_ui"), style = "margin-top: 1rem;"),
+
+    # dataset options like rolling mean, may be blank
+    uiOutput(ns("data_options_ui")),
+
+    # which columns to plot
+    uiOutput(ns("plot_cols_ui"), style = "margin-top: 1rem;"),
+
+    # multi-site checkboxes, plot, and download button
+    # includes validation messages
+    uiOutput(ns("main_ui")),
   )
 }
 
-# Data server ------------------------------------------------------------------
+
+# Module server ----------------------------------------------------------------
+
 dataServer <- function(wx_data, selected_site, sites_ready) {
   moduleServer(
     id = "data",
@@ -145,7 +170,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           grid_ids = sort(wx$sites$grid_id),
           start = wx$dates$start,
           end = wx$dates$end,
-          n_daily = nrow(wx$daily_full)
+          n_daily = nrow(wx$daily)
         )
       })
 
@@ -223,19 +248,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         validate(need(rv$ready, OPTS$validation_weather_ready))
 
         tagList(
-          # metric/forecast switches
-          uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
-          # dataset selector
-          uiOutput(ns("data_type_ui"), style = "margin-top: 1rem;"),
-          # dataset options like rolling mean, may be blank
-          uiOutput(ns("data_options_ui")),
-          # which columns to plot
-          uiOutput(ns("plot_cols_ui"), style = "margin-top: 1rem;"),
           # shown if more than one site
           uiOutput(ns("plot_sites_ui")),
-          # warning if there is missing data
-          uiOutput(ns("weather_missing_ui")),
-          # main plot area
           div(
             class = "plotly-container",
             style = "margin-top: 1rem;",
@@ -316,56 +330,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         }
       })
 
-      ## weather_missing_ui ----
-      output$weather_missing_ui <- renderUI({
-        sites <- wx_data()$sites
-        req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
-
-        weather_warning_for_sites(sites) |>
-          build_warning_box()
-      })
-
-      ## plot_sites_ui ----
-      # plot_sites_choices <- reactive({
-      #   sites <- wx_data()$sites
-      #   req(nrow(sites) > 1)
-      #
-      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-      # }) |>
-      #   debounce(1000)
-
-      output$plot_sites_ui <- renderUI({
-        # choices <- plot_sites_choices()
-
-        sites <- wx_data()$sites
-        req(nrow(sites) > 1)
-
-        choices <- set_names(
-          sites$id,
-          sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
-        )
-        selected <- isolate(input$plot_sites) %||% selected_site()
-
-        checkboxGroupInput(
-          inputId = ns("plot_sites"),
-          label = "Sites to display",
-          choices = choices,
-          selected = selected,
-          inline = TRUE
-        )
-      })
-
-      ## change selection ----
-      observe({
-        selected <- selected_site()
-
-        updateCheckboxGroupInput(
-          session,
-          inputId = "plot_sites",
-          selected = selected
-        )
-      })
-
       ## plot_cols - reactive ----
       plot_cols <- reactive({
         cols <- names(selected_data())
@@ -425,8 +389,49 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # reset on button press
       observe(reset_plot_cols()) |> bindEvent(input$reset_plot_cols)
 
-      ## data_plot - renderPlotly ----
-      output$data_plot <- renderPlotly({
+      ## plot_sites_ui ----
+      # plot_sites_choices <- reactive({
+      #   sites <- wx_data()$sites
+      #   req(nrow(sites) > 1)
+      #
+      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
+      # }) |>
+      #   debounce(1000)
+
+      output$plot_sites_ui <- renderUI({
+        # choices <- plot_sites_choices()
+
+        sites <- wx_data()$sites
+        req(nrow(sites) > 1)
+
+        choices <- set_names(
+          sites$id,
+          sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
+        )
+        selected <- isolate(input$plot_sites) %||% selected_site()
+
+        checkboxGroupInput(
+          inputId = ns("plot_sites"),
+          label = "Sites to display",
+          choices = choices,
+          selected = selected,
+          inline = TRUE
+        )
+      })
+
+      ## change selection ----
+      observe({
+        selected <- selected_site()
+
+        updateCheckboxGroupInput(
+          session,
+          inputId = "plot_sites",
+          selected = selected
+        )
+      })
+
+      ## plot_data ----
+      plot_data <- reactive({
         df <- selected_data()
         sites <- wx_data()$sites
         dates <- wx_data()$dates
@@ -446,20 +451,27 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           cols = req(input$plot_cols),
           unit_system = ifelse(input$metric, "metric", "imperial"),
           site_ids = unique(df$site_id),
-          show_forecast = input$forecast,
-          filename = download_filename()$plot
+          show_forecast = input$forecast
         )
 
         # if multiple sites filter by the ones selected in the UI
         if (opts$multi_site) {
           opts$selected_ids <- req(input$plot_sites)
           df <- filter(df, site_id %in% opts$selected_ids)
+          sites <- filter(sites, id %in% opts$selected_ids)
         }
 
         req(nrow(df) > 0)
         req(all(opts$cols %in% names(df)))
 
-        build_data_plot(df, sites, opts)
+        list(df = df, sites = sites, opts = opts)
+      })
+
+      ## data_plot - renderPlotly ----
+      output$data_plot <- renderPlotly({
+        data <- plot_data()
+        data$opts$filename <- download_filename()$plot
+        build_data_plot(data$df, data$sites, data$opts)
       })
 
       # Download button ----
@@ -467,11 +479,12 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## download_data - reactive ----
       download_data <- reactive({
         unit_system <- if_else(input$metric, "metric", "imperial")
-        selected_data() |>
+        data <- plot_data()
+        data$df |>
           rename_with_units(unit_system) |>
           mutate(across(
-            any_of(c("datetime_utc", "datetime_local")),
-            as.character
+            where(is.POSIXct),
+            ~ format(.x, "%Y-%m-%d %H:%M:%S")
           )) |>
           janitor::clean_names("big_camel")
       })
@@ -481,8 +494,10 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       download_filename <- reactive({
         type <- req(input$data_type)
         wx <- wx_data()
-        sites <- wx$sites
+        # sites <- wx$sites
         dates <- wx$dates
+        data <- plot_data()
+        sites <- data$sites
         name_str <- invert(OPTS$data_type_choices)[[type]]
         site_str <- ifelse(
           nrow(sites) == 1,

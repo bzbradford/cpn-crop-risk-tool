@@ -376,22 +376,6 @@ ibm_vars <- c(
   "pressure_change"
 )
 
-#' df must have cols `date` and `datetime_local`
-add_date_cols <- function(df) {
-  df |>
-    mutate(
-      yday = yday(date),
-      year = year(date),
-      month = month(date),
-      day = day(date),
-      hour = hour(datetime_local),
-      night = !between(hour, 7, 19), # night is between 20:00 and 6:00
-      date_since_night = as_date(datetime_local + hours(4)),
-      .after = date,
-      .by = grid_id
-    )
-}
-
 #' Creates the working hourly weather dataset from cleaned ibm response
 #' @param ibm_hourly hourly weather data from `ibm_clean_resp` function
 #' @returns tibble
