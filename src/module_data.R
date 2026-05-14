@@ -107,7 +107,7 @@ dataUI <- function() {
     div(
       style = "margin-top: 1rem; padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;",
 
-      "Explore and download hourly, daily, moving average, or growing degree day data for your sites. Values may be shown in either metric or imperial units.",
+      "Explore and download hourly, daily, moving average, or growing degree day data for your sites. Values may be shown in either metric or imperial units. Forecast may be shown when end date is set to today. Forecast is available for most measures.",
 
       # metric/forecast switches
       uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
@@ -131,62 +131,35 @@ dataUI <- function() {
 
 # Module server ----------------------------------------------------------------
 
-dataServer <- function(wx_data, selected_site, sites_ready) {
+#' @param rv reactive values from parent server
+#' @param rx list of reactive expressions from parent server
+dataServer <- function(rv, rx) {
   moduleServer(
     id = "data",
     function(input, output, session) {
       ns <- session$ns
 
-      # Reactive Values ----
-
-      rv <- reactiveValues(
-        data = NULL,
-        ready = FALSE
-      )
-
-      # toggle readiness
-      observe({
-        if (is.null(rv$data)) {
-          rv$ready <- FALSE
-        } else if (!rv$ready) {
-          rv$ready <- TRUE
-        }
-      })
-
-      # load dataset — MA/GDD are built lazily below
-      observe({
-        wx <- wx_data()
-        if (nrow(wx$hourly) > 0) {
-          rv$data <- wx
-        } else {
-          rv$data <- NULL
-        }
-      })
-
       # lightweight cache key shared by the three lazy reactives below
       wx_cache_key <- reactive({
-        wx <- req(rv$data)
-        list(
-          grid_ids = sort(wx$sites$grid_id),
-          start = wx$dates$start,
-          end = wx$dates$end,
-          n_daily = nrow(wx$daily)
-        )
+        rlang::hash(rx$wx()$daily)
       })
 
       # lazy MA/GDD — computed only when selected_data() requests them
       ma_center <- reactive({
-        build_ma_from_daily(req(rv$data)$daily_full, "center")
+        rx$wx()$daily_full |>
+          build_ma_from_daily("center")
       }) |>
         bindCache(wx_cache_key())
 
       ma_right <- reactive({
-        build_ma_from_daily(req(rv$data)$daily_full, "right")
+        rx$wx()$daily_full |>
+          build_ma_from_daily("right")
       }) |>
         bindCache(wx_cache_key())
 
       gdd <- reactive({
-        build_gdd_from_daily(req(rv$data)$daily)
+        rx$wx()$daily |>
+          build_gdd_from_daily()
       }) |>
         bindCache(wx_cache_key())
 
@@ -197,9 +170,9 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         if (opts$data_type == "ma") {
           opts$ma_align <- req(input$ma_align)
         }
-        wx <- req(rv$data)
 
-        sites <- wx$sites |>
+        wx <- rx$wx()
+        sites <- rx$sites() |>
           st_drop_geometry() |>
           select(
             site_id = id,
@@ -244,8 +217,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       ## main_ui ----
       output$main_ui <- renderUI({
-        validate(need(sites_ready(), OPTS$validation_sites_ready))
-        validate(need(rv$ready, OPTS$validation_weather_ready))
+        validate(need(rv$sites_ready, OPTS$validation_sites_ready))
+        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
 
         tagList(
           # shown if more than one site
@@ -283,7 +256,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       ## forecast_switch ----
       output$forecast_switch <- renderUI({
-        dates <- wx_data()$dates
+        dates <- rx$dates()
         req(dates$end == today())
         div(
           style = "margin-left: 2rem;",
@@ -383,32 +356,19 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         )
       }
 
-      # reset when all columns are removed
-      # observe({ if (length(input$plot_cols) == 0) reset_plot_cols() })
-
       # reset on button press
       observe(reset_plot_cols()) |> bindEvent(input$reset_plot_cols)
 
       ## plot_sites_ui ----
-      # plot_sites_choices <- reactive({
-      #   sites <- wx_data()$sites
-      #   req(nrow(sites) > 1)
-      #
-      #   set_names(sites$id, sprintf("%s: %s", sites$id, str_trunc(sites$name, 15)))
-      # }) |>
-      #   debounce(1000)
-
       output$plot_sites_ui <- renderUI({
-        # choices <- plot_sites_choices()
-
-        sites <- wx_data()$sites
+        sites <- rx$sites()
         req(nrow(sites) > 1)
 
         choices <- set_names(
           sites$id,
           sprintf("%s: %s", sites$id, str_trunc(sites$name, 15))
         )
-        selected <- isolate(input$plot_sites) %||% selected_site()
+        selected <- isolate(input$plot_sites) %||% rv$selected_site
 
         checkboxGroupInput(
           inputId = ns("plot_sites"),
@@ -421,7 +381,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
 
       ## change selection ----
       observe({
-        selected <- selected_site()
+        selected <- rv$selected_site
 
         updateCheckboxGroupInput(
           session,
@@ -433,8 +393,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       ## plot_data ----
       plot_data <- reactive({
         df <- selected_data()
-        sites <- wx_data()$sites
-        dates <- wx_data()$dates
+        sites <- rx$sites()
+        dates <- rx$dates()
 
         req(nrow(sites) > 0)
 
@@ -493,9 +453,7 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
       # for both the csv download and plot png export
       download_filename <- reactive({
         type <- req(input$data_type)
-        wx <- wx_data()
-        # sites <- wx$sites
-        dates <- wx$dates
+        dates <- rx$dates()
         data <- plot_data()
         sites <- data$sites
         name_str <- invert(OPTS$data_type_choices)[[type]]
