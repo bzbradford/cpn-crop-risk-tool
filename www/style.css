@@ -282,14 +282,89 @@ table {
   table-layout: fixed;
 }
 
-td.tbl-coords {
-  font-size: smaller;
-}
-
 /* prevent site table from overflowing */
 #site_ui {
   max-width: 100%;
   overflow: auto;
+}
+
+/*--- SITES LIST ---*/
+
+.sites-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.site-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.site-row:hover {
+  background: #e9ecef;
+}
+
+.site-row--selected {
+  background: #d9edf7;
+}
+
+.site-row--selected:hover {
+  background: #c4e3f3;
+}
+
+.site-row--hidden {
+  cursor: default;
+}
+
+.site-row--hidden:hover {
+  background: transparent;
+}
+
+.site-row--hidden .site-row__name,
+.site-row--hidden .site-row__coords {
+  opacity: 0.5;
+  text-decoration: line-through;
+}
+
+.site-row__id {
+  min-width: 1.5em;
+  text-align: right;
+  color: #888;
+  font-variant-numeric: tabular-nums;
+}
+
+.site-row__name {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.site-row__coords {
+  font-variant-numeric: tabular-nums;
+  font-size: 0.85em;
+  color: #555;
+  white-space: nowrap;
+}
+
+.site-row__actions {
+  display: inline-flex;
+  gap: 10px;
+  padding: 0 4px;
+}
+
+.site-row__actions a {
+  color: #555;
+}
+
+.site-row__actions a:hover {
+  color: #000;
 }
 
 /*--- STYLES ---*/

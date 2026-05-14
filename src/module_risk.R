@@ -1,18 +1,36 @@
-#--- crop risk module ---#
+#--- RISK MODEL MODULE ---#
+
+# Static UI --------------------------------------------------------------------
 
 riskUI <- function() {
   ns <- NS("risk")
+
   div(
     style = "margin-top: 10px; min-height: 300px;",
-    uiOutput(ns("main_ui")) |>
-      withSpinner(
-        type = 8,
-        size = 0.5,
-        proxy.height = 300,
-        caption = "Loading..."
+    div(
+      class = "label-inline",
+      style = "margin-bottom: 1rem;",
+      tags$label(
+        "Group:",
+        `for` = ns("model_group")
+      ),
+      radioGroupButtons(
+        inputId = ns("model_group"),
+        label = NULL,
+        choices = OPTS$model_group_choices,
+        size = "sm",
+        individual = TRUE
       )
+    ),
+    uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
+    uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
+    uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
+    uiOutput(ns("results_ui"), style = "margin-top: 1rem;"),
   )
 }
+
+
+# Module server ----------------------------------------------------------------
 
 riskServer <- function(rv, wx_data) {
   moduleServer(
@@ -21,32 +39,6 @@ riskServer <- function(rv, wx_data) {
       ns <- session$ns
 
       # Interface ----
-
-      ## main_ui ----
-      # handle validation messages
-      output$main_ui <- renderUI({
-        tagList(
-          div(
-            class = "label-inline",
-            style = "margin-bottom: 1rem;",
-            tags$label(
-              "Group:",
-              `for` = ns("model_group")
-            ),
-            radioGroupButtons(
-              inputId = ns("model_group"),
-              label = NULL,
-              choices = OPTS$model_group_choices,
-              size = "sm",
-              individual = TRUE
-            )
-          ),
-          uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
-          uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
-          uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
-          uiOutput(ns("results_ui"), style = "margin-top: 1rem;"),
-        )
-      })
 
       ## model_picker ----
       # combine standard and insect models

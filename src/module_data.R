@@ -51,7 +51,10 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   bind_cols(attr, ma)
 }
 
-# test_hourly_wx |> build_daily() |> build_ma_from_daily()
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_ma_from_daily()
+}
+
 
 ## Build all GDDs ----
 #' Generate various growing degree day models with and without an 86F upper threshold
@@ -91,23 +94,43 @@ build_gdd_from_daily <- function(daily) {
     )
 }
 
-# test_hourly_wx |> build_daily() |> build_gdd_from_daily()
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_gdd_from_daily()
+}
 
-# Data UI ----------------------------------------------------------------------
+
+# Static UI --------------------------------------------------------------------
+
 dataUI <- function() {
   ns <- NS("data")
   div(
-    # class = "tab-content",
     div(
-      em(
-        "Most values may be shown in either metric or imperial units. 7-day forecasts from NOAA can be shown for locations in the US. Press the (i) button above for more information."
-      )
+      style = "margin-top: 1rem; padding: 5px 10px; border: 1px solid lightsteelblue; border-radius: 5px; background: white;",
+
+      "Explore and download hourly, daily, moving average, or growing degree day data for your sites. Values may be shown in either metric or imperial units.",
+
+      # metric/forecast switches
+      uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
     ),
-    uiOutput(ns("main_ui"), fill = "container"),
+
+    # dataset selector
+    uiOutput(ns("data_type_ui"), style = "margin-top: 1rem;"),
+
+    # dataset options like rolling mean, may be blank
+    uiOutput(ns("data_options_ui")),
+
+    # which columns to plot
+    uiOutput(ns("plot_cols_ui"), style = "margin-top: 1rem;"),
+
+    # multi-site checkboxes, plot, and download button
+    # includes validation messages
+    uiOutput(ns("main_ui")),
   )
 }
 
-# Data server ------------------------------------------------------------------
+
+# Module server ----------------------------------------------------------------
+
 dataServer <- function(wx_data, selected_site, sites_ready) {
   moduleServer(
     id = "data",
@@ -225,19 +248,8 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
         validate(need(rv$ready, OPTS$validation_weather_ready))
 
         tagList(
-          # metric/forecast switches
-          uiOutput(ns("switches_ui"), style = "margin-top: 1rem;"),
-          # dataset selector
-          uiOutput(ns("data_type_ui"), style = "margin-top: 1rem;"),
-          # dataset options like rolling mean, may be blank
-          uiOutput(ns("data_options_ui")),
-          # which columns to plot
-          uiOutput(ns("plot_cols_ui"), style = "margin-top: 1rem;"),
           # shown if more than one site
           uiOutput(ns("plot_sites_ui")),
-          # warning if there is missing data
-          # uiOutput(ns("weather_missing_ui")),
-          # main plot area
           div(
             class = "plotly-container",
             style = "margin-top: 1rem;",
@@ -317,15 +329,6 @@ dataServer <- function(wx_data, selected_site, sites_ready) {
           )
         }
       })
-
-      ## weather_missing_ui ----
-      # output$weather_missing_ui <- renderUI({
-      #   sites <- wx_data()$sites
-      #   req(rv$ready, nrow(sites) > 0, any(sites$needs_download))
-
-      #   weather_warning_for_sites(sites) |>
-      #     build_warning_box()
-      # })
 
       ## plot_cols - reactive ----
       plot_cols <- reactive({
