@@ -74,6 +74,14 @@ function saveSite(site_id) {
   sendShiny('save_site', site_id);
 }
 
+function toggleSiteVisibility(site_id) {
+  sendShiny('toggle_site', site_id);
+}
+
+function selectSite(site_id) {
+  sendShiny('select_site', site_id);
+}
+
 function clearSites() {
   if (confirm('Remove all sites?')) sendShiny('clear_sites', true);
 }

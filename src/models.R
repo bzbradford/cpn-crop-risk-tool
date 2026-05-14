@@ -1161,7 +1161,7 @@ build_botrytis <- function(daily) {
 
 #' @param plant_doy planting day of year
 #' @param precip_fall precipitation (mm) between planting date and Dec 31
-#' @param gdd_total Cumualtive sine GDD base 0C
+#' @param gdd_total Cumulative sine GDD base 0C
 predict_rye_biomass <- function(plant_doy, precip_fall, gdd_total) {
   # coefficients from the NLS model
   b0 <- 4.231e+02
@@ -1355,7 +1355,7 @@ if (FALSE) {
 #' Map a value onto a sine wave with minima at `start` and maxima at `peak`
 half_sine <- function(value, start, peak) {
   # normalize the input range to [0, 1]
-  x = (value - start) / (peak - start)
+  x <- (value - start) / (peak - start)
   (sin(x * pi - pi / 2) + 1) / 2
 }
 
@@ -1415,7 +1415,7 @@ build_insect <- function(
 validate_biofix <- function(biofix) {
   force(biofix)
 
-  return(function(params) {
+  function(params) {
     sd <- params$start_date
     if (yday(sd) != biofix) {
       biofix_date <- make_date(year(sd)) + biofix - 1
@@ -1426,7 +1426,7 @@ validate_biofix <- function(biofix) {
     } else {
       NULL
     }
-  })
+  }
 }
 
 if (FALSE) {

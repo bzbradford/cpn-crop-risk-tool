@@ -43,7 +43,10 @@ server <- function(input, output, session) {
   ## rv$sites_ready ----
   # update sites_ready but only if different than existing value
   observe({
-    ready <- nrow(rv$sites) > 0
+    n_sites <- req(rv$sites) |>
+      filter(!hidden) |>
+      nrow()
+    ready <- n_sites > 0
     if (rv$sites_ready != ready) {
       rv$sites_ready <- ready
     }
@@ -481,7 +484,10 @@ server <- function(input, output, session) {
   ## wx_data ----
   wx_data <- reactive({
     weather <- rv$weather
-    sites <- sites_with_status()
+    # hidden sites are excluded from charts and risk models, but their
+    # weather is still fetched so toggling visibility is instant
+    sites <- req(sites_with_status()) |>
+      filter(!hidden)
     sel_dates <- selected_dates()
 
     req(nrow(weather) > 0, nrow(sites) > 0)
@@ -534,8 +540,6 @@ server <- function(input, output, session) {
     )
   })
 
-  # observe(echo(wx_data()))
-
   # Help modal -----------------------------------------------------------------
 
   observeEvent(input$about, show_modal(md = "README.md"))
@@ -567,99 +571,86 @@ server <- function(input, output, session) {
     p(style = "font-size: small", HTML(str))
   })
 
-  ## sites_tbl_data ----
-  # sites formatted for DT
-  sites_dt_data <- reactive({
-    req(rv$sites) |>
-      mutate(
-        id = as.character(id),
-        # across(c(lat, lng), ~sprintf("%.2f", .x)),
-        loc = sprintf("%.2f, %.2f", lat, lng),
-        btns = paste0(
-          "<div style='display:inline-flex; gap:10px; padding: 5px;'>",
-          site_action_link("edit", id, name),
-          site_action_link("trash", id),
-          "</div>"
-        ) |>
-          lapply(HTML)
-      ) |>
-      select(id, name, loc, btns)
-  })
+  ## sites_list ----
+  # flex-grid render of the user's sites with select/hide/edit/trash actions
+  output$sites_list <- renderUI({
+    sites <- rv$sites
+    if (nrow(sites) == 0) {
+      return(NULL)
+    }
+    selected_id <- rv$selected_site
 
-  ## sites_dt ----
-  # render initial DT
-  output$sites_dt <- renderDT({
-    # sites <- isolate(sites_dt_data())
-    template <- tibble(
-      id = numeric(),
-      name = character(),
-      loc = character(),
-      btns = character()
-    )
-    # selected <- isolate(rv$selected_site)
-    dt <- datatable(
-      template,
-      colnames = c("", "Name", "GPS", "Edit"),
-      rownames = FALSE,
-      selection = "none",
-      class = "compact",
-      options = list(
-        dom = "t",
-        ordering = FALSE,
-        paging = FALSE,
-        scrollX = TRUE,
-        scrollCollapse = TRUE,
-        columnDefs = list(
-          list(width = "5%", targets = 0),
-          list(width = "40%", targets = 1),
-          list(width = "25%", targets = 2),
-          list(width = "50px", targets = 3),
-          list(className = "dt-right", targets = 0),
-          list(className = "dt-center tbl-coords", targets = 2),
-          list(className = "dt-right", targets = 3)
+    rows <- lapply(seq_len(nrow(sites)), function(i) {
+      s <- sites[i, ]
+      is_selected <- isTRUE(s$id == selected_id)
+      is_hidden <- isTRUE(s$hidden)
+      cls <- paste(
+        c(
+          "site-row",
+          if (is_selected) "site-row--selected",
+          if (is_hidden) "site-row--hidden"
+        ),
+        collapse = " "
+      )
+      vis_action <- if (is_hidden) "show" else "hide"
+      div(
+        class = cls,
+        onclick = if (!is_hidden) sprintf("selectSite(%s)", s$id),
+        div(class = "site-row__id", s$id),
+        div(class = "site-row__name", s$name),
+        div(class = "site-row__coords", sprintf("%.2f, %.2f", s$lat, s$lng)),
+        div(
+          class = "site-row__actions",
+          onclick = "event.stopPropagation()",
+          HTML(site_action_link(vis_action, s$id)),
+          HTML(site_action_link("edit", s$id, s$name)),
+          HTML(site_action_link("trash", s$id))
         )
       )
-    ) |>
-      formatStyle(0:3, lineHeight = "1rem", textWrap = "nowrap")
+    })
 
-    dt_observer$resume()
-
-    dt
+    div(class = "sites-list", rows)
   })
 
-  ## Handle DT update ----
-  dt_observer <- observe(
-    {
-      selected_id <- rv$selected_site
-      df <- sites_dt_data() |>
-        mutate(
-          id = if_else(id == selected_id, paste0(">", id), as.character(id))
-        )
+  ## Handle row selection click ----
+  observeEvent(input$select_site, {
+    id <- req(input$select_site)
+    req(id %in% rv$sites$id)
+    rv$selected_site <- id
+  })
 
-      dataTableProxy("sites_dt") |>
-        replaceData(df, rownames = FALSE, clearSelection = "none")
-    },
-    suspended = TRUE
-  )
+  ## Handle visibility toggle ----
+  observeEvent(input$toggle_site, {
+    toggle_id <- req(input$toggle_site)
+    rv$sites <- rv$sites |>
+      mutate(hidden = if_else(id == toggle_id, !hidden, hidden))
+  })
 
-  # observe(print(paste(names(input))))
-
-  # select clicked site
+  ## Advance selection when selected site becomes hidden or deleted ----
+  # picks the next visible site in list order, wrapping to the first if none after
   observe({
-    req(rv$sites_ready)
-    click <- req(input$sites_dt_cell_clicked)
-    row <- req(click$row)
-    req(row %in% rv$sites$id)
+    sites <- rv$sites
+    current <- rv$selected_site
+    req(nrow(sites) > 0)
 
-    rv$selected_site <- row
+    visible_ids <- sites$id[!sites$hidden]
+    if (length(visible_ids) == 0) {
+      return()
+    }
+    if (!is.null(current) && current %in% visible_ids) {
+      return()
+    }
+
+    if (!is.null(current) && current %in% sites$id) {
+      current_pos <- match(current, sites$id)
+      after <- sites$id[!sites$hidden & seq_len(nrow(sites)) > current_pos]
+      if (length(after) > 0) {
+        rv$selected_site <- after[1]
+        return()
+      }
+    }
+    rv$selected_site <- visible_ids[1]
   })
-
-  # highlight selected site
-  # observe({
-  #   selected <- req(rv$selected_site)
-  #   runjs("$('#sites_dt table.dataTable tr').removeClass('selected')")
-  #   runjs(sprintf("$('#sites_dt table.dataTable tr:nth-child(%s)').addClass('selected')", selected))
-  # })
 
   ## Handle trash_site button ----
   observeEvent(input$trash_site, {
@@ -998,8 +989,8 @@ server <- function(input, output, session) {
           setequal(cur_dates, value)
         }
         build_date_btn(
-          name,
-          label,
+          value = name,
+          label = label,
           btn_class = ifelse(selected, "primary", "default")
         )
       })
