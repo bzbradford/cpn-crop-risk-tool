@@ -41,22 +41,33 @@ if (FALSE) {
 #' @returns tibble
 build_daily <- function(hourly) {
   # grid attributes to be retained
+  # historical and forecast data have different grid id/lat/lng, but coming into
+  # this function forecasts are re-tagged to the historical grid_id
   lat_lng <- hourly |>
-    distinct(grid_id, grid_lat, grid_lng)
+    select(grid_id, grid_lat, grid_lng) |>
+    distinct(grid_id, .keep_all = TRUE)
 
   # summarized by calendar date
   summary_fns <- c("min" = calc_min, "mean" = calc_mean, "max" = calc_max)
   by_date <- hourly |>
     summarize(
-      hours = n(),
       across(
-        c(temperature, dew_point, dew_point_depression, relative_humidity),
+        c(
+          temperature,
+          dew_point,
+          dew_point_depression,
+          relative_humidity
+        ),
         summary_fns
       ),
-      across(c(precip, snow), c("daily" = calc_sum, "max_hourly" = calc_max)),
-      across(c(pressure_mean_sea_level, wind_speed), summary_fns),
+      evapotranspiration_daily = calc_sum(evapotranspiration),
+      across(
+        c(precipitation, rain, snowfall),
+        c("daily" = calc_sum, "max_hourly" = calc_max)
+      ),
+      across(c(snow_depth, pressure_msl, wind_speed), summary_fns),
       wind_gust_max = calc_max(wind_gust),
-      across(c(wind_direction), summary_fns),
+      across(c(wind_direction, soil_temp, soil_moisture), summary_fns),
       hours_temp_over_20 = sum(temperature >= 20),
       hours_temp_over_30 = sum(temperature >= 30),
       hours_rh_under_70 = sum(relative_humidity < 70),
@@ -66,16 +77,18 @@ build_daily <- function(hourly) {
     ) |>
     arrange(grid_id, date) |>
     group_by(grid_id) |>
+    add_cumsum("evapotranspiration_daily") |>
+    add_cumsum("precipitation_daily") |>
+    add_cumsum("rain_daily") |>
+    add_cumsum("snowfall_daily") |>
     mutate(
-      precip_cumulative = cumsum(precip_daily),
-      snow_cumulative = cumsum(snow_daily),
       hot_past_5_days = data.table::frollapply(
         hours_temp_over_30,
         5,
         \(x) any(x >= 4),
         partial = TRUE
       ),
-      dry = (hours_rh_under_70 >= 6) & (precip_daily < 1)
+      dry = (hours_rh_under_70 >= 6) & (precipitation_daily < 1)
     ) |>
     ungroup()
 
@@ -103,7 +116,6 @@ build_daily <- function(hourly) {
 
   # assemble the data
   by_date |>
-    filter((hours >= 12) | (date == today())) |>
     left_join(by_night, join_by(grid_id, date == date_since_night)) |>
     left_join(lat_lng, join_by(grid_id)) |>
     relocate(grid_lat, grid_lng, .after = grid_id) |>
@@ -562,13 +574,13 @@ build_don <- function(daily) {
   req(nrow(daily) > 0)
 
   daily |>
-    replace_na(list(precip_daily = 0)) |>
+    replace_na(list(precipitation_daily = 0)) |>
     mutate(
       date = date,
       temp_max_14day = roll_mean(temperature_max, 14),
       temp_min_14day = roll_mean(temperature_min, 14),
       days_temp_over_25_14day = roll_sum(temperature_mean >= 25, 14),
-      days_precip_14day = roll_sum(precip_daily > 0, 14),
+      days_precip_14day = roll_sum(precipitation_daily > 0, 14),
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
       days_rh_over_80_14day = roll_sum(relative_humidity_mean > 80, 14),
       probability = predict_don(
@@ -1149,7 +1161,7 @@ build_botrytis <- function(daily) {
 
 #' @param plant_doy planting day of year
 #' @param precip_fall precipitation (mm) between planting date and Dec 31
-#' @param gdd_total Cumualtive sine GDD base 0C
+#' @param gdd_total Cumulative sine GDD base 0C
 predict_rye_biomass <- function(plant_doy, precip_fall, gdd_total) {
   # coefficients from the NLS model
   b0 <- 4.231e+02
@@ -1178,7 +1190,9 @@ build_rye_biomass <- function(daily) {
       # season = if_else(year == min(year), 1, 2),
       gdd_0C = gdd_sine(temperature_min, temperature_max, 0, 35),
       gdd_total = cumsum(gdd_0C),
-      precip_fall = cumsum(precip_daily * (year(date) == year(min(date)))),
+      precip_fall = cumsum(
+        precipitation_daily * (year(date) == year(min(date)))
+      ),
       biomass = predict_rye_biomass(
         plant_doy,
         precip_fall,
@@ -1214,7 +1228,7 @@ if (FALSE) {
     rename(
       temperature_min = temperature_min_c,
       temperature_max = temperature_max_c,
-      precip_daily = precip_daily_mm
+      precipitation_daily = precip_daily_mm
     ) |>
     filter(!between(yday, 180, sample(200:300, 1))) |>
     build_rye_biomass() |>
@@ -1309,7 +1323,7 @@ build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
     mutate(
       date = date,
       year = year,
-      precip_3day_forward = roll_sum(precip_daily, 3, "left"),
+      precip_3day_forward = roll_sum(precipitation_daily, 3, "left"),
       mean_min_temp_9day_forward = roll_mean(temperature_min, 9, "left"),
       probability = cotton_planting_model(
         precip_3day_forward = precip_3day_forward,
@@ -1341,7 +1355,7 @@ if (FALSE) {
 #' Map a value onto a sine wave with minima at `start` and maxima at `peak`
 half_sine <- function(value, start, peak) {
   # normalize the input range to [0, 1]
-  x = (value - start) / (peak - start)
+  x <- (value - start) / (peak - start)
   (sin(x * pi - pi / 2) + 1) / 2
 }
 
@@ -1401,7 +1415,7 @@ build_insect <- function(
 validate_biofix <- function(biofix) {
   force(biofix)
 
-  return(function(params) {
+  function(params) {
     sd <- params$start_date
     if (yday(sd) != biofix) {
       biofix_date <- make_date(year(sd)) + biofix - 1
@@ -1412,7 +1426,7 @@ validate_biofix <- function(biofix) {
     } else {
       NULL
     }
-  })
+  }
 }
 
 if (FALSE) {

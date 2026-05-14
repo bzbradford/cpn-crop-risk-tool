@@ -1,18 +1,36 @@
-#--- crop risk module ---#
+#--- RISK MODEL MODULE ---#
+
+# Static UI --------------------------------------------------------------------
 
 riskUI <- function() {
   ns <- NS("risk")
+
   div(
     style = "margin-top: 10px; min-height: 300px;",
-    uiOutput(ns("main_ui")) |>
-      withSpinner(
-        type = 8,
-        size = 0.5,
-        proxy.height = 300,
-        caption = "Loading..."
+    div(
+      class = "label-inline",
+      style = "margin-bottom: 1rem;",
+      tags$label(
+        "Group:",
+        `for` = ns("model_group")
+      ),
+      radioGroupButtons(
+        inputId = ns("model_group"),
+        label = NULL,
+        choices = OPTS$model_group_choices,
+        size = "sm",
+        individual = TRUE
       )
+    ),
+    uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
+    uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
+    uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
+    uiOutput(ns("results_ui"), style = "margin-top: 1rem;"),
   )
 }
+
+
+# Module server ----------------------------------------------------------------
 
 riskServer <- function(rv, wx_data) {
   moduleServer(
@@ -21,32 +39,6 @@ riskServer <- function(rv, wx_data) {
       ns <- session$ns
 
       # Interface ----
-
-      ## main_ui ----
-      # handle validation messages
-      output$main_ui <- renderUI({
-        tagList(
-          div(
-            class = "label-inline",
-            style = "margin-bottom: 1rem;",
-            tags$label(
-              "Group:",
-              `for` = ns("model_group")
-            ),
-            radioGroupButtons(
-              inputId = ns("model_group"),
-              label = NULL,
-              choices = OPTS$model_group_choices,
-              size = "sm",
-              individual = TRUE
-            )
-          ),
-          uiOutput(ns("model_picker"), style = "margin-bottom: 1rem;"),
-          uiOutput(ns("model_ui"), style = "margin: 1rem 0;"),
-          uiOutput(ns("model_warnings"), style = "margin: 1rem 0;"),
-          uiOutput(ns("results_ui"), style = "margin-top: 1rem;"),
-        )
-      })
 
       ## model_picker ----
       # combine standard and insect models
@@ -96,6 +88,7 @@ riskServer <- function(rv, wx_data) {
         end_date <- rv$end_date
         start_year <- year(end_date) - (biofix > yday(end_date))
         start_date <- make_date(start_year) + biofix - 1
+        rv$start_date_setter <- NULL
         rv$start_date_setter <- start_date
       })
 
@@ -320,15 +313,21 @@ riskServer <- function(rv, wx_data) {
           }
         }
 
-        sites
+        sites |>
+          st_drop_geometry() |>
+          select(
+            id,
+            name,
+            lat,
+            lng,
+            any_of(OPTS$grid_attr_cols)
+          )
       })
 
       ## joined_data - reactive ----
       # join model data to sites list
       joined_data <- reactive({
         selected_sites() |>
-          st_drop_geometry() |>
-          select(id, name, lat, lng, grid_id, grid_lat, grid_lng, time_zone) |>
           left_join(
             model_data(),
             join_by(grid_id),
@@ -348,7 +347,7 @@ riskServer <- function(rv, wx_data) {
 
         # check for any warnings
         warnings <- list()
-        warnings$wx <- weather_warning_for_sites(sites)
+        # warnings$wx <- weather_warning_for_sites(sites)
         warnings$model <- model_warning()
         req(length(warnings) > 0)
 
@@ -509,8 +508,7 @@ riskServer <- function(rv, wx_data) {
           )
 
           sites <- selected_sites() |>
-            st_drop_geometry() |>
-            select(id:days_missing)
+            mutate(across(where(is.POSIXct), ~ format(.x, "%Y-%m-%d %H:%M:%S")))
 
           write_excel_csv(header, file, na = "", col_names = FALSE)
           tibble(line = c("", "=== Site list ===")) |>
