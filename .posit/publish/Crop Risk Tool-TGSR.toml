@@ -16,7 +16,6 @@ files = [
     "/README.md",
     "/.Renviron",
     "/docs",
-    "/data",
     "/www",
     "/tests",
 ]

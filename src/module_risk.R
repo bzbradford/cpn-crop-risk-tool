@@ -32,11 +32,15 @@ riskUI <- function() {
 
 # Module server ----------------------------------------------------------------
 
-riskServer <- function(rv, wx_data) {
+#' @param rv reactive values object from parent server
+#' @param rx list of reactive expressions from parent server
+riskServer <- function(rv, rx) {
   moduleServer(
     id = "risk",
     function(input, output, session) {
       ns <- session$ns
+
+      plt_cache <- reactiveValues()
 
       # Interface ----
 
@@ -226,17 +230,16 @@ riskServer <- function(rv, wx_data) {
 
       ## model_data - reactive ----
       model_data <- reactive({
-        # model <- req(input$model)
         model <- selected_model()
-        wx_data <- wx_data()
-        date_range <- wx_data$dates
+        wx <- rx$wx()
+        date_range <- rx$dates()
 
         # use full weather for models that have moving averages or lookback windows
         # includes 30 days prior to start_date
-        daily_full <- wx_data$daily_full
+        daily_full <- wx$daily_full
 
         # use exact weather for models without moving averages
-        daily <- wx_data$daily
+        daily <- wx$daily
 
         req(nrow(daily) > 0)
 
@@ -285,15 +288,13 @@ riskServer <- function(rv, wx_data) {
           filter(date >= date_range$start)
       })
 
-      # observe(echo(model_data()))
-
       ## model_warning // reactive ----
       # check for a validation message for select models
       model_warning <- reactive({
         model <- selected_model()
 
         if (is.function(model$validate)) {
-          dates <- wx_data()$dates
+          dates <- rx$dates()
           params <- list(
             start_date = dates$start,
             date_range = c(dates$start, dates$end)
@@ -304,7 +305,7 @@ riskServer <- function(rv, wx_data) {
 
       ## selected_sites // reactive ----
       selected_sites <- reactive({
-        sites <- wx_data()$sites
+        sites <- rx$sites()
 
         if (nrow(sites) > 1) {
           i <- req(input$show_all_sites)
@@ -335,8 +336,6 @@ riskServer <- function(rv, wx_data) {
           ) |>
           mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
       })
-
-      # observe(echo(joined_data()))
 
       ## model_warning_ui ----
       # Display warnings for various conditions
@@ -375,7 +374,7 @@ riskServer <- function(rv, wx_data) {
       ## plot_feed_opts ----
       # shown when more than one site
       output$plot_feed_opts <- renderUI({
-        sites <- wx_data()$sites
+        sites <- rx$sites()
         req(nrow(sites) > 1)
 
         div(
@@ -401,9 +400,10 @@ riskServer <- function(rv, wx_data) {
         model <- selected_model()
         model_data <- joined_data() |>
           rename(model_value = !!model$ycol)
-        wx <- wx_data()
-        sites <- wx$sites
-        dates <- wx$dates
+
+        sites <- selected_sites()
+        dates <- rx$dates()
+        wx <- rx$wx()
 
         req(nrow(model_data) > 0)
 
@@ -480,13 +480,13 @@ riskServer <- function(rv, wx_data) {
       ## download_data ----
       output$download_data <- downloadHandler(
         filename = function() {
-          data <- wx_data()
+          dates <- rx$dates()
           model <- selected_model()
           fname <- sprintf(
             "%s - %s to %s.csv",
             model$name,
-            data$date$start,
-            data$date$end
+            dates$start,
+            dates$end
           )
           fname <- gsub("[^A-Za-z0-9 \\.\\-]", " ", fname)
           str_squish(fname)

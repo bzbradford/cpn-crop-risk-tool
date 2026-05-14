@@ -237,33 +237,13 @@ mapUI <- function() {
 
 # Module server ----------------------------------------------------------------
 
-mapServer <- function(rv, map_data) {
+#' @param rv reactive values from parent server
+#' @param rx list of reactive expressions from parent server
+mapServer <- function(rv, rx) {
   moduleServer(
     id = "map",
     function(input, output, session) {
       ns <- session$ns
-
-      # Local reactives ----
-
-      ## visible_sites ----
-      # rv$sites filtered to non-hidden; always a tibble (possibly empty)
-      visible_sites <- reactive({
-        sites <- rv$sites
-        if (is.null(sites) || nrow(sites) == 0) {
-          return(sites_template)
-        }
-        sites |> filter(!hidden)
-      })
-
-      ## visible_sites_with_status ----
-      # map_data()$sites_with_status filtered to non-hidden; NULL if unavailable
-      visible_sites_with_status <- reactive({
-        sites <- map_data()$sites_with_status
-        if (is.null(sites) || nrow(sites) == 0) {
-          return(NULL)
-        }
-        sites |> filter(!hidden)
-      })
 
       # Helper functions ----
 
@@ -288,7 +268,7 @@ mapServer <- function(rv, map_data) {
 
       # fits all sites on the map
       fit_sites <- function() {
-        sites <- visible_sites()
+        sites <- rv$sites
         req(nrow(sites) > 0)
 
         bounds <- list(
@@ -545,18 +525,10 @@ mapServer <- function(rv, map_data) {
 
       ## Show site markers ----
       observe({
-        wx <- rv$weather
-        sites <- visible_sites()
+        sites <- rx$sites()
 
         proxy_map |> clearGroup("sites")
         req(nrow(sites) > 0)
-
-        # determine site icons
-        sites <- if (nrow(wx) == 0) {
-          sites |> mutate(needs_download = TRUE)
-        } else {
-          req(visible_sites_with_status())
-        }
 
         color_by_risk <- FALSE
 
@@ -632,19 +604,19 @@ mapServer <- function(rv, map_data) {
       # will only show grids that the user has interacted with in the session
       observe({
         # display any cached weather data for user
-        grids <- req(map_data()$grids_with_status)
+        grids <- req(rx$grid_status())
         if (nrow(grids) > 0) {
           grids <- annotate_grids(grids)
           proxy_map |>
             clearGroup(OPTS$map_layers$grid) |>
             addPolygons(
               data = grids,
-              weight = 0.5,
+              weight = 1,
               label = ~label,
               layerId = ~grid_id,
               group = OPTS$map_layers$grid,
               color = "grey",
-              opacity = 0.25,
+              opacity = 0.5,
               # fillColor = ~color,
               fillOpacity = 0,
               options = pathOptions(pane = "grid")
@@ -652,7 +624,7 @@ mapServer <- function(rv, map_data) {
         }
 
         # display grids linked to sites more prominently
-        sites <- req(visible_sites_with_status())
+        sites <- rx$sites()
         linked_sites <- sites |>
           drop_na(grid_id)
         if (nrow(linked_sites) > 0) {
@@ -674,25 +646,6 @@ mapServer <- function(rv, map_data) {
               options = pathOptions(pane = "grid")
             )
         }
-      })
-
-      ## Show all weather data grids ----
-      # these are any grids in the saved weather data
-      observe({
-        # req(session$clientData$url_hostname == "127.0.0.1")
-
-        grids <- map_data()$grids
-
-        proxy_map |>
-          clearGroup("grid") |>
-          addPolylines(
-            data = grids,
-            color = "black",
-            weight = 0.25,
-            opacity = 1,
-            group = OPTS$map_layers$grid,
-            options = pathOptions(pane = "grid")
-          )
       })
 
       ## Handle EasyButton clicks ----
