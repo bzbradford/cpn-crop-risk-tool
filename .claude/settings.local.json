@@ -1,7 +1,8 @@
 {
   "permissions": {
     "allow": [
-      "Bash(Rscript -e \"testthat::test_dir\\('tests/testthat'\\)\")"
+      "Bash(Rscript -e \"testthat::test_dir\\('tests/testthat'\\)\")",
+      "PowerShell(Rscript *)"
     ]
   }
 }

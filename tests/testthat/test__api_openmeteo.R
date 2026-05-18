@@ -27,6 +27,13 @@ fake_om_resp <- function(body, status = 200L) {
 
 example_resp <- fake_om_resp("open_meteo_example.json")
 
+# Per-feature bounding box from the sfc geometry column that get_o1280_cells()
+# returns (it exposes grid_lat/grid_lng/grid_id/geometry, not raw bbox cols)
+cell_bbox <- function(cells) {
+  bb <- do.call(rbind, lapply(cells$geometry, \(g) as.numeric(sf::st_bbox(g))))
+  tibble(xmin = bb[, 1], ymin = bb[, 2], xmax = bb[, 3], ymax = bb[, 4])
+}
+
 
 # Variable list ----------------------------------------------------------------
 
@@ -183,11 +190,12 @@ test_that("get_o1280_cells returns cells whose bbox contains the centroid", {
   cells <- get_o1280_cells(lats, lngs)
   expect_equal(nrow(cells), length(lats))
   expect_true(all(
-    c("xmin", "xmax", "ymin", "ymax", "geometry") %in% names(cells)
+    c("grid_lat", "grid_lng", "grid_id", "geometry") %in% names(cells)
   ))
-  # centroids fall within their assigned bbox
-  expect_true(all(lats >= cells$ymin & lats <= cells$ymax))
-  expect_true(all(lngs >= cells$xmin & lngs <= cells$xmax))
+  # input points fall within their assigned cell's bbox
+  bb <- cell_bbox(cells)
+  expect_true(all(lats >= bb$ymin & lats <= bb$ymax))
+  expect_true(all(lngs >= bb$xmin & lngs <= bb$xmax))
 })
 
 test_that("get_o1280_cells errors on mismatched input lengths", {
@@ -197,16 +205,16 @@ test_that("get_o1280_cells errors on mismatched input lengths", {
 test_that("get_o1280_cells produces narrower longitude bands near the poles", {
   # rings near the equator have many lng cells (small d_lng);
   # rings near the pole have few (large d_lng)
-  eq <- get_o1280_cells(0, 0)
-  pole <- get_o1280_cells(89.9, 0)
+  eq <- cell_bbox(get_o1280_cells(0, 0))
+  pole <- cell_bbox(get_o1280_cells(89.9, 0))
   expect_lt(eq$xmax - eq$xmin, pole$xmax - pole$xmin)
 })
 
 
 # Grid + status summaries ------------------------------------------------------
 
-test_that("om_build_grids returns one sf row per unique grid_id", {
-  grids <- om_build_grids(test_hourly_wx)
+test_that("om_build_wx_grids returns one sf row per unique grid_id", {
+  grids <- om_build_wx_grids(test_hourly_wx)
   expect_s3_class(grids, "sf")
   expect_equal(
     nrow(grids),
@@ -291,12 +299,32 @@ test_that("om_grid_status joins grids and status by grid_id", {
   ))
 })
 
-test_that("om_join_grids matches site lat/lng to grid bbox", {
-  grids <- om_grid_status(test_hourly_wx)
-  joined <- om_join_grids(test_sites, grids)
-  expect_equal(nrow(joined), nrow(test_sites))
-  # every test site should land in some grid
-  expect_true(all(!is.na(joined$grid_id)))
+test_that("om_build_site_grids assigns each site its canonical grid cell", {
+  site_grids <- om_build_site_grids(test_sites)
+  expect_s3_class(site_grids, "sf")
+  expect_equal(nrow(site_grids), nrow(test_sites))
+  expect_true(all(!is.na(site_grids$grid_id)))
+  expect_true(all(
+    c(
+      "id",
+      "name",
+      "lat",
+      "lng",
+      "grid_id",
+      "grid_lat",
+      "grid_lng",
+      "geometry"
+    ) %in%
+      names(site_grids)
+  ))
+})
+
+test_that("site grid_ids are consistent with weather-derived grid_ids", {
+  # the Phase 1 invariant: a site snapped via get_o1280_cells() resolves to the
+  # same grid_id the stored weather carries (idempotency of the O1280 snap)
+  site_ids <- om_build_site_grids(test_sites)$grid_id
+  wx_ids <- om_build_wx_grids(test_hourly_wx)$grid_id
+  expect_true(all(site_ids %in% wx_ids))
 })
 
 
