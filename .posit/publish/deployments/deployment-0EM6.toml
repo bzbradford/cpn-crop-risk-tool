@@ -10,9 +10,9 @@ id = "4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 dashboard_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 direct_url = "https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/"
 logs_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs"
-deployed_at = "2026-05-14T21:46:19.377Z"
-bundle_id = "4853"
-bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4853/download"
+deployed_at = "2026-05-18T00:03:56.183Z"
+bundle_id = "4863"
+bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/4863/download"
 files = [
     ".Renviron",
     ".posit/publish/Crop Risk Tool-TGSR.toml",
@@ -3102,43 +3102,6 @@ needs_compilation = "yes"
 author = "Vitalie Spinu [aut, cre], Garrett Grolemund [aut], Hadley Wickham [aut], Davis Vaughan [ctb], Ian Lyttle [ctb], Imanuel Costigan [ctb], Jason Law [ctb], Doug Mitarotonda [ctb], Joseph Larmarange [ctb], Jonathan Boiser [ctb], Chel Hee Lee [ctb]"
 repository = "https://packagemanager.posit.co/cran/latest"
 
-[renv.packages.lutz]
-package = "lutz"
-version = "0.3.2"
-source = "Repository"
-type = "Package"
-title = "Look Up Time Zones of Point Coordinates"
-"authors@r" = "c( person(\"Andy\", \"Teucher\", email = \"andy.teucher@gmail.com\", role = c(\"aut\", \"cre\"),  comment = c(ORCID = \"0000-0002-7840-692X\")), person(\"Bob\", \"Rudis\", email = \"bob@rud.is\", role = c(\"ctb\"),  comment = c(ORCID = \"0000-0001-5670-2640\")) )"
-description = "Input latitude and longitude values or an 'sf/sfc' POINT  object and get back the time zone in which they exist. Two methods are implemented.  One is very fast and uses 'Rcpp' in conjunction with data from the 'Javascript' library (<https://github.com/darkskyapp/tz-lookup-oss/>). This method also works outside of countries'  borders and in international waters, however speed comes at the cost of accuracy - near time  zone borders away from populated centres there is a chance that it will return the incorrect time zone. The other method is slower but more accurate - it uses the 'sf' package to intersect  points with a detailed map of time zones from here:  <https://github.com/evansiroky/timezone-boundary-builder/>. The package also  contains several utility functions for helping to understand and visualize  time zones, such as listing of world time zones, including information about  daylight savings times and their offsets from UTC. You can also plot a  time zone to visualize the UTC offset over a year and when daylight savings  times are in effect."
-license = "MIT + file LICENSE"
-url = "https://andyteucher.ca/lutz/, https://github.com/ateucher/lutz"
-bug_reports = "https://github.com/ateucher/lutz/issues"
-depends = [
-    "R (>= 3.2)",
-]
-imports = [
-    "stats",
-    "Rcpp",
-    "lubridate",
-]
-suggests = [
-    "testthat (>= 2.1.0)",
-    "sf (>= 0.7)",
-    "sp",
-    "datasets",
-    "covr",
-    "ggplot2",
-]
-encoding = "UTF-8"
-roxygen_note = "7.2.3"
-linking_to = [
-    "Rcpp",
-]
-needs_compilation = "yes"
-author = "Andy Teucher [aut, cre] (<https://orcid.org/0000-0002-7840-692X>), Bob Rudis [ctb] (<https://orcid.org/0000-0001-5670-2640>)"
-maintainer = "Andy Teucher <andy.teucher@gmail.com>"
-repository = "https://packagemanager.posit.co/cran/latest"
-
 [renv.packages.magrittr]
 package = "magrittr"
 version = "2.0.5"
@@ -6204,46 +6167,4 @@ needs_compilation = "yes"
 author = "Hadley Wickham [cre] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Shawn Garbett [ctb] (ORCID: <https://orcid.org/0000-0003-4079-5621>), Jeremy Stephens [aut, ctb], Kirill Simonov [aut], Yihui Xie [ctb] (ORCID: <https://orcid.org/0000-0003-0645-5666>), Zhuoer Dong [ctb], Jeffrey Horner [ctb], reikoch [ctb], Will Beasley [ctb] (ORCID: <https://orcid.org/0000-0002-5613-5006>), Brendan O'Connor [ctb], Michael Quinn [ctb], Charlie Gao [ctb], Gregory R. Warnes [ctb], Zhian N. Kamvar [ctb]"
 maintainer = "Hadley Wickham <hadley@posit.co>"
 repository = "https://packagemanager.posit.co/cran/latest"
-
-[renv.packages.zoo]
-package = "zoo"
-version = "1.8-15"
-source = "Repository"
-date = "2025-12-15"
-title = "S3 Infrastructure for Regular and Irregular Time Series (Z's Ordered Observations)"
-"authors@r" = "c(person(given = \"Achim\", family = \"Zeileis\", role = c(\"aut\", \"cre\"), email = \"Achim.Zeileis@R-project.org\", comment = c(ORCID = \"0000-0003-0918-3766\")), person(given = \"Gabor\", family = \"Grothendieck\", role = \"aut\", email = \"ggrothendieck@gmail.com\"), person(given = c(\"Jeffrey\", \"A.\"), family = \"Ryan\", role = \"aut\", email = \"jeff.a.ryan@gmail.com\"), person(given = c(\"Joshua\", \"M.\"), family = \"Ulrich\", role = \"ctb\", email = \"josh.m.ulrich@gmail.com\"), person(given = \"Felix\", family = \"Andrews\", role = \"ctb\", email = \"felix@nfrac.org\"))"
-description = "An S3 class with methods for totally ordered indexed observations. It is particularly aimed at irregular time series of numeric vectors/matrices and factors. zoo's key design goals are independence of a particular index/date/time class and consistency with ts and base R by providing methods to extend standard generics."
-depends = [
-    "R (>= 3.1.0)",
-    "stats",
-]
-suggests = [
-    "AER",
-    "coda",
-    "chron",
-    "ggplot2 (>= 3.5.0)",
-    "mondate",
-    "scales",
-    "stinepack",
-    "strucchange",
-    "timeDate",
-    "timeSeries",
-    "tinyplot",
-    "tis",
-    "tseries",
-    "xts",
-]
-imports = [
-    "utils",
-    "graphics",
-    "grDevices",
-    "lattice (>= 0.20-27)",
-]
-license = "GPL-2 | GPL-3"
-url = "https://zoo.R-Forge.R-project.org/"
-needs_compilation = "yes"
-author = "Achim Zeileis [aut, cre] (ORCID: <https://orcid.org/0000-0003-0918-3766>), Gabor Grothendieck [aut], Jeffrey A. Ryan [aut], Joshua M. Ulrich [ctb], Felix Andrews [ctb]"
-maintainer = "Achim Zeileis <Achim.Zeileis@R-project.org>"
-repository = "https://packagemanager.posit.co/cran/latest"
-encoding = "UTF-8"
 

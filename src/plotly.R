@@ -259,10 +259,6 @@ assign_axes <- function(df, cols) {
 #' @param df hourly, daily, or other dataset to plot
 #' @param opts rest of arguments
 build_data_plot <- function(df, sites, opts) {
-  # change marker style depending on amount of data
-  opts$mode <- ifelse(nrow(df) <= 100, "lines+markers", "lines")
-  opts$linewidth <- ifelse(nrow(df) <= 500, 2, 1)
-
   # create plot title
   opts$title <- if (!opts$multi_site) {
     req(nrow(sites) == 1)
@@ -353,38 +349,44 @@ build_data_plot <- function(df, sites, opts) {
     col_axis <- filter(col_ranges, name == col)$axis
 
     add_trace_to_plot <- function(plt, x, y, name) {
+      # change marker style depending on amount of data
+      mode <- ifelse(length(x) <= 100, "lines+markers", "lines")
+      linewidth <- ifelse(length(x) <= 500, 2, 1)
+
       add_trace(
         plt,
         x = x,
         y = y,
         name = name,
         type = "scatter",
-        mode = opts$mode,
+        mode = mode,
         yaxis = col_axis,
         hovertemplate = paste0(
           "%{y:.3~f}",
           find_unit(col, opts$unit_system)
         ),
-        line = list(shape = "spline", width = opts$linewidth)
+        line = list(shape = "spline", width = linewidth)
       )
     }
 
     if (opts$multi_site) {
       for (id in opts$selected_ids) {
-        site_df <- df |> filter(site_id == id)
+        site_df <- filter(df, site_id == id)
+        trace_df <- drop_na(site_df, !!col)
         name <- str_trunc(first(site_df$site_name), 15)
         plt <- add_trace_to_plot(
           plt,
-          x = site_df$date,
-          y = site_df[[col]],
+          x = trace_df$date,
+          y = trace_df[[col]],
           name = sprintf("%s: %s - %s", id, name, col_name)
         )
       }
     } else {
+      trace_df <- drop_na(df, !!col)
       plt <- add_trace_to_plot(
         plt,
-        x = df$date,
-        y = df[[col]],
+        x = trace_df$date,
+        y = trace_df[[col]],
         name = col_name
       )
     }

@@ -572,10 +572,10 @@ gmp-place-autocomplete {
 }
 
 .reset-plot {
-  margin-bottom: 15px;
-  width: 30px;
+  display: inline-flex;
   align-self: center;
   font-size: 2rem;
+  gap: 5px;
 }
 
 .reset-plot a {

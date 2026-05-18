@@ -50,6 +50,14 @@ server <- function(input, output, session) {
     }
   })
 
+  ## rv$map_risk_data ----
+  # set by risk module to show risk colors on the map
+  # clear it if no sites
+  observe({
+    req(nrow(rv$sites) == 0)
+    rv$map_risk_data <- NULL
+  })
+
   ## wx_grids ----
   # sf of grid polygons derived from downloaded weather data
   wx_grids <- reactive({
@@ -74,9 +82,7 @@ server <- function(input, output, session) {
   ## sites_with_grid ----
 
   add_grids <- function(df) {
-    if (nrow(df) == 0) {
-      return(NULL)
-    } else if (nrow(rv$weather) == 0) {
+    if (nrow(df) == 0 || nrow(rv$weather) == 0) {
       df |>
         mutate(grid_id = NA_character_, needs_download = TRUE)
     } else {
@@ -87,14 +93,13 @@ server <- function(input, output, session) {
 
   # sites joined to grid status via non-spatial bbox join
   locs_with_grid <- reactive({
-    locs <- rv$site_locs %||% tibble()
+    locs <- rv$site_locs
     add_grids(locs)
   })
 
   sites_with_grid <- reactive({
     sites <- rv$sites |>
       filter(!hidden)
-    req(nrow(sites) > 0)
     add_grids(sites)
   })
 
@@ -459,11 +464,15 @@ server <- function(input, output, session) {
     result <- task_forecast$result()
     req(!is.null(result), nrow(result) > 0)
 
-    fc <- rv$forecasts
-    for (gid in unique(result$grid_id)) {
-      fc[[gid]] <- result |> filter(grid_id == gid)
-    }
-    rv$forecasts <- fc
+    isolate({
+      fc <- rv$forecasts
+      for (gid in unique(result$grid_id)) {
+        fc[[gid]] <- result |> filter(grid_id == gid)
+      }
+      if (!identical(rv$forecasts, fc)) {
+        rv$forecasts <- fc
+      }
+    })
   })
 
   # Weather data ---------------------------------------------------------------
@@ -497,8 +506,13 @@ server <- function(input, output, session) {
       arrange(grid_id, datetime_utc) |>
       distinct(grid_id, datetime_utc, .keep_all = TRUE)
 
+    # drop pre-fetch dates and build cumulative counts
     hourly <- hourly_full |>
-      filter(date >= sel_dates$start)
+      filter(date >= sel_dates$start) |>
+      add_cumsum("evapotranspiration") |>
+      add_cumsum("precipitation") |>
+      add_cumsum("rain") |>
+      add_cumsum("snowfall")
 
     daily_full <- build_daily(hourly_full)
 
