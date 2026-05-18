@@ -15,6 +15,9 @@ if (FALSE) {
     ymd("2025-1-1"),
     ymd("2025-12-31")
   )
+  # mirror what the app actually stores in rv$weather: om_merge_wx drops NA
+  # datetime_utc parse artifacts, then sorts and dedups by grid + time
+  test_hourly_wx <- om_merge_wx(tibble(), test_hourly_wx)
   saveRDS(test_hourly_wx, "tests/testthat/test_hourly_wx.rds")
   test_hourly_wx <- readRDS("tests/testthat/test_hourly_wx.rds")
 }

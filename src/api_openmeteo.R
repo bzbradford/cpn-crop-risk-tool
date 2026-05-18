@@ -391,13 +391,15 @@ om_build_wx_grids <- function(wx) {
     select(grid_id, grid_lat, grid_lng, timezone, elevation, geometry)
 }
 
-#' Builds unique grids from downloaded weather data
-#' @param wx weather data from `om_parse_resp` or `build_hourly`
+#' Build each site's O1280 grid cell (canonical centroid + polygon) as an sf.
+#' Geometry travels with the site so its cell can render before any weather is
+#' downloaded. get_o1280_cells() already sets grid_id via fmt_grid_id().
+#' @param sites sites df with `lat` and `lng` columns
 om_build_site_grids <- function(sites) {
   sites |>
     mutate(get_o1280_cells(lat, lng)) |>
-    mutate(grid_id = fmt_grid_id(grid_lat, grid_lng)) |>
-    select(id, name, lat, lng, grid_id, grid_lat, grid_lng)
+    select(id, name, lat, lng, grid_id, grid_lat, grid_lng, geometry) |>
+    st_as_sf()
 }
 
 if (FALSE) {
@@ -742,6 +744,35 @@ if (FALSE) {
 }
 
 
+## Response collection ----
+
+#' Count successful responses from `req_perform_parallel()`
+#' (neither a captured error condition nor an HTTP error status)
+#' @param resps list of responses
+n_resp_ok <- function(resps) {
+  sum(vapply(
+    resps,
+    \(r) !inherits(r, "error") && !resp_is_error(r),
+    logical(1L)
+  ))
+}
+
+#' Parse parallel responses and stamp them with the caller's canonical grid
+#' identity. The API's nearest-centroid (grid_lat/grid_lng from om_parse_json)
+#' is discarded and replaced with the grid_id/grid_lat/grid_lng carried on
+#' `reqs`, keeping grid identity consistent with `om_build_site_grids()`.
+#' @param reqs rowwise df with `grid_id`, `grid_lat`, `grid_lng`, and a `resp`
+#'   list column from `req_perform_parallel()`
+om_collect_responses <- function(reqs) {
+  centroids <- distinct(reqs, grid_id, grid_lat, grid_lng)
+  reqs |>
+    reframe(grid_id, om_parse_resp(resp)) |>
+    select(-any_of(c("grid_lat", "grid_lng"))) |>
+    left_join(centroids, join_by(grid_id)) |>
+    om_build_hourly()
+}
+
+
 ## Build and execute data requests ----
 
 #' Get hourly data for a set of grid cells from start to end date.
@@ -770,12 +801,7 @@ om_fetch_weather <- function(grids, start_date, end_date, wx = tibble()) {
   ))
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
-
-  n_ok <- sum(vapply(
-    reqs$resp,
-    \(r) !inherits(r, "error") && !resp_is_error(r),
-    logical(1L)
-  ))
+  n_ok <- n_resp_ok(reqs$resp)
 
   message(sprintf(
     "Completed in %.1fs: %d/%d succeeded",
@@ -789,16 +815,7 @@ om_fetch_weather <- function(grids, start_date, end_date, wx = tibble()) {
     return(NULL)
   }
 
-  # Stamp results with our canonical grid identity, discarding the API's
-  # nearest-centroid (grid_lat/grid_lng from om_parse_json) so downstream
-  # grid_id joins stay consistent with om_build_site_grids().
-  centroids <- distinct(reqs, grid_id, grid_lat, grid_lng)
-
-  reqs |>
-    reframe(grid_id, om_parse_resp(resp)) |>
-    select(-any_of(c("grid_lat", "grid_lng"))) |>
-    left_join(centroids, join_by(grid_id)) |>
-    om_build_hourly()
+  om_collect_responses(reqs)
 }
 
 if (FALSE) {
@@ -821,12 +838,7 @@ om_fetch_forecast <- function(grids) {
     mutate(req = list(om_build_forecast_req(grid_lat, grid_lng)))
 
   reqs$resp <- req_perform_parallel(reqs$req, on_error = "continue")
-
-  n_ok <- sum(vapply(
-    reqs$resp,
-    \(r) !inherits(r, "error") && !resp_is_error(r),
-    logical(1L)
-  ))
+  n_ok <- n_resp_ok(reqs$resp)
 
   message(sprintf(
     "Completed in %.1fs: %d/%d succeeded",
@@ -840,14 +852,7 @@ om_fetch_forecast <- function(grids) {
     return(NULL)
   }
 
-  # stamp results with the canonical grid identity coming in from input grids
-  centroids <- distinct(reqs, grid_id, grid_lat, grid_lng)
-
-  reqs |>
-    reframe(grid_id, om_parse_resp(resp)) |>
-    select(-any_of(c("grid_lat", "grid_lng"))) |>
-    left_join(centroids, join_by(grid_id)) |>
-    om_build_hourly()
+  om_collect_responses(reqs)
 }
 
 if (FALSE) {

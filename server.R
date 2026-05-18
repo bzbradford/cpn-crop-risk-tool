@@ -58,15 +58,8 @@ server <- function(input, output, session) {
     rv$map_risk_data <- NULL
   })
 
-  ## wx_grids() ----
-  # sf of grid polygons derived from downloaded weather data
-  wx_grids <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    om_build_wx_grids(wx)
-  })
-
   ## sites_with_grid() ----
+  # sf: each visible site's O1280 cell (canonical centroid + polygon)
   sites_with_grid <- reactive({
     sites <- rv$sites |>
       filter(!hidden)
@@ -88,15 +81,21 @@ server <- function(input, output, session) {
   })
 
   ## sites_with_status() ----
+  # each site's own grid cell (geometry + canonical centroid from
+  # sites_with_grid) with per-grid coverage joined on from grid_status.
+  # Geometry/centroid stay on the site side so a cell renders even before its
+  # weather is downloaded; only the status columns come from the weather side.
   sites_with_status <- reactive({
     sites <- sites_with_grid()
     if (nrow(rv$weather) == 0) {
       sites |>
         mutate(needs_download = TRUE)
     } else {
+      status <- grid_status() |>
+        sf::st_drop_geometry() |>
+        select(-any_of(c("grid_lat", "grid_lng")))
       sites |>
-        select(id, name, lat, lng, grid_id) |>
-        left_join(grid_status(), join_by(grid_id)) |>
+        left_join(status, join_by(grid_id)) |>
         replace_na(list(needs_download = TRUE))
     }
   })
@@ -351,9 +350,11 @@ server <- function(input, output, session) {
     # canonical centroid (grid_lat/grid_lng) so the request hits the expected
     # O1280 cell and results can be stamped with our own grid identity.
     grids_need <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
       distinct(grid_id, grid_lat, grid_lng) |>
       semi_join(
         sites_with_status() |>
+          sf::st_drop_geometry() |>
           filter(needs_download) |>
           distinct(grid_id),
         join_by(grid_id)
@@ -486,6 +487,7 @@ server <- function(input, output, session) {
   wx_data <- reactive({
     weather <- rv$weather
     sites <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
       distinct(grid_id, grid_lat, grid_lng)
     fc_list <- rv$forecasts
     sel_dates <- selected_dates()
@@ -1082,7 +1084,6 @@ server <- function(input, output, session) {
   mapServer(
     rv = rv,
     rx = list(
-      grids = wx_grids,
       grid_status = grid_status,
       sites = sites_with_status
     )
