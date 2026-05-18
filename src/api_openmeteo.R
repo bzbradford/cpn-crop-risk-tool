@@ -228,6 +228,10 @@ if (FALSE) {
 
 ## Format response ----
 
+fmt_grid_id <- function(grid_lat, grid_lng) {
+  sprintf("%.3f,%.3f", grid_lat, grid_lng)
+}
+
 #' Creates the working hourly weather dataset from parsed openmeteo response
 #' @param wx hourly weather data from `parse_openmeteo` function. If it does not
 #'   have a grid_id column one will be generated
@@ -308,14 +312,12 @@ if (FALSE) {
   invisible()
 }
 
-#' Bounding boxes for O1280 grid cells given centroid lat/lng
-#'
-#' @param grid_lat,grid_lng Numeric vectors of equal length (degrees). These
-#'   are the centroids returned by Open-Meteo's ECMWF endpoint.
-#' @return A tibble with xmin/xmax/ymin/ymax, ring index, and an sfc geometry
+#' Identify centroid and bounding box for O1280 grid cells given lat/lng
+#' @param lat,lng coordinates of target point
+#' @return A tibble with grid_lat, grid_lng, grid_id, and an sfc geometry
 #'   column in EPSG:4326.
-get_o1280_cells <- function(grid_lat, grid_lng) {
-  stopifnot(length(grid_lat) == length(grid_lng))
+get_o1280_cells <- function(lat, lng) {
+  stopifnot(length(lat) == length(lng))
   .build_o1280()
   N <- .o1280_cache$N
   gauss_lats <- .o1280_cache$gauss_lats
@@ -324,7 +326,7 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
   # Snap each input lat to its ring index (1-based in R).
   # edges is descending: edges[j] > center[j] > edges[j+1].
   # findInterval on -edges (ascending) gives j directly.
-  j <- findInterval(-grid_lat, .o1280_cache$neg_edges_asc, all.inside = TRUE)
+  j <- findInterval(-lat, .o1280_cache$neg_edges_asc, all.inside = TRUE)
   j <- pmin(pmax(j, 1L), 2L * N)
 
   # k = ring distance from nearest pole (1..N)
@@ -338,14 +340,14 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
 
   # Snap incoming lon to nearest ring longitude center. Rings start at lon = 0;
   # centers are i * d_lng for i = 0..n_lng-1. Normalize input to [0, 360) first.
-  lng_pos <- (grid_lng %% 360 + 360) %% 360
+  lng_pos <- (lng %% 360 + 360) %% 360
   i <- round(lng_pos / d_lng) %% n_lng
-  lon_c <- i * d_lng
+  c_lng <- i * d_lng
   # Back to [-180, 180]
-  lon_c <- ifelse(lon_c > 180, lon_c - 360, lon_c)
+  c_lng <- ifelse(c_lng > 180, c_lng - 360, c_lng)
 
-  xmin <- lon_c - d_lng / 2
-  xmax <- lon_c + d_lng / 2
+  xmin <- c_lng - d_lng / 2
+  xmax <- c_lng + d_lng / 2
 
   # Build polygons. NB: cells that straddle the antimeridian (xmin < -180 or
   # xmax > 180) will need splitting if you care about rendering; flag here.
@@ -364,21 +366,17 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
   )
 
   tibble(
-    # ring = j,
-    # n_lng = n_lng,
-    # lat_c = gauss_lats[j],
-    # lon_c = lon_c,
-    xmin = xmin,
-    xmax = xmax,
-    ymin = ymin,
-    ymax = ymax,
+    grid_lat = gauss_lats[j],
+    grid_lng = c_lng,
+    grid_id = fmt_grid_id(grid_lat, grid_lng),
     geometry = st_as_sfc(wkt_vec, crs = 4326)
   )
 }
 
+
 #' Builds unique grids from downloaded weather data
 #' @param wx weather data from `om_parse_resp` or `build_hourly`
-om_build_grids <- function(wx) {
+om_build_wx_grids <- function(wx) {
   tz_lookup <- wx |>
     summarize(
       across(c(timezone, elevation), first),
@@ -389,12 +387,33 @@ om_build_grids <- function(wx) {
     distinct(grid_id, grid_lat, grid_lng) |>
     mutate(get_o1280_cells(grid_lat, grid_lng)) |>
     st_as_sf() |>
-    left_join(tz_lookup, join_by(grid_id))
+    left_join(tz_lookup, join_by(grid_id)) |>
+    select(grid_id, grid_lat, grid_lng, timezone, elevation, geometry)
+}
+
+#' Builds unique grids from downloaded weather data
+#' @param wx weather data from `om_parse_resp` or `build_hourly`
+om_build_site_grids <- function(sites) {
+  sites |>
+    mutate(get_o1280_cells(lat, lng)) |>
+    mutate(grid_id = fmt_grid_id(grid_lat, grid_lng)) |>
+    select(id, name, lat, lng, grid_id, grid_lat, grid_lng)
 }
 
 if (FALSE) {
+  sites1 <- load_sites("data/hars-aars-msn.csv")
+  om_build_site_grids(sites1)
   test_wx <- read_csv("dev/test_wx.csv")
-  om_build_grids(test_wx)
+  test_wx <- read_csv("data/Hourly data.csv") |>
+    janitor::clean_names() |>
+    mutate(grid_id = fmt_grid_id(grid_lat, grid_lng))
+  test_wx |>
+    distinct(grid_id)
+  g <- om_build_wx_grids(test_wx)
+  leaflet() |>
+    addTiles() |>
+    addPolygons(data = g)
+  round(g$lat_c, 6) - round(g$grid_lat, 6)
 }
 
 
@@ -423,6 +442,11 @@ om_wx_daily_status <- function(wx) {
       hours_missing = pmax(0, hours_expected - hours_actual),
       .by = grid_id
     )
+}
+
+if (FALSE) {
+  test_wx <- read_csv("dev/test_wx.csv")
+  om_wx_daily_status(test_wx)
 }
 
 
@@ -573,35 +597,14 @@ om_grid_status <- function(
   start_date = min(wx$date),
   end_date = max(wx$date)
 ) {
-  x <- om_build_grids(wx)
+  x <- om_build_wx_grids(wx)
   y <- om_wx_status(wx, start_date, end_date)
   left_join(x, y, join_by(grid_id))
 }
 
 if (FALSE) {
   om_grid_status(wx)
-  om_wx_status(wx)
-}
-
-
-#' Non-spatial join using site lat/lng and grid extents
-#' @param sites sites df with `lat` and `lng` cols
-#' @param grid grid df from `om_grid_status()`
-om_join_grids <- function(sites, grids) {
-  sites |>
-    left_join(
-      grids,
-      join_by(lng >= xmin, lng <= xmax, lat >= ymin, lat <= ymax)
-    )
-}
-
-if (FALSE) {
-  sites1 <- load_sites("dev/hars-aars-msn.csv")
-  om_grid_status(wx)
-  om_join_grids(sites1, om_grid_status(wx))
-
-  sites2 <- load_sites("dev/wisconet stns.csv")
-  om_join_grids(sites2, om_grid_status(wx))
+  om_wx_status(test_wx)
 }
 
 
@@ -684,15 +687,15 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
 
   # if there already is some weather data, match sites to grids
   df <- if (!is.null(grids)) {
-    joined <- om_join_grids(sites, grids)
-    joined |>
+    sites |>
+      left_join(grids, join_by(grid_id)) |>
       reframe(
         om_build_chunks(start_date, end_date, unlist(dates_have)),
         .by = c(lat, lng)
       )
   } else {
     sites |>
-      distinct(lat, lng) |>
+      # distinct(lat, lng) |>
       mutate(
         start_date = !!start_date,
         end_date = !!end_date,
@@ -714,7 +717,7 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
 }
 
 if (FALSE) {
-  om_prep_reqs(sites1, "2025-12-30", "2026-01-10", om_grid_status(wx))
+  om_prep_reqs(sites1, "2025-12-30", "2026-01-10", om_grid_status(test_wx))
   om_prep_reqs(sites1, "2025-12-30", "2026-01-10")
 }
 
@@ -767,8 +770,9 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
 }
 
 if (FALSE) {
-  wx1 <- om_fetch_weather(sites1, today() - days(1), today())
-  om_wx_status(wx1)
+  wx1 <- sites1 |>
+    om_fetch_weather(today() - days(1), today())
+  om_wx_status(test_wx)
   wx2 <- om_fetch_weather(sites1, today() - days(2), today(), wx1)
   om_wx_status(wx2)
 }
@@ -816,7 +820,7 @@ if (FALSE) {
   wx <- om_fetch_weather(sites1, today() - days(1), today())
   wx
 
-  fc <- om_build_grids(wx) |>
+  fc <- om_build_wx_grids(wx) |>
     om_fetch_forecast()
   fc
 
