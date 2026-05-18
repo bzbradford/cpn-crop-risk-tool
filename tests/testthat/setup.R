@@ -11,7 +11,7 @@ if (FALSE) {
 
   # get and store weather data for testing
   test_hourly_wx <- om_fetch_weather(
-    test_sites,
+    om_build_site_grids(test_sites),
     ymd("2025-1-1"),
     ymd("2025-12-31")
   )

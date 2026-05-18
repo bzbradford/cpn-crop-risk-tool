@@ -343,27 +343,30 @@ test_that("om_build_chunks splits missing dates into contiguous runs", {
 
 # Request preparation ----------------------------------------------------------
 
-test_that("om_prep_reqs returns one request per site when no existing grids", {
-  out <- om_prep_reqs(test_sites, "2026-01-01", "2026-01-03")
-  expect_equal(nrow(out), nrow(distinct(test_sites, lat, lng)))
+test_that("om_prep_reqs returns one request per grid when no existing weather", {
+  site_grids <- om_build_site_grids(test_sites)
+  out <- om_prep_reqs(site_grids, "2026-01-01", "2026-01-03")
+  expect_equal(nrow(out), nrow(distinct(site_grids, grid_id)))
   expect_true("req" %in% names(out))
   expect_s3_class(out$req[[1]], "httr2_request")
   expect_true(all(out$days == 3))
 })
 
 test_that("om_prep_reqs warns and returns empty when start > end", {
-  expect_warning(out <- om_prep_reqs(test_sites, "2026-02-01", "2026-01-01"))
+  site_grids <- om_build_site_grids(test_sites)
+  expect_warning(out <- om_prep_reqs(site_grids, "2026-02-01", "2026-01-01"))
   expect_equal(nrow(out), 0)
 })
 
 test_that("om_prep_reqs produces requests for ranges extending beyond fixture", {
-  grids <- om_grid_status(test_hourly_wx)
+  site_grids <- om_build_site_grids(test_sites)
+  wx_status <- om_grid_status(test_hourly_wx)
   fixture_dates <- sort(unique(test_hourly_wx$date))
   out <- om_prep_reqs(
-    test_sites,
+    site_grids,
     max(fixture_dates) - 1,
     max(fixture_dates) + 5,
-    grids
+    wx_status
   )
   expect_gt(nrow(out), 0)
   expect_s3_class(out$req[[1]], "httr2_request")

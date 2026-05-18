@@ -667,12 +667,15 @@ if (FALSE) {
 
 ## Build requests list ----
 
-#' Generate requests list from sites, date range, and existing data
-#' @param sites sites df, must have `lat` and `lng` cols
+#' Generate the requests list for a set of grid cells and date range
+#' @param grids df of grid cells to fetch, must have `grid_id`, `grid_lat`,
+#'   `grid_lng` (centroid). Requests are issued at the grid centroid so
+#'   Open-Meteo resolves the cell we expect, not its nearest neighbor.
 #' @param start_date start of requested date range, date or "YYYY-MM-DD" string
 #' @param end_date end of requested date range
-#' @param grids if already have weather, provide grid summary from `om_grid_status()`
-om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
+#' @param wx_status if weather already exists, the `om_grid_status()` summary
+#'   used to fetch only the missing date runs per grid
+om_prep_reqs <- function(grids, start_date, end_date, wx_status = NULL) {
   start_date <- as.Date(start_date)
   end_date <- as.Date(end_date)
 
@@ -685,17 +688,29 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
     return(tibble())
   }
 
-  # if there already is some weather data, match sites to grids
-  df <- if (!is.null(grids)) {
-    sites |>
-      left_join(grids, join_by(grid_id)) |>
+  grids <- distinct(grids, grid_id, grid_lat, grid_lng)
+
+  # if there already is some weather data, fetch only the missing date runs
+  df <- if (!is.null(wx_status)) {
+    grids |>
+      left_join(
+        wx_status |>
+          sf::st_drop_geometry() |>
+          select(grid_id, dates_have),
+        join_by(grid_id)
+      ) |>
       reframe(
-        om_build_chunks(start_date, end_date, unlist(dates_have)),
-        .by = c(lat, lng)
+        om_build_chunks(
+          start_date,
+          end_date,
+          # reduce(c) preserves the Date class (unlist() would coerce to
+          # numeric and crash as.Date() inside om_build_chunks)
+          purrr::reduce(dates_have, c, .init = as.Date(character()))
+        ),
+        .by = c(grid_id, grid_lat, grid_lng)
       )
   } else {
-    sites |>
-      # distinct(lat, lng) |>
+    grids |>
       mutate(
         start_date = !!start_date,
         end_date = !!end_date,
@@ -703,13 +718,17 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
       )
   }
 
-  # build requests for each row
+  if (nrow(df) == 0) {
+    return(tibble())
+  }
+
+  # one request per (grid, date run), issued at the grid centroid
   df |>
     rowwise() |>
     mutate(
       req = list(om_build_req(
-        lat = lat,
-        lng = lng,
+        lat = grid_lat,
+        lng = grid_lng,
         start = start_date,
         end = end_date
       ))
@@ -717,19 +736,25 @@ om_prep_reqs <- function(sites, start_date, end_date, grids = NULL) {
 }
 
 if (FALSE) {
-  om_prep_reqs(sites1, "2025-12-30", "2026-01-10", om_grid_status(test_wx))
-  om_prep_reqs(sites1, "2025-12-30", "2026-01-10")
+  g1 <- om_build_site_grids(sites1)
+  om_prep_reqs(g1, "2025-12-30", "2026-01-10", om_grid_status(test_wx))
+  om_prep_reqs(g1, "2025-12-30", "2026-01-10")
 }
 
 
 ## Build and execute data requests ----
 
-#' get hourly data for sites from start to end date
-#' optionally include existing weather to identify needs
-om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
+#' Get hourly data for a set of grid cells from start to end date.
+#' Requests are issued at each grid centroid and the returned rows are stamped
+#' with the caller's canonical grid_id / grid_lat / grid_lng so grid identity
+#' stays consistent with `om_build_site_grids()` / `om_build_wx_grids()`.
+#' @param grids df with `grid_id`, `grid_lat`, `grid_lng`
+#' @param wx optional existing weather, used to fetch only missing dates
+om_fetch_weather <- function(grids, start_date, end_date, wx = tibble()) {
   t0 <- now()
-  grids <- if (nrow(wx) > 0) om_grid_status(wx) else NULL
-  reqs <- om_prep_reqs(sites, start_date, end_date, grids)
+  grids <- distinct(grids, grid_id, grid_lat, grid_lng)
+  wx_status <- if (nrow(wx) > 0) om_grid_status(wx) else NULL
+  reqs <- om_prep_reqs(grids, start_date, end_date, wx_status)
 
   if (nrow(reqs) == 0) {
     message("No new data needed")
@@ -737,8 +762,8 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
   }
 
   message(sprintf(
-    "Fetching weather: %d sites, %s to %s (%d requests)",
-    nrow(sites),
+    "Fetching weather: %d grids, %s to %s (%d requests)",
+    nrow(grids),
     start_date,
     end_date,
     nrow(reqs)
@@ -764,16 +789,23 @@ om_fetch_weather <- function(sites, start_date, end_date, wx = tibble()) {
     return(NULL)
   }
 
+  # Stamp results with our canonical grid identity, discarding the API's
+  # nearest-centroid (grid_lat/grid_lng from om_parse_json) so downstream
+  # grid_id joins stay consistent with om_build_site_grids().
+  centroids <- distinct(reqs, grid_id, grid_lat, grid_lng)
+
   reqs |>
-    reframe(lat, lng, om_parse_resp(resp)) |>
+    reframe(grid_id, om_parse_resp(resp)) |>
+    select(-any_of(c("grid_lat", "grid_lng"))) |>
+    left_join(centroids, join_by(grid_id)) |>
     om_build_hourly()
 }
 
 if (FALSE) {
-  wx1 <- sites1 |>
-    om_fetch_weather(today() - days(1), today())
-  om_wx_status(test_wx)
-  wx2 <- om_fetch_weather(sites1, today() - days(2), today(), wx1)
+  g1 <- om_build_site_grids(sites1)
+  wx1 <- om_fetch_weather(g1, today() - days(1), today())
+  om_wx_status(wx1)
+  wx2 <- om_fetch_weather(g1, today() - days(2), today(), wx1)
   om_wx_status(wx2)
 }
 
@@ -808,16 +840,21 @@ om_fetch_forecast <- function(grids) {
     return(NULL)
   }
 
-  # use the grid_id coming in from input grids
+  # stamp results with the canonical grid identity coming in from input grids
+  centroids <- distinct(reqs, grid_id, grid_lat, grid_lng)
+
   reqs |>
     reframe(grid_id, om_parse_resp(resp)) |>
+    select(-any_of(c("grid_lat", "grid_lng"))) |>
+    left_join(centroids, join_by(grid_id)) |>
     om_build_hourly()
 }
 
 if (FALSE) {
   sites1 <- load_sites("dev/hars-aars-msn.csv")
 
-  wx <- om_fetch_weather(sites1, today() - days(1), today())
+  wx <- om_build_site_grids(sites1) |>
+    om_fetch_weather(today() - days(1), today())
   wx
 
   fc <- om_build_wx_grids(wx) |>
