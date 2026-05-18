@@ -541,10 +541,9 @@ mapServer <- function(rv, rx) {
 
       ## Show site markers ----
       observe({
-        sites <- rx$sites()
-
         proxy_map |> clearGroup("sites")
-        req(nrow(sites) > 0)
+
+        sites <- rx$sites()
 
         color_by_risk <- FALSE
 
