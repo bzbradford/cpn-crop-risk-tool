@@ -300,7 +300,7 @@ server <- function(input, output, session) {
   # caller is responsible for clamping end_date to local today() before invoking;
   # don't re-clamp here because the worker's system TZ may differ from the user's.
   task_weather <- ExtendedTask$new(function(
-    sites,
+    grids,
     start_date,
     end_date,
     wx
@@ -308,7 +308,7 @@ server <- function(input, output, session) {
     mirai(
       {
         new_wx <- om_fetch_weather(
-          sites,
+          grids,
           as.Date(start_date),
           as.Date(end_date),
           wx
@@ -316,7 +316,7 @@ server <- function(input, output, session) {
         om_merge_wx(wx, new_wx)
       },
       .GlobalEnv,
-      .args = lst(sites, start_date, end_date, wx)
+      .args = lst(grids, start_date, end_date, wx)
     )
   })
 
@@ -347,22 +347,29 @@ server <- function(input, output, session) {
   observe({
     req(rv$sites_ready)
     req(need_weather())
-    sites <- sites_with_status()
-    sites_need <- sites |>
-      filter(needs_download) |>
-      select(id, name, lat, lng, grid_id)
-    req(nrow(sites_need) > 0)
+    # Fetch by grid, not by site: dedupe sites sharing a cell and carry the
+    # canonical centroid (grid_lat/grid_lng) so the request hits the expected
+    # O1280 cell and results can be stamped with our own grid identity.
+    grids_need <- sites_with_grid() |>
+      distinct(grid_id, grid_lat, grid_lng) |>
+      semi_join(
+        sites_with_status() |>
+          filter(needs_download) |>
+          distinct(grid_id),
+        join_by(grid_id)
+      )
+    req(nrow(grids_need) > 0)
     dates <- expanded_dates()
     start_date <- as.Date(dates$start)
     end_date <- min(as.Date(dates$end), today())
 
     req(task_weather$status() %in% c("initial", "success"))
 
-    # Debounce: bail if the same (sites, dates) was fetched in the last 30s.
+    # Debounce: bail if the same (grids, dates) was fetched in the last 30s.
     # Defense against feedback loops where post-fetch state still reads as
     # needing weather.
     fetch_key <- paste(
-      paste(sort(sites_need$id), collapse = ","),
+      paste(sort(grids_need$grid_id), collapse = ","),
       start_date,
       end_date,
       sep = "|"
@@ -378,7 +385,7 @@ server <- function(input, output, session) {
 
     isolate({
       task_weather$invoke(
-        sites_need,
+        grids_need,
         start_date,
         end_date,
         rv$weather
