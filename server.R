@@ -58,15 +58,16 @@ server <- function(input, output, session) {
     rv$map_risk_data <- NULL
   })
 
-  ## wx_grids ----
-  # sf of grid polygons derived from downloaded weather data
-  wx_grids <- reactive({
-    wx <- rv$weather
-    req(nrow(wx) > 0)
-    om_build_grids(wx)
+  ## sites_with_grid() ----
+  # sf: each visible site's O1280 cell (canonical centroid + polygon)
+  sites_with_grid <- reactive({
+    sites <- rv$sites |>
+      filter(!hidden)
+    req(nrow(sites) > 0)
+    om_build_site_grids(sites)
   })
 
-  ## grid_status ----
+  ## grid_status() ----
   # per-grid date range, completeness, and freshness
   grid_status <- reactive({
     req(nrow(rv$weather) > 0)
@@ -79,37 +80,31 @@ server <- function(input, output, session) {
     )
   })
 
-  ## sites_with_grid ----
-
-  add_grids <- function(df) {
-    if (nrow(df) == 0 || nrow(rv$weather) == 0) {
-      df |>
-        mutate(grid_id = NA_character_, needs_download = TRUE)
+  ## sites_with_status() ----
+  # each site's own grid cell (geometry + canonical centroid from
+  # sites_with_grid) with per-grid coverage joined on from grid_status.
+  # Geometry/centroid stay on the site side so a cell renders even before its
+  # weather is downloaded; only the status columns come from the weather side.
+  sites_with_status <- reactive({
+    sites <- sites_with_grid()
+    if (nrow(rv$weather) == 0) {
+      sites |>
+        mutate(needs_download = TRUE)
     } else {
-      om_join_grids(df, grid_status()) |>
+      status <- grid_status() |>
+        sf::st_drop_geometry() |>
+        select(-any_of(c("grid_lat", "grid_lng")))
+      sites |>
+        left_join(status, join_by(grid_id)) |>
         replace_na(list(needs_download = TRUE))
     }
-  }
-
-  # sites joined to grid status via non-spatial bbox join
-  locs_with_grid <- reactive({
-    locs <- rv$site_locs
-    add_grids(locs)
   })
 
-  sites_with_grid <- reactive({
-    sites <- rv$sites |>
-      filter(!hidden)
-    add_grids(sites)
-  })
-
-  # observe(echo(sites_with_status()))
-
-  ## need_weather ----
+  ## need_weather() ----
   # single source of truth with the task trigger: read needs_download off
   # sites_with_status (which itself uses needs_download from grid_status).
   need_weather <- reactive({
-    sites <- sites_with_grid()
+    sites <- sites_with_status()
     if (nrow(sites) == 0) {
       return(FALSE)
     }
@@ -304,7 +299,7 @@ server <- function(input, output, session) {
   # caller is responsible for clamping end_date to local today() before invoking;
   # don't re-clamp here because the worker's system TZ may differ from the user's.
   task_weather <- ExtendedTask$new(function(
-    sites,
+    grids,
     start_date,
     end_date,
     wx
@@ -312,7 +307,7 @@ server <- function(input, output, session) {
     mirai(
       {
         new_wx <- om_fetch_weather(
-          sites,
+          grids,
           as.Date(start_date),
           as.Date(end_date),
           wx
@@ -320,7 +315,7 @@ server <- function(input, output, session) {
         om_merge_wx(wx, new_wx)
       },
       .GlobalEnv,
-      .args = lst(sites, start_date, end_date, wx)
+      .args = lst(grids, start_date, end_date, wx)
     )
   })
 
@@ -330,10 +325,10 @@ server <- function(input, output, session) {
 
   ## Invoke weather request ----
 
-  ## Non-external version of weather fetch for testing
+  ## Non-mirai version of weather fetch for testing
   # observe({
   #   req(rv$sites_ready)
-  #   sites <- rv$sites
+  #   sites <- sites_with_status()
   #   dates <- expanded_dates()
   #   start_date <- as.Date(dates$start)
   #   end_date <- min(as.Date(dates$end), today())
@@ -351,22 +346,31 @@ server <- function(input, output, session) {
   observe({
     req(rv$sites_ready)
     req(need_weather())
-    sites <- req(sites_with_grid())
-    sites_need <- sites |>
-      filter(needs_download) |>
-      select(id, name, lat, lng)
-    req(nrow(sites_need) > 0)
+    # Fetch by grid, not by site: dedupe sites sharing a cell and carry the
+    # canonical centroid (grid_lat/grid_lng) so the request hits the expected
+    # O1280 cell and results can be stamped with our own grid identity.
+    grids_need <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
+      distinct(grid_id, grid_lat, grid_lng) |>
+      semi_join(
+        sites_with_status() |>
+          sf::st_drop_geometry() |>
+          filter(needs_download) |>
+          distinct(grid_id),
+        join_by(grid_id)
+      )
+    req(nrow(grids_need) > 0)
     dates <- expanded_dates()
     start_date <- as.Date(dates$start)
     end_date <- min(as.Date(dates$end), today())
 
     req(task_weather$status() %in% c("initial", "success"))
 
-    # Debounce: bail if the same (sites, dates) was fetched in the last 30s.
+    # Debounce: bail if the same (grids, dates) was fetched in the last 30s.
     # Defense against feedback loops where post-fetch state still reads as
     # needing weather.
     fetch_key <- paste(
-      paste(sort(sites_need$id), collapse = ","),
+      paste(sort(grids_need$grid_id), collapse = ","),
       start_date,
       end_date,
       sep = "|"
@@ -382,7 +386,7 @@ server <- function(input, output, session) {
 
     isolate({
       task_weather$invoke(
-        sites_need,
+        grids_need,
         start_date,
         end_date,
         rv$weather
@@ -433,8 +437,9 @@ server <- function(input, output, session) {
 
   ## Invoke forecast fetch ----
   observe({
-    sites <- req(locs_with_grid())
+    sites <- sites_with_grid()
     grids <- sites |>
+      distinct(grid_id, .keep_all = TRUE) |>
       drop_na(grid_id)
 
     req(nrow(grids) > 0)
@@ -481,21 +486,23 @@ server <- function(input, output, session) {
   # dependency on unique lat/lngs vs site ids, names, hide state, etc
   wx_data <- reactive({
     weather <- rv$weather
-    locs <- req(locs_with_grid())
+    sites <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
+      distinct(grid_id, grid_lat, grid_lng)
     fc_list <- rv$forecasts
     sel_dates <- selected_dates()
 
-    req(nrow(weather) > 0, nrow(locs) > 0)
+    req(nrow(weather) > 0, nrow(sites) > 0)
 
     historical <- weather |>
       filter(
-        grid_id %in% locs$grid_id,
+        grid_id %in% sites$grid_id,
         between(date, sel_dates$start - days(30), sel_dates$end)
       )
 
     fc_data <- if (sel_dates$end == today() & length(fc_list) > 0) {
       sel_fc <- bind_rows(fc_list) |>
-        filter(grid_id %in% locs$grid_id)
+        filter(grid_id %in% sites$grid_id)
     } else {
       tibble()
     }
@@ -1077,9 +1084,8 @@ server <- function(input, output, session) {
   mapServer(
     rv = rv,
     rx = list(
-      grids = wx_grids,
       grid_status = grid_status,
-      sites = sites_with_grid
+      sites = sites_with_status
     )
   )
 
@@ -1088,7 +1094,7 @@ server <- function(input, output, session) {
   dataServer(
     rv = rv,
     rx = list(
-      sites = sites_with_grid,
+      sites = sites_with_status,
       dates = selected_dates,
       wx = wx_data
     )
@@ -1099,7 +1105,7 @@ server <- function(input, output, session) {
   riskServer(
     rv = rv,
     rx = list(
-      sites = sites_with_grid,
+      sites = sites_with_status,
       dates = selected_dates,
       wx = wx_data
     )
