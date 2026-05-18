@@ -379,7 +379,11 @@ get_o1280_cells <- function(grid_lat, grid_lng) {
 #' Builds unique grids from downloaded weather data
 #' @param wx weather data from `om_parse_resp` or `build_hourly`
 om_build_grids <- function(wx) {
-  tz_lookup <- wx |> distinct(grid_id, timezone, elevation)
+  tz_lookup <- wx |>
+    summarize(
+      across(c(timezone, elevation), first),
+      .by = grid_id
+    )
 
   wx |>
     distinct(grid_id, grid_lat, grid_lng) |>
@@ -399,11 +403,10 @@ if (FALSE) {
 #' Similar to weather_status but returns number of hours per day
 #' to check for any incomplete days
 #' @param wx hourly weather data
-#' @param tz time
 om_wx_daily_status <- function(wx) {
   wx |>
     summarize(
-      tz = coalesce(first(timezone), "UTC"),
+      tz = first(timezone),
       time_min = min(datetime_utc),
       time_max = max(datetime_utc),
       hours_actual = n(),
@@ -413,53 +416,63 @@ om_wx_daily_status <- function(wx) {
       start_hour = ymd_hms(paste(date, "00:00:00"), tz = first(tz)),
       end_hour = if_else(
         date == today(tzone = first(tz)),
-        now(tzone = tz),
+        now(tzone = first(tz)),
         ymd_hms(paste(date, "23:00:00"), tz = first(tz))
       ),
       hours_expected = hours_diff(start_hour, end_hour) + 1,
-      # clamp to 0: archive can return forecast hours past now() for today,
-      # so `hours` may exceed `hours_expected`. Negative "missing" would
-      # otherwise exclude today from dates_have and cause a refetch loop.
-      hours_missing = pmax(0, hours_expected - hours_actual)
+      hours_missing = pmax(0, hours_expected - hours_actual),
+      .by = grid_id
     )
 }
 
 
 #' Summarize downloaded weather data by grid cell and creates sf object
 #' used to intersect site points with existing weather data
-#' @param wx hourly weather data from `ibm_clean_resp` function
+#' @param wx hourly weather data from `om_build_hourly` function
 #' @param start_date start of expected date range
 #' @param end_date end of expected date range
 #' @returns tibble
 om_wx_status <- function(
   wx,
-  start_date = min(wx$date),
-  end_date = max(wx$date)
+  start_date = if (nrow(wx) > 0) min(wx$date),
+  end_date = if (nrow(wx) > 0) max(wx$date)
 ) {
-  default <- tibble(
-    grid_id = NA,
-    needs_download = TRUE
+  # Single canonical empty schema — every return path matches this
+  status_template <- tibble(
+    grid_id = character(),
+    date_min = as.Date(character()),
+    date_max = as.Date(character()),
+    time_min = as.POSIXct(character()),
+    time_max = as.POSIXct(character()),
+    days_expected = integer(),
+    days_actual = integer(),
+    days_incomplete = integer(),
+    days_missing = integer(),
+    hours_expected = integer(),
+    hours_missing = integer(),
+    hours_actual = integer(),
+    hours_stale = integer(),
+    needs_download = logical(),
+    dates_have = list(),
+    dates_missing = list()
   )
 
   if (nrow(wx) == 0) {
-    return(default)
+    return(status_template)
   }
 
-  selected_wx <- wx |>
-    filter(between(date, start_date, end_date))
+  start_date <- as.Date(start_date)
+  end_date <- as.Date(end_date)
+  dates_expected <- seq.Date(start_date, end_date, by = "day")
+  n_expected <- length(dates_expected)
+  max_hours_missing <- 2L
 
-  if (nrow(selected_wx) == 0) {
-    return(default)
-  }
+  daily <- om_wx_daily_status(wx)
 
-  dates_expected <- seq.Date(start_date, end_date, 1)
-  max_hours_missing <- 2
+  # Every grid that appears anywhere in wx — survives the partial case
+  all_grids <- distinct(daily, grid_id)
 
-  # summarize for each grid
-  daily <- selected_wx |>
-    om_wx_daily_status()
-
-  # dates we don't need to refetch: those with at most max_hours_missing gap
+  # Dates with adequate coverage (across all time, not just selected range)
   dates_have <- daily |>
     filter(hours_missing <= max_hours_missing) |>
     summarize(
@@ -467,38 +480,86 @@ om_wx_status <- function(
       .by = grid_id
     )
 
-  daily |>
-    summarize(
-      tz = first(tz),
-      date_min = min(date),
-      date_max = max(date),
-      time_min = min(time_min),
-      time_max = max(time_max),
-      days_expected = length(dates_expected),
-      days_actual = n_distinct(date),
-      days_incomplete = sum(hours_missing > max_hours_missing),
-      days_missing = max(0, days_expected - days_actual),
-      dates_missing = list(setdiff(dates_expected, date)),
-      hours_expected = sum(hours_expected),
-      hours_missing = sum(hours_missing),
+  # Per-grid stats restricted to the selected window.
+  # Guard the summarize: with zero rows, dplyr still evaluates min()/max()
+  # on empty vectors for type inference, which produces warnings.
+  sel_daily <- filter(daily, between(date, start_date, end_date))
+
+  sel_status <- if (nrow(sel_daily) > 0L) {
+    sel_daily |>
+      summarize(
+        date_min = min(date),
+        date_max = max(date),
+        time_min = min(time_min),
+        time_max = max(time_max),
+        days_actual = n_distinct(date),
+        days_incomplete = as.integer(sum(hours_missing > max_hours_missing)),
+        hours_expected = as.integer(sum(hours_expected)),
+        hours_missing = as.integer(sum(hours_missing)),
+        hours_stale = if_else(
+          date_max == today(tzone = first(tz)),
+          pmax(0L, hours_diff(time_max, now(tzone = first(tz)))),
+          0L
+        ),
+        .by = grid_id
+      )
+  } else {
+    # Zero-row prototype matching the summarize schema.
+    # Take time_min/time_max from `daily` so POSIXct tz attributes carry over.
+    tibble(
+      grid_id = character(),
+      date_min = as.Date(character()),
+      date_max = as.Date(character()),
+      time_min = daily$time_min[0],
+      time_max = daily$time_max[0],
+      days_actual = integer(),
+      days_incomplete = integer(),
+      hours_expected = integer(),
+      hours_missing = integer(),
+      hours_stale = integer()
+    )
+  }
+
+  all_grids |>
+    left_join(sel_status, by = "grid_id") |>
+    left_join(dates_have, by = "grid_id") |>
+    mutate(
+      days_expected = n_expected,
+      days_actual = coalesce(days_actual, 0L),
+      days_incomplete = coalesce(days_incomplete, 0L),
+      days_missing = pmax(0L, days_expected - days_actual),
+      hours_expected = coalesce(hours_expected, 24L * n_expected),
+      hours_missing = coalesce(hours_missing, hours_expected),
       hours_actual = hours_expected - hours_missing,
-      # clamp to 0: archive includes forecast hours past now() for today, so
-      # time_max can be ahead of now(); negative "stale" would be misleading.
-      hours_stale = if_else(
-        date_max == today(tzone = tz),
-        pmax(0L, hours_diff(time_max, now(tzone = tz))),
-        0L
-      ),
-      needs_download = days_missing > 0 | days_incomplete > 0,
-      .by = grid_id
+      hours_stale = coalesce(hours_stale, 0L),
+      needs_download = days_missing > 0L | days_incomplete > 0L,
+      # Derive dates_missing from dates_have so list-col NA/NULL is handled cleanly.
+      # (setdiff strips the Date class — restore it explicitly.)
+      dates_missing = purrr::map(dates_have, \(have) {
+        if (is.null(have) || length(have) == 0L) {
+          dates_expected
+        } else {
+          as.Date(setdiff(dates_expected, have), origin = "1970-01-01")
+        }
+      })
     ) |>
-    select(-tz) |>
-    left_join(dates_have, join_by(grid_id))
+    select(all_of(names(status_template)))
 }
 
 if (FALSE) {
   test_wx <- read_csv("dev/test_wx.csv")
   om_wx_status(test_wx)
+
+  # handle no weather
+  test_wx |>
+    filter(FALSE) |>
+    om_wx_status()
+
+  # handle date range with no weather
+  range(test_wx$date)
+  test_wx |>
+    om_wx_status(start_date = ymd("2024-1-1"), end_date = ymd("2024-2-1"))
+
   om_grid_status(test_wx)
   om_grid_status(test_wx, as_date("2026-1-1"), today()) |>
     annotate_grids() |>

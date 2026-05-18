@@ -237,30 +237,38 @@ test_that("om_wx_daily_status reports hours per grid-date", {
   expect_true(median(full_days$hours_actual) == 24)
 })
 
-test_that("om_wx_status returns the default sentinel for empty input", {
-  out <- om_wx_status(tibble())
-  expect_true(all(is.na(out$grid_id)))
-  expect_true(all(out$needs_download))
-})
+test_that("om_wx_status works correctly", {
+  expected_cols <- c(
+    "grid_id",
+    "date_min",
+    "date_max",
+    "time_min",
+    "time_max",
+    "days_expected",
+    "days_actual",
+    "days_incomplete",
+    "days_missing",
+    "hours_expected",
+    "hours_missing",
+    "hours_actual",
+    "hours_stale",
+    "needs_download",
+    "dates_have",
+    "dates_missing"
+  )
 
-test_that("om_wx_status summarizes coverage per grid", {
-  out <- om_wx_status(test_hourly_wx)
+  # it handles an empty tibble
+  out <- om_wx_status(tibble())
+  expect_named(out, expected_cols)
+
+  # it handles when dates are outside available weather
+  out <- om_wx_status(
+    test_hourly_wx,
+    start_date = ymd("2020-1-1"),
+    end_date = ymd("2020-2-1")
+  )
+  expect_named(out, expected_cols)
   expect_s3_class(out, "tbl_df")
-  expect_true(all(
-    c(
-      "grid_id",
-      "date_min",
-      "date_max",
-      "days_expected",
-      "days_actual",
-      "days_missing",
-      "hours_expected",
-      "hours_missing",
-      "needs_download",
-      "dates_have"
-    ) %in%
-      names(out)
-  ))
   expect_equal(nrow(out), length(unique(test_hourly_wx$grid_id)))
 })
 

@@ -137,7 +137,8 @@ OPTS <- lst(
     "Hourly" = "hourly",
     "Daily" = "daily",
     "Moving averages" = "ma",
-    "Growing degree days" = "gdd"
+    "Growing degree days" = "gdd",
+    "All" = "all"
     # "Model models" = "Model"
   ),
 
@@ -192,10 +193,30 @@ OPTS <- lst(
   ),
   daily_attr_cols = c("date", "yday", "year", "month", "day"),
   plot_default_cols = c(
+    # hourly
     "temperature",
+    "precipitation",
+    "precipitation_cumulative",
+
+    # daily
     "temperature_mean",
+    "precipitation_daily",
+    "precipitation_daily_cumulative",
+    "wind_speed_max",
+
+    # moving average
     "temperature_mean_7day",
-    "base_50_upper_86_cumulative"
+    "relative_humidity_mean_7day",
+    "soil_temp_mean_7day",
+
+    # gdd
+    "base_50_upper_86_cumulative",
+
+    # all
+    "temperature_hourly",
+    "temperature_mean_daily",
+    "precipitation_daily",
+    "precipitation_daily_cumulative"
   ),
   plot_ignore_cols = c(site_attr_cols, grid_attr_cols, date_attr_cols),
 )
@@ -305,7 +326,9 @@ if (FALSE) {
 #' create and insert cumulative count after a column
 add_cumsum <- function(df, col) {
   newcol <- paste0(col, "_cumulative")
-  mutate(df, !!newcol := cumsum(.data[[col]]), .after = !!col)
+  df |>
+    mutate(!!newcol := cumsum(.data[[col]])) |>
+    relocate(all_of(newcol), .after = all_of(col))
 }
 
 if (FALSE) {
@@ -336,10 +359,10 @@ add_date_cols <- function(df) {
 
 ## NA-safe summary functions ----
 
-calc_sum <- \(x) if (all(is.na(x))) NA_real_ else sum(x, na.rm = TRUE)
-calc_mean <- \(x) if (all(is.na(x))) NA_real_ else mean(x, na.rm = TRUE)
-calc_min <- \(x) if (all(is.na(x))) NA_real_ else min(x, na.rm = TRUE)
-calc_max <- \(x) if (all(is.na(x))) NA_real_ else max(x, na.rm = TRUE)
+calc_sum <- \(x) if (all(is.na(x))) NA else sum(x, na.rm = TRUE)
+calc_mean <- \(x) if (all(is.na(x))) NA else mean(x, na.rm = TRUE)
+calc_min <- \(x) if (all(is.na(x))) NA else min(x, na.rm = TRUE)
+calc_max <- \(x) if (all(is.na(x))) NA else max(x, na.rm = TRUE)
 
 
 ## data.table rolling functions ----
@@ -354,6 +377,49 @@ roll_mean <- function(x, width, align = "right") {
     partial = !(align == "center")
   )
 }
+
+if (FALSE) {
+  c(1:10, rep(NA, 5)) |>
+    roll_mean(10, align = "center")
+}
+
+roll_mean_center <- function(x, width, na.rm = TRUE) {
+  n <- length(x)
+  half_r <- width %/% 2 # points to the right
+  half_l <- width - half_r - 1L # points to the left (>= half_r for even width)
+
+  not_na <- as.integer(!is.na(x))
+  x0 <- data.table::fifelse(is.na(x), 0, x)
+
+  # Accumulate rightward (right-aligned): covers [i - half_l - half_r, i]
+  # We want [i - half_l, i + half_r], so shift results left by half_r
+  rs <- data.table::frollsum(
+    x0,
+    width,
+    align = "right",
+    partial = TRUE,
+    na.rm = FALSE
+  )
+  rc <- data.table::frollsum(
+    not_na,
+    width,
+    align = "right",
+    partial = TRUE,
+    na.rm = FALSE
+  )
+
+  # Shift left by half_r to re-center
+  idx <- c(seq(half_r + 1L, n), rep(NA_integer_, half_r))
+
+  result <- rs[idx] / rc[idx]
+  result
+}
+
+if (FALSE) {
+  c(1:10, rep(NA, 5)) |>
+    roll_mean_center(10)
+}
+
 
 roll_sum <- function(x, width, align = "right") {
   data.table::frollsum(
@@ -434,7 +500,7 @@ conversion_lookup <- tribble(
   "temperature"          , "°C"    , "°F"      , c_to_f       ,
   "dew_point_depression" , "°C"    , "°F"      , \(x) x * 1.8 , # C to F without offset
   "dew_point"            , "°C"    , "°F"      , c_to_f       ,
-  "relative_humidity"    , "%"     , "%"       , \(x) x       , # no conversion
+  "relative_humidity"    , "%"     , "%"       , \(x) x       ,
   "evapotranspiration"   , "mm"    , "in"      , mm_to_in     ,
   "precipitation"        , "mm"    , "in"      , mm_to_in     ,
   "rain"                 , "mm"    , "in"      , mm_to_in     ,
@@ -443,9 +509,10 @@ conversion_lookup <- tribble(
   "pressure_msl"         , "kPa"   , "inHg"    , kPa_to_inHg  ,
   "wind_speed"           , "kmh"   , "mph"     , km_to_mi     ,
   "wind_gust"            , "kmh"   , "mph"     , km_to_mi     ,
-  "wind_direction"       , "°"     , "°"       , \(x) x       , # no conversion
+  "wind_direction"       , "°"     , "°"       , \(x) x       ,
   "soil_temp"            , "°C"    , "°F"      , c_to_f       ,
-  "soil_moisture"        , "%"     , "%"       , \(x) x       , # no conversion
+  "soil_moisture"        , "%"     , "%"       , \(x) x       ,
+  "base"                 , "GDD"   , "GDD"     , \(x) x
 )
 
 

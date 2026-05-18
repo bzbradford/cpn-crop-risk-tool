@@ -13,9 +13,8 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
   # retain attribute cols
   attr <- daily |> select(grid_id, any_of(OPTS$date_attr_cols))
 
-  # define moving average functions. Using zoo here for its handling of partial centered rolls
-  roll_mean <- function(vec, width) {
-    zoo::rollapply(vec, width, calc_mean, partial = TRUE, align = align)
+  if (align == "center") {
+    roll_mean <- roll_mean_center
   }
 
   fns <- c(
@@ -27,6 +26,7 @@ build_ma_from_daily <- function(daily, align = c("center", "right")) {
 
   # apply moving average functions to each primary data column
   ma <- daily |>
+    select(-contains("_cumulative")) |>
     mutate(
       across(
         starts_with(c(
@@ -63,7 +63,7 @@ if (FALSE) {
 #' @returns tibble
 build_gdd_from_daily <- function(daily) {
   # retain attribute cols
-  attr <- daily |> select(grid_id, date)
+  attr <- daily |> select(grid_id, any_of(OPTS$date_attr_cols))
 
   # convert temperatures
   tmin <- c_to_f(daily$temperature_min)
@@ -124,7 +124,7 @@ dataUI <- function() {
 
     # multi-site checkboxes, plot, and download button
     # includes validation messages
-    uiOutput(ns("main_ui")),
+    uiOutput(ns("main_ui"), style = "margin-top: 1rem;"),
   )
 }
 
@@ -139,29 +139,69 @@ dataServer <- function(rv, rx) {
     function(input, output, session) {
       ns <- session$ns
 
-      # lightweight cache key shared by the three lazy reactives below
-      wx_cache_key <- reactive({
-        rlang::hash(rx$wx()$daily)
+      wx_hourly <- reactive({
+        rx$wx()$hourly
       })
 
-      # lazy MA/GDD — computed only when selected_data() requests them
+      wx_daily <- reactive({
+        rx$wx()$daily
+      })
+
       ma_center <- reactive({
-        rx$wx()$daily_full |>
-          build_ma_from_daily("center")
-      }) |>
-        bindCache(wx_cache_key())
+        rx$wx()$daily_full |> build_ma_from_daily("center")
+      })
 
       ma_right <- reactive({
-        rx$wx()$daily_full |>
-          build_ma_from_daily("right")
-      }) |>
-        bindCache(wx_cache_key())
+        rx$wx()$daily_full |> build_ma_from_daily("right")
+      })
+
+      ma <- reactive({
+        switch(
+          input$ma_align %||% "right",
+          "center" = ma_center(),
+          "right" = ma_right()
+        )
+      })
 
       gdd <- reactive({
-        rx$wx()$daily |>
-          build_gdd_from_daily()
-      }) |>
-        bindCache(wx_cache_key())
+        rx$wx()$daily |> build_gdd_from_daily()
+      })
+
+      all_data <- reactive({
+        hourly <- wx_hourly() |>
+          rename_with(~ paste0(., "_hourly"), temperature:last_col())
+
+        # get the middle datetime for each date to join against hourly data
+        date_time_link <<- hourly |>
+          summarize(
+            datetime_local = quantile(datetime_local, probs = 0.5, type = 1),
+            .by = c(grid_id, date)
+          )
+
+        # remove extra cols
+        .rm_cols <- function(df) {
+          select(df, -c(yday, year, month, day))
+        }
+
+        daily <- .rm_cols(wx_daily())
+        ma <- .rm_cols(ma())
+        gdd <- .rm_cols(gdd())
+
+        daily_joined <<- date_time_link |>
+          left_join(daily, join_by(grid_id, date)) |>
+          left_join(ma, join_by(grid_id, date)) |>
+          left_join(gdd, join_by(grid_id, date)) |>
+          rename_with(
+            ~ if_else(str_detect(., "_daily"), ., paste0(., "_daily")),
+            temperature_min:last_col()
+          ) |>
+          select(-date)
+
+        wx_all <<- hourly |>
+          left_join(daily_joined, join_by(grid_id, datetime_local))
+
+        wx_all
+      })
 
       ## selected_data // reactive ----
       selected_data <- reactive({
@@ -184,15 +224,11 @@ dataServer <- function(rv, rx) {
 
         data <- switch(
           opts$data_type,
-          "hourly" = wx$hourly,
-          "daily" = wx$daily,
-          "ma" = switch(
-            opts$ma_align,
-            "center" = ma_center(),
-            "right" = ma_right()
-          ),
-          # "disease" = wx$disease,
-          "gdd" = gdd()
+          "hourly" = wx_hourly(),
+          "daily" = wx_daily(),
+          "ma" = ma(),
+          "gdd" = gdd(),
+          "all" = all_data()
         )
 
         req(nrow(data) > 0)
@@ -203,42 +239,20 @@ dataServer <- function(rv, rx) {
           select(-grid_id) |>
           mutate(across(where(is.numeric), ~ signif(.x)))
 
+        # trim off forecast data if desired
         if (isFALSE(input$forecast)) {
-          df <- if (opts$data_type == "hourly") {
-            filter(df, datetime_utc < now() - hours(1))
+          if ("datetime_utc" %in% names(df)) {
+            df <- filter(df, datetime_utc < now())
           } else {
-            filter(df, date <= today())
+            df <- filter(df, date <= today())
           }
         }
+
+        # convert units
         if (input$metric) df else convert_measures(df)
       })
 
       # Interface ----
-
-      ## main_ui ----
-      output$main_ui <- renderUI({
-        validate(need(rv$sites_ready, OPTS$validation_sites_ready))
-        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
-
-        tagList(
-          # shown if more than one site
-          uiOutput(ns("plot_sites_ui")),
-          div(
-            class = "plotly-container",
-            style = "margin-top: 1rem;",
-            plotlyOutput(ns("data_plot"))
-          ),
-          # download button
-          div(
-            style = "text-align: right;",
-            downloadButton(
-              ns("download_data"),
-              "Download dataset",
-              class = "btn-sm"
-            )
-          )
-        )
-      })
 
       ## metric_switch ----
       output$switches_ui <- renderUI({
@@ -287,7 +301,7 @@ dataServer <- function(rv, rx) {
         type <- req(input$data_type)
 
         # moving average type
-        if (type == "ma") {
+        if (type %in% c("ma", "all")) {
           div(
             class = "flex-across",
             style = "margin-top: 1rem;",
@@ -295,12 +309,29 @@ dataServer <- function(rv, rx) {
             radioButtons(
               inputId = ns("ma_align"),
               label = NULL,
-              choices = c("Centered" = "center", "Trailing" = "right"),
+              choices = c("Trailing" = "right", "Centered" = "center"),
               selected = isolate(input$ma_align),
               inline = TRUE
             )
           )
         }
+      })
+
+      ## main_ui ----
+      output$main_ui <- renderUI({
+        validate(need(rv$sites_ready, OPTS$validation_sites_ready))
+        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
+
+        tagList(
+          # shown if more than one site
+          uiOutput(ns("plot_sites_ui")),
+          div(
+            class = "plotly-container",
+            style = "margin-top: 1rem;",
+            plotlyOutput(ns("data_plot"))
+          ),
+          uiOutput(ns("downloads"))
+        )
       })
 
       ## plot_cols - reactive ----
@@ -316,7 +347,7 @@ dataServer <- function(rv, rx) {
         prev_selection <- intersect(cols, isolate(input$plot_cols))
         default_selection <- intersect(cols, OPTS$plot_default_cols)
         div(
-          tags$label("Data to display"),
+          tags$label("Data selection"),
           div(
             class = "flex-across",
             div(
@@ -337,27 +368,39 @@ dataServer <- function(rv, rx) {
             div(
               class = "reset-plot",
               actionLink(
+                ns("clear_plot_cols"),
+                icon("x"),
+                title = "Clear",
+                onclick = "this.blur();"
+              ),
+              actionLink(
                 ns("reset_plot_cols"),
                 icon("refresh"),
-                title = "Reset to defaults"
+                title = "Reset to defaults",
+                onclick = "this.blur();"
               )
             )
           )
         )
       })
 
+      ## Clear plot columns ----
+      observeEvent(input$clear_plot_cols, {
+        updateSelectizeInput(
+          inputId = "plot_cols",
+          selected = ""
+        )
+      })
+
       ## Reset plot columns ----
-      reset_plot_cols <- function() {
+      observeEvent(input$reset_plot_cols, {
         cols <- plot_cols()
         default_col <- intersect(cols, OPTS$plot_default_cols)
         updateSelectizeInput(
           inputId = "plot_cols",
           selected = first_truthy(default_col, cols[1])
         )
-      }
-
-      # reset on button press
-      observe(reset_plot_cols()) |> bindEvent(input$reset_plot_cols)
+      })
 
       ## plot_sites_ui ----
       output$plot_sites_ui <- renderUI({
@@ -430,52 +473,89 @@ dataServer <- function(rv, rx) {
       ## data_plot - renderPlotly ----
       output$data_plot <- renderPlotly({
         data <- plot_data()
-        data$opts$filename <- download_filename()$plot
+        data$opts$filename <- paste0(
+          dl_fname(data = data$df, desc = "plot"),
+          ".png"
+        )
         build_data_plot(data$df, data$sites, data$opts)
       })
 
-      # Download button ----
+      # Download buttons ----
 
-      ## download_data - reactive ----
-      download_data <- reactive({
+      output$downloads <- renderUI({
+        sites <- rx$sites()
+        div(
+          style = "text-align: right;",
+          if (nrow(sites) > 1) {
+            downloadButton(
+              ns("download_selected"),
+              "Download selected data",
+              class = "btn-sm"
+            )
+          },
+          downloadButton(
+            ns("download_all"),
+            "Download all data",
+            class = "btn-sm"
+          )
+        )
+      })
+
+      fmt_download_data <- function(df) {
         unit_system <- if_else(input$metric, "metric", "imperial")
-        data <- plot_data()
-        data$df |>
+        df |>
           rename_with_units(unit_system) |>
           mutate(across(
             where(is.POSIXct),
             ~ format(.x, "%Y-%m-%d %H:%M:%S")
           )) |>
           janitor::clean_names("big_camel")
-      })
+      }
 
-      ## download_filename - reactive ----
       # for both the csv download and plot png export
-      download_filename <- reactive({
+      dl_fname <- function(data, desc) {
         type <- req(input$data_type)
-        dates <- rx$dates()
-        data <- plot_data()
-        sites <- data$sites
         name_str <- invert(OPTS$data_type_choices)[[type]]
+        dates <- rx$dates()
+        sites <- distinct(data, site_name, site_lat, site_lng)
         site_str <- ifelse(
           nrow(sites) == 1,
-          sprintf("(%.3f, %.3f)", sites$lat, sites$lng),
-          "(multiple locations)"
+          sprintf(
+            " %s (%.3f, %.3f)",
+            sites$site_name,
+            sites$site_lat,
+            sites$site_lng
+          ),
+          "multiple locations"
         )
         date_str <- paste(dates$start, "to", dates$end)
-        list(
-          csv = paste(name_str, "data", site_str, "-", date_str),
-          plot = paste(name_str, "plot", site_str, "-", date_str)
-        )
-      })
+        str_glue("{name_str} {desc} - {site_str}, {date_str}")
+      }
 
       ## download_data - downloadHandler ----
-      output$download_data <- downloadHandler(
+      output$download_selected <- downloadHandler(
         filename = function() {
-          paste0(download_filename()$csv, ".csv")
+          fname <- dl_fname(data = plot_data()$df, desc = "data")
+          paste0(fname, ".csv")
         },
         content = function(file) {
-          download_data() |> write_excel_csv(file, na = "")
+          cols <- req(input$plot_cols)
+          plot_data()$df |>
+            select(any_of(c(OPTS$plot_ignore_cols, cols))) |>
+            fmt_download_data() |>
+            write_excel_csv(file, na = "")
+        }
+      )
+
+      output$download_all <- downloadHandler(
+        filename = function() {
+          fname <- dl_fname(data = selected_data(), desc = "data")
+          paste0(fname, ".csv")
+        },
+        content = function(file) {
+          selected_data() |>
+            fmt_download_data() |>
+            write_excel_csv(file, na = "")
         }
       )
     } # end module
