@@ -148,19 +148,29 @@ dataServer <- function(rv, rx) {
       })
 
       ma_center <- reactive({
-        rx$wx()$daily_full |> build_ma_from_daily("center")
+        rx$wx()$daily_full |>
+          build_ma_from_daily("center")
       })
 
       ma_right <- reactive({
-        rx$wx()$daily_full |> build_ma_from_daily("right")
+        rx$wx()$daily_full |>
+          build_ma_from_daily("right")
       })
 
       ma <- reactive({
-        switch(
+        df <- switch(
           input$ma_align %||% "right",
           "center" = ma_center(),
           "right" = ma_right()
         )
+        # moving average calcs use expanded weather data
+        # need to clamp back to selected dates
+        dates <- rx$dates()
+        df <- filter(df, date >= dates$start)
+        if (dates$end != today()) {
+          df <- filter(df, date <= dates$end)
+        }
+        df
       })
 
       gdd <- reactive({
@@ -172,7 +182,7 @@ dataServer <- function(rv, rx) {
           rename_with(~ paste0(., "_hourly"), temperature:last_col())
 
         # get the middle datetime for each date to join against hourly data
-        date_time_link <<- hourly |>
+        date_time_link <- hourly |>
           summarize(
             datetime_local = quantile(datetime_local, probs = 0.5, type = 1),
             .by = c(grid_id, date)
@@ -187,7 +197,7 @@ dataServer <- function(rv, rx) {
         ma <- .rm_cols(ma())
         gdd <- .rm_cols(gdd())
 
-        daily_joined <<- date_time_link |>
+        daily_joined <- date_time_link |>
           left_join(daily, join_by(grid_id, date)) |>
           left_join(ma, join_by(grid_id, date)) |>
           left_join(gdd, join_by(grid_id, date)) |>
@@ -197,7 +207,7 @@ dataServer <- function(rv, rx) {
           ) |>
           select(-date)
 
-        wx_all <<- hourly |>
+        wx_all <- hourly |>
           left_join(daily_joined, join_by(grid_id, datetime_local))
 
         wx_all
@@ -250,6 +260,15 @@ dataServer <- function(rv, rx) {
 
         # convert units
         if (input$metric) df else convert_measures(df)
+      })
+
+      dataset_name <- reactive({
+        type <- req(input$data_type)
+        name_str <- invert(OPTS$data_type_choices)[[type]]
+        if (type == "ma") {
+          name_str <- str_glue("{name_str} ({input$ma_align} aligned)")
+        }
+        name_str
       })
 
       # Interface ----
@@ -450,7 +469,7 @@ dataServer <- function(rv, rx) {
             ymd_hms(paste(max(df$date), "23:00:00"))
           ),
           data_type = req(input$data_type),
-          data_name = invert(OPTS$data_type_choices)[[data_type]],
+          data_name = dataset_name(),
           cols = req(input$plot_cols),
           unit_system = ifelse(input$metric, "metric", "imperial"),
           site_ids = unique(df$site_id),
@@ -486,13 +505,11 @@ dataServer <- function(rv, rx) {
         sites <- rx$sites()
         div(
           style = "text-align: right;",
-          if (nrow(sites) > 1) {
-            downloadButton(
-              ns("download_selected"),
-              "Download selected data",
-              class = "btn-sm"
-            )
-          },
+          downloadButton(
+            ns("download_selected"),
+            "Download selected data",
+            class = "btn-sm"
+          ),
           downloadButton(
             ns("download_all"),
             "Download all data",
@@ -515,7 +532,7 @@ dataServer <- function(rv, rx) {
       # for both the csv download and plot png export
       dl_fname <- function(data, desc) {
         type <- req(input$data_type)
-        name_str <- invert(OPTS$data_type_choices)[[type]]
+        name_str <- dataset_name()
         dates <- rx$dates()
         sites <- distinct(data, site_name, site_lat, site_lng)
         site_str <- ifelse(

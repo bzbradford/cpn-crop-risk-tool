@@ -188,6 +188,7 @@ server <- function(input, output, session) {
   expanded_dates <- reactive({
     dates <- selected_dates()
     dates$start <- dates$start - days(30)
+    dates$end <- dates$end + days(30)
     dates
   })
 
@@ -491,31 +492,36 @@ server <- function(input, output, session) {
       distinct(grid_id, grid_lat, grid_lng)
     fc_list <- rv$forecasts
     sel_dates <- selected_dates()
+    exp_dates <- expanded_dates()
 
     req(nrow(weather) > 0, nrow(sites) > 0)
 
-    historical <- weather |>
+    wx <- weather |>
       filter(
         grid_id %in% sites$grid_id,
-        between(date, sel_dates$start - days(30), sel_dates$end)
+        between(date, exp_dates$start, exp_dates$end)
       )
 
     fc_data <- if (sel_dates$end == today() & length(fc_list) > 0) {
       sel_fc <- bind_rows(fc_list) |>
         filter(grid_id %in% sites$grid_id)
+      if (nrow(sel_fc) > 0) {
+        sel_dates$end <- max(sel_fc$date)
+      }
+      sel_fc
     } else {
       tibble()
     }
 
     # includes 30 days prior to selected dates
-    hourly_full <- bind_rows(historical, fc_data) |>
+    hourly_full <- bind_rows(wx, fc_data) |>
       drop_na(datetime_utc) |>
       arrange(grid_id, datetime_utc) |>
       distinct(grid_id, datetime_utc, .keep_all = TRUE)
 
-    # drop pre-fetch dates and build cumulative counts
+    # drop expanded dates and build cumulative counts
     hourly <- hourly_full |>
-      filter(date >= sel_dates$start) |>
+      filter(between(date, sel_dates$start, sel_dates$end)) |>
       add_cumsum("evapotranspiration") |>
       add_cumsum("precipitation") |>
       add_cumsum("rain") |>
@@ -523,15 +529,16 @@ server <- function(input, output, session) {
 
     daily_full <- build_daily(hourly_full)
 
-    # drop pre-fetch dates and rebuild cumulative counts
+    # drop expanded dates and rebuild cumulative counts
     daily <- daily_full |>
-      filter(date >= sel_dates$start) |>
+      filter(between(date, sel_dates$start, sel_dates$end)) |>
       add_cumsum("evapotranspiration_daily") |>
       add_cumsum("precipitation_daily") |>
       add_cumsum("rain_daily") |>
       add_cumsum("snowfall_daily")
 
     list(
+      dates = sel_dates,
       hourly = hourly,
       daily = daily,
       daily_full = daily_full
