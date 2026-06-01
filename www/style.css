@@ -139,8 +139,7 @@ footer {
 
 .main {
   display: grid;
-  grid-template-columns: 1fr 2fr 2fr;
-  /* 20% 40% 40% equivalent */
+  grid-template-columns: 2fr 3fr 4fr;
   grid-template-rows: auto;
   gap: 1rem;
   padding: 1rem;
@@ -266,6 +265,7 @@ footer {
 .date-btns {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(calc(25% - 10px), 1fr));
+  grid-auto-rows: 1fr;
   gap: 10px;
 }
 
