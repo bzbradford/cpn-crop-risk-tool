@@ -45,7 +45,7 @@ ui <- fluidPage(
       class = "column sidebar-col",
       h2("Site selection"),
       div(
-        style = "margin-top: 1rem; min-height: 150px;",
+        style = "margin-top: 1rem;",
         uiOutput("site_help_ui"),
         uiOutput("sites_list", style = "max-height: 400px; overflow: auto;"),
         uiOutput("site_btns"),
@@ -54,7 +54,6 @@ ui <- fluidPage(
 
       h2("Weather data", style = "margin-top: 2rem;"),
       div(
-        style = "min-height: 150px",
         uiOutput("date_select_ui"),
         uiOutput("date_btns_ui", style = "margin-top: 1rem;"),
       ),

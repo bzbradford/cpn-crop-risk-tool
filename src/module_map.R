@@ -28,63 +28,25 @@ if (FALSE) {
 
 
 #' Add some more information for displaying on the map
-#' @param grids_with_status:tibble constructed by `om_grid_status()`
+#' @param grids:tibble constructed by `om_grid_status()`
 #' @returns tibble with additional columns
-annotate_grids <- function(grids_with_status) {
-  grids_with_status |>
+annotate_grids <- function(grids) {
+  grids |>
+    rowwise() |>
     mutate(
       color = if_else(needs_download, "orange", "darkgreen"),
-      label = paste0(
-        "<b>Weather grid</b><br>",
-        sprintf("Centroid: %.4f, %.4f<br>", grid_lat, grid_lng),
-        # sprintf("Earliest date: %s<br>", date_min),
-        # sprintf("Latest date: %s<br>", date_max),
-        if_else(
-          date_max == today(),
-          sprintf("Most recent data: %s hours ago<br>", hours_stale),
-          ""
-        ),
-        sprintf("Total days: %s<br>", days_expected),
-        if_else(
-          days_incomplete > 0,
+      label = HTML(paste0(
+        c(
+          "<b>Weather grid</b>",
+          sprintf("Centroid: %.4f, %.4f", grid_lat, grid_lng),
           sprintf(
-            "Days incomplete: %s (%.1f%%)<br>",
-            days_incomplete,
-            100 * (days_incomplete / days_expected)
-          ),
-          ""
+            "Dates loaded: %s / %s",
+            days_actual,
+            days_expected
+          )
         ),
-        if_else(
-          days_missing > 0,
-          sprintf(
-            "Days missing: %s (%.1f%%)<br>",
-            days_missing,
-            100 * (days_missing / days_expected)
-          ),
-          ""
-        ),
-        if_else(
-          hours_missing > 0,
-          sprintf(
-            "Hours missing: %s (%.1f%%)<br>",
-            hours_missing,
-            100 * (hours_missing / hours_expected)
-          ),
-          ""
-        )
-        # lapply(dates_missing, function(dt) {
-        #   if (length(dt) == 0) {
-        #     return(NULL)
-        #   }
-        #   print(dt)
-        #   sprintf(
-        #     "Dates missing: %s",
-        #     paste(dt, collapse = ", ") |>
-        #       str_trunc(40)
-        #   )
-        # })
-      ) |>
-        lapply(HTML)
+        collapse = "<br>"
+      ))
     )
 }
 
@@ -237,33 +199,13 @@ mapUI <- function() {
 
 # Module server ----------------------------------------------------------------
 
-mapServer <- function(rv, map_data) {
+#' @param rv reactive values from parent server
+#' @param rx list of reactive expressions from parent server
+mapServer <- function(rv, rx) {
   moduleServer(
     id = "map",
     function(input, output, session) {
       ns <- session$ns
-
-      # Local reactives ----
-
-      ## visible_sites ----
-      # rv$sites filtered to non-hidden; always a tibble (possibly empty)
-      visible_sites <- reactive({
-        sites <- rv$sites
-        if (is.null(sites) || nrow(sites) == 0) {
-          return(sites_template)
-        }
-        sites |> filter(!hidden)
-      })
-
-      ## visible_sites_with_status ----
-      # map_data()$sites_with_status filtered to non-hidden; NULL if unavailable
-      visible_sites_with_status <- reactive({
-        sites <- map_data()$sites_with_status
-        if (is.null(sites) || nrow(sites) == 0) {
-          return(NULL)
-        }
-        sites |> filter(!hidden)
-      })
 
       # Helper functions ----
 
@@ -288,7 +230,7 @@ mapServer <- function(rv, map_data) {
 
       # fits all sites on the map
       fit_sites <- function() {
-        sites <- visible_sites()
+        sites <- rv$sites
         req(nrow(sites) > 0)
 
         bounds <- list(
@@ -389,10 +331,10 @@ mapServer <- function(rv, map_data) {
         }
 
         map <- leaflet(options = leafletOptions(preferCanvas = TRUE)) |>
-          addMapPane("extent", 501) |>
-          # addMapPane("counties", 410) |>
-          addMapPane("grid", 502) |>
-          addMapPane("sites", 503) |>
+          addMapPane("extent", 401) |>
+          addMapPane("grids", 402) |>
+          addMapPane("cur_grids", 403) |>
+          addMapPane("sites", 500) |>
           # addPolygons(
           #   data = service_bounds,
           #   color = "black",
@@ -543,20 +485,65 @@ mapServer <- function(rv, map_data) {
       #   })
       # })
 
-      ## Show site markers ----
+      ## Show weather data grids ----
       observe({
-        wx <- rv$weather
-        sites <- visible_sites()
+        # All weather grids
+        grids <- req(rx$grid_status())
+        req(nrow(grids) > 0)
 
-        proxy_map |> clearGroup("sites")
+        grids_labelled <- grids |>
+          mutate(
+            label = sprintf(
+              "<b>Weather grid</b><br> Centroid: %.4f, %.4f",
+              grid_lat,
+              grid_lng
+            )
+          )
+
+        proxy_map |>
+          clearGroup(OPTS$map_layers$grid) |>
+          addPolygons(
+            data = grids_labelled,
+            weight = 1,
+            label = ~ lapply(label, HTML),
+            layerId = ~grid_id,
+            group = OPTS$map_layers$grid,
+            color = "grey",
+            opacity = 0.5,
+            fillOpacity = 0,
+            options = pathOptions(pane = "grids")
+          )
+
+        # Currently selected weather grids
+        sites <- rx$sites()
         req(nrow(sites) > 0)
 
-        # determine site icons
-        sites <- if (nrow(wx) == 0) {
-          sites |> mutate(needs_download = TRUE)
-        } else {
-          req(visible_sites_with_status())
-        }
+        linked_sites <- sites |> drop_na(grid_id)
+        req(nrow(linked_sites) > 0)
+
+        annotated_sites <- linked_sites |>
+          annotate_grids() |>
+          st_as_sf()
+
+        proxy_map |>
+          addPolygons(
+            data = annotated_sites,
+            weight = 1,
+            label = ~label,
+            layerId = ~grid_id,
+            group = OPTS$map_layers$grid,
+            color = ~color,
+            opacity = 1,
+            fillOpacity = 0,
+            options = pathOptions(pane = "grids")
+          )
+      })
+
+      ## Show site markers ----
+      observe({
+        proxy_map |> clearGroup("sites")
+
+        sites <- rx$sites()
 
         color_by_risk <- FALSE
 
@@ -625,73 +612,6 @@ mapServer <- function(rv, map_data) {
               )
             ),
             options = markerOptions(pane = "sites")
-          )
-      })
-
-      ## Show user weather data grids ----
-      # will only show grids that the user has interacted with in the session
-      observe({
-        # display any cached weather data for user
-        grids <- req(map_data()$grids_with_status)
-        if (nrow(grids) > 0) {
-          grids <- annotate_grids(grids)
-          proxy_map |>
-            clearGroup(OPTS$map_layers$grid) |>
-            addPolygons(
-              data = grids,
-              weight = 0.5,
-              label = ~label,
-              layerId = ~grid_id,
-              group = OPTS$map_layers$grid,
-              color = "grey",
-              opacity = 0.25,
-              # fillColor = ~color,
-              fillOpacity = 0,
-              options = pathOptions(pane = "grid")
-            )
-        }
-
-        # display grids linked to sites more prominently
-        sites <- req(visible_sites_with_status())
-        linked_sites <- sites |>
-          drop_na(grid_id)
-        if (nrow(linked_sites) > 0) {
-          sites <- linked_sites |>
-            st_as_sf() |>
-            annotate_grids()
-          proxy_map |>
-            addPolygons(
-              data = sites,
-              weight = 1,
-              label = ~label,
-              layerId = ~grid_id,
-              group = OPTS$map_layers$grid,
-              color = ~color,
-              opacity = 1,
-              # fillColor = ~color,
-              # fillOpacity = 0.025,
-              fillOpacity = 0,
-              options = pathOptions(pane = "grid")
-            )
-        }
-      })
-
-      ## Show all weather data grids ----
-      # these are any grids in the saved weather data
-      observe({
-        # req(session$clientData$url_hostname == "127.0.0.1")
-
-        grids <- map_data()$grids
-
-        proxy_map |>
-          clearGroup("grid") |>
-          addPolylines(
-            data = grids,
-            color = "black",
-            weight = 0.25,
-            opacity = 1,
-            group = OPTS$map_layers$grid,
-            options = pathOptions(pane = "grid")
           )
       })
 

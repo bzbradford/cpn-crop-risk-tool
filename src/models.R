@@ -40,13 +40,6 @@ if (FALSE) {
 #' @param hourly accepts the cleaned hourly data from `build_hourly()`
 #' @returns tibble
 build_daily <- function(hourly) {
-  # grid attributes to be retained
-  # historical and forecast data have different grid id/lat/lng, but coming into
-  # this function forecasts are re-tagged to the historical grid_id
-  lat_lng <- hourly |>
-    select(grid_id, grid_lat, grid_lng) |>
-    distinct(grid_id, .keep_all = TRUE)
-
   # summarized by calendar date
   summary_fns <- c("min" = calc_min, "mean" = calc_mean, "max" = calc_max)
   by_date <- hourly |>
@@ -67,7 +60,8 @@ build_daily <- function(hourly) {
       ),
       across(c(snow_depth, pressure_msl, wind_speed), summary_fns),
       wind_gust_max = calc_max(wind_gust),
-      across(c(wind_direction, soil_temp, soil_moisture), summary_fns),
+      across(wind_direction, summary_fns),
+      across(c(soil_temp, soil_moisture), c("mean" = calc_mean)),
       hours_temp_over_20 = sum(temperature >= 20),
       hours_temp_over_30 = sum(temperature >= 30),
       hours_rh_under_70 = sum(relative_humidity < 70),
@@ -117,8 +111,6 @@ build_daily <- function(hourly) {
   # assemble the data
   by_date |>
     left_join(by_night, join_by(grid_id, date == date_since_night)) |>
-    left_join(lat_lng, join_by(grid_id)) |>
-    relocate(grid_lat, grid_lng, .after = grid_id) |>
     arrange(grid_id, date)
 }
 

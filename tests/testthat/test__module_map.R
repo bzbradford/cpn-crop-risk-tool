@@ -17,7 +17,7 @@ test_that("parse_coords works", {
 
 test_that("annotate_grids works", {
   expect_silent({
-    grids <- test_hourly_wx |> om_build_grids()
+    grids <- test_hourly_wx |> om_build_wx_grids()
     status <- test_hourly_wx |> om_wx_status()
 
     left_join(grids, status, join_by(grid_id)) |>

@@ -30,11 +30,12 @@ An R Shiny web application for agricultural weather monitoring and crop disease 
 
 ### Data Flow
 1. User defines sites (lat/lon) by map click, csv load, or browser cookie
-2. Historical weather fetch per site from Open-Meteo, cached as per-user .fst files. Invoked via mirai in ExtendedTask.
-3. Forecast fetch for each unique historical weather data grid attached to a site. Invoked via mirai in ExtendedTask.
-4. Historical and forecast data merged and sent to modules
-5. Crop risk module builds each model from daily weather on demand
-6. Data explorer module builds and displays hourly/daily/moving average/GDD
+2. Each site is snapped to its O1280 grid cell via `get_o1280_cells()` — the single source of grid identity (`grid_id`/`grid_lat`/`grid_lng`/polygon). This is idempotent on its own centroids, so the same grid_id flows through sites, stored weather, and status joins.
+3. Historical weather fetched per unique grid (deduped, requested at the grid centroid so Open-Meteo resolves the expected cell) and stamped with the canonical grid identity. Cached as per-user .fst files. Invoked via mirai in ExtendedTask.
+4. Forecast fetch for each unique grid attached to a site, same canonical stamping. Invoked via mirai in ExtendedTask.
+5. Historical and forecast data merged and sent to modules
+6. Crop risk module builds each model from daily weather on demand
+7. Data explorer module builds and displays hourly/daily/moving average/GDD
 
 ### State Management
 - `rv$` reactive values object in `server.R` holds all app state
