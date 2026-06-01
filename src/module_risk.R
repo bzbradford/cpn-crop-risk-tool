@@ -283,9 +283,16 @@ riskServer <- function(rv, rx) {
           req(FALSE)
         }
 
-        # clip off any early weather that was used for moving averages
-        results |>
+        # clip off any data outside of selected range
+        results <- results |>
           filter(date >= date_range$start)
+
+        if (date_range$end != today()) {
+          results <- results |>
+            filter(date <= date_range$end)
+        }
+
+        results
       })
 
       ## model_warning // reactive ----
@@ -366,7 +373,11 @@ riskServer <- function(rv, rx) {
         )
 
         tagList(
-          uiOutput(ns("plot_feed_opts")),
+          div(
+            style = "display: flex; gap: 5px 20px;",
+            uiOutput(ns("plot_feed_opts")),
+            uiOutput(ns("date_range_ui"))
+          ),
           uiOutput(ns("plots_ui"))
         )
       })
@@ -394,6 +405,40 @@ riskServer <- function(rv, rx) {
         )
       })
 
+      ## date_range_ui ----
+      long_date_range <- reactive({
+        dates <- rx$dates()
+        as.integer(dates$end - dates$start) > 60
+      })
+
+      output$date_range_ui <- renderUI({
+        req(long_date_range())
+        div(
+          style = "margin-bottom: 0.5rem;",
+          class = "label-inline",
+          tags$label("Show date range:", `for` = ns("date_range_clamp")),
+          radioButtons(
+            inputId = ns("date_range_clamp"),
+            label = NULL,
+            choices = list(
+              "All" = FALSE,
+              "Last 30 days" = TRUE
+            ),
+            selected = TRUE,
+            inline = TRUE
+          )
+        )
+      })
+
+      should_clamp_dates <- reactive({
+        if (long_date_range()) {
+          i <- req(input$date_range_clamp)
+          i == TRUE
+        } else {
+          FALSE
+        }
+      })
+
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
@@ -406,6 +451,12 @@ riskServer <- function(rv, rx) {
         wx <- rx$wx()
 
         req(nrow(model_data) > 0)
+
+        if (should_clamp_dates()) {
+          dates$start <- dates$end - days(30)
+          model_data <- model_data |>
+            filter(date >= dates$start)
+        }
 
         last_values <- model_data |>
           filter(date == min(today(), max(date)), .by = id)
@@ -492,7 +543,6 @@ riskServer <- function(rv, rx) {
           str_squish(fname)
         },
         content = function(file) {
-          data <- wx_data()
           model <- selected_model()
           model_data <- joined_data() |>
             select(-any_of(OPTS$grid_attr_cols)) |>
