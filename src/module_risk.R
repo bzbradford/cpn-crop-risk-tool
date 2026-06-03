@@ -32,11 +32,15 @@ riskUI <- function() {
 
 # Module server ----------------------------------------------------------------
 
-riskServer <- function(rv, wx_data) {
+#' @param rv reactive values object from parent server
+#' @param rx list of reactive expressions from parent server
+riskServer <- function(rv, rx) {
   moduleServer(
     id = "risk",
     function(input, output, session) {
       ns <- session$ns
+
+      plt_cache <- reactiveValues()
 
       # Interface ----
 
@@ -226,17 +230,16 @@ riskServer <- function(rv, wx_data) {
 
       ## model_data - reactive ----
       model_data <- reactive({
-        # model <- req(input$model)
         model <- selected_model()
-        wx_data <- wx_data()
-        date_range <- wx_data$dates
+        wx <- rx$wx()
+        date_range <- rx$dates()
 
         # use full weather for models that have moving averages or lookback windows
         # includes 30 days prior to start_date
-        daily_full <- wx_data$daily_full
+        daily_full <- wx$daily_full
 
         # use exact weather for models without moving averages
-        daily <- wx_data$daily
+        daily <- wx$daily
 
         req(nrow(daily) > 0)
 
@@ -280,12 +283,17 @@ riskServer <- function(rv, wx_data) {
           req(FALSE)
         }
 
-        # clip off any early weather that was used for moving averages
-        results |>
+        # clip off any data outside of selected range
+        results <- results |>
           filter(date >= date_range$start)
-      })
 
-      # observe(echo(model_data()))
+        if (date_range$end != today()) {
+          results <- results |>
+            filter(date <= date_range$end)
+        }
+
+        results
+      })
 
       ## model_warning // reactive ----
       # check for a validation message for select models
@@ -293,7 +301,7 @@ riskServer <- function(rv, wx_data) {
         model <- selected_model()
 
         if (is.function(model$validate)) {
-          dates <- wx_data()$dates
+          dates <- rx$dates()
           params <- list(
             start_date = dates$start,
             date_range = c(dates$start, dates$end)
@@ -304,7 +312,7 @@ riskServer <- function(rv, wx_data) {
 
       ## selected_sites // reactive ----
       selected_sites <- reactive({
-        sites <- wx_data()$sites
+        sites <- rx$sites()
 
         if (nrow(sites) > 1) {
           i <- req(input$show_all_sites)
@@ -336,8 +344,6 @@ riskServer <- function(rv, wx_data) {
           mutate(site_label = sprintf("Site %s: %s", id, name), .after = name)
       })
 
-      # observe(echo(joined_data()))
-
       ## model_warning_ui ----
       # Display warnings for various conditions
       output$model_warnings <- renderUI({
@@ -367,7 +373,11 @@ riskServer <- function(rv, wx_data) {
         )
 
         tagList(
-          uiOutput(ns("plot_feed_opts")),
+          div(
+            style = "display: flex; gap: 5px 20px;",
+            uiOutput(ns("plot_feed_opts")),
+            uiOutput(ns("date_range_ui"))
+          ),
           uiOutput(ns("plots_ui"))
         )
       })
@@ -375,7 +385,7 @@ riskServer <- function(rv, wx_data) {
       ## plot_feed_opts ----
       # shown when more than one site
       output$plot_feed_opts <- renderUI({
-        sites <- wx_data()$sites
+        sites <- rx$sites()
         req(nrow(sites) > 1)
 
         div(
@@ -395,17 +405,58 @@ riskServer <- function(rv, wx_data) {
         )
       })
 
+      ## date_range_ui ----
+      long_date_range <- reactive({
+        dates <- rx$dates()
+        as.integer(dates$end - dates$start) > 60
+      })
+
+      output$date_range_ui <- renderUI({
+        req(long_date_range())
+        div(
+          style = "margin-bottom: 0.5rem;",
+          class = "label-inline",
+          tags$label("Show date range:", `for` = ns("date_range_clamp")),
+          radioButtons(
+            inputId = ns("date_range_clamp"),
+            label = NULL,
+            choices = list(
+              "All" = FALSE,
+              "Last 30 days" = TRUE
+            ),
+            selected = TRUE,
+            inline = TRUE
+          )
+        )
+      })
+
+      should_clamp_dates <- reactive({
+        if (long_date_range()) {
+          i <- req(input$date_range_clamp)
+          i == TRUE
+        } else {
+          FALSE
+        }
+      })
+
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
         model_data <- joined_data() |>
           rename(model_value = !!model$ycol)
-        wx <- wx_data()
-        sites <- wx$sites
-        dates <- wx$dates
+
+        sites <- selected_sites()
+        dates <- rx$dates()
+        wx <- rx$wx()
 
         req(nrow(model_data) > 0)
+
+        if (should_clamp_dates()) {
+          dates$start <- dates$end - days(30)
+          model_data <- model_data |>
+            filter(date >= dates$start)
+        }
 
         last_values <- model_data |>
           filter(date == min(today(), max(date)), .by = id)
@@ -480,19 +531,18 @@ riskServer <- function(rv, wx_data) {
       ## download_data ----
       output$download_data <- downloadHandler(
         filename = function() {
-          data <- wx_data()
+          dates <- rx$dates()
           model <- selected_model()
           fname <- sprintf(
             "%s - %s to %s.csv",
             model$name,
-            data$date$start,
-            data$date$end
+            dates$start,
+            dates$end
           )
           fname <- gsub("[^A-Za-z0-9 \\.\\-]", " ", fname)
           str_squish(fname)
         },
         content = function(file) {
-          data <- wx_data()
           model <- selected_model()
           model_data <- joined_data() |>
             select(-any_of(OPTS$grid_attr_cols)) |>
