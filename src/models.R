@@ -70,7 +70,6 @@ build_daily <- function(hourly) {
       .by = c(grid_id, date, yday, year, month, day)
     ) |>
     arrange(grid_id, date) |>
-    group_by(grid_id) |>
     add_cumsum("evapotranspiration_daily") |>
     add_cumsum("precipitation_daily") |>
     add_cumsum("rain_daily") |>
@@ -82,9 +81,9 @@ build_daily <- function(hourly) {
         \(x) any(x >= 4),
         partial = TRUE
       ),
-      dry = (hours_rh_under_70 >= 6) & (precipitation_daily < 1)
-    ) |>
-    ungroup()
+      dry = (hours_rh_under_70 >= 6) & (precipitation_daily < 1),
+      .by = grid_id
+    )
 
   # summarized by "date since night" eg since 8 pm the day before through 7 pm
   by_night <- hourly |>

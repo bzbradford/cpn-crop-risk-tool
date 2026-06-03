@@ -324,10 +324,11 @@ if (FALSE) {
 # Tibble helpers ---------------------------------------------------------------
 
 #' create and insert cumulative count after a column
+#' assumes data is already sorted chronologically
 add_cumsum <- function(df, col) {
   newcol <- paste0(col, "_cumulative")
   df |>
-    mutate(!!newcol := cumsum(.data[[col]])) |>
+    mutate(!!newcol := cumsum(.data[[col]]), .by = grid_id) |>
     relocate(all_of(newcol), .after = all_of(col))
 }
 
