@@ -90,6 +90,11 @@ plotly_get_risk_period_annot <- function(
   end_date,
   xrange = c(start_date, end_date)
 ) {
+  # return empty if entire graph range is inside the risk period
+  if (start_date < xrange[1] && end_date > xrange[2]) {
+    return(list(shapes = list(), annotations = list()))
+  }
+
   text_date_min <- max(start_date, xrange[1])
   text_date_max <- min(end_date, xrange[2])
   text_date <- text_date_min + (text_date_max - text_date_min) / 2
@@ -97,10 +102,10 @@ plotly_get_risk_period_annot <- function(
   text <- list(list(
     yref = "paper",
     x = text_date,
-    y = 1,
+    y = 0.8,
     text = "Risk Period",
     showarrow = FALSE,
-    opacity = .5,
+    opacity = 0.5,
     xanchor = "center",
     align = "center"
   ))
@@ -111,10 +116,10 @@ plotly_get_risk_period_annot <- function(
       yref = "paper",
       x0 = dt,
       x1 = dt,
-      y0 = .05,
+      y0 = 0.05,
       y1 = 1,
-      line = list(color = "maroon", weight = .5, dash = "dot"),
-      opacity = .25
+      line = list(color = "maroon", width = 0.5, dash = "dot"),
+      opacity = 0.25
     )
   })
 
@@ -126,7 +131,7 @@ plotly_get_risk_period_annot <- function(
     yref = "paper",
     x0 = start_date,
     x1 = end_date,
-    y0 = .05,
+    y0 = 0.05,
     y1 = 1,
     layer = "below"
   ))

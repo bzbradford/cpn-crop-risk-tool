@@ -370,6 +370,24 @@ model_list <- list(
     validate = NULL,
     ycol = "probability",
     yrange = c(0, 1)
+  ),
+
+  pecan_scab = Model(
+    name = "Pecan scab",
+    crop = "Pecan",
+    display_name = "Pecan scab [beta]",
+    group = "tree",
+    info = "<b>Pecan is susceptible to pecan scab when in the growth stages shuck split through early nut development.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours.",
+    doc = "docs/pecan-scab.md",
+    risk_period = c("Mar 1", "Aug 31"),
+    validate = function(params) {
+      overlap <- check_date_overlap(params$date_range, c("Mar 1", "Aug 31"))
+      if (!any(overlap)) {
+        "Pecan is only vulnerable to pecan scab between shuck split and early nut development. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+      }
+    },
+    ycol = "scab_hours",
+    yrange = c(0, 40)
   )
 )
 
@@ -436,7 +454,7 @@ risk_from_severity <- function(severity) {
 #' @param df any of the data from build_* functions
 test_plot <- function(df) {
   df |>
-    pivot_longer(cols = any_of(c("probability", "severity", "biomass"))) |>
+    pivot_longer(cols = any_of(c("value", "probability", "severity"))) |>
     ggplot(aes(x = date, y = value)) +
     geom_col(aes(fill = risk_color), lwd = 0, width = 1) +
     geom_line(aes(color = name, group = grid_id)) +
@@ -1223,6 +1241,7 @@ if (FALSE) {
     ) |>
     filter(!between(yday, 180, sample(200:300, 1))) |>
     build_rye_biomass() |>
+    rename(value = biomass) |>
     test_plot()
 }
 
@@ -1340,6 +1359,65 @@ if (FALSE) {
     test_plot()
 }
 
+
+# Pecan scab risk model --------------------------------------------------------
+# https://www.mesonet.org/agriculture/horticulture/pecan/pecan-scab-advisor
+# The Mesonet Pecan Scab Advisor is an online weather-based management tool that identifies times when the risk of pecan scab infection is high. It is seasonal and operates between March 1 and August 31. The advisory is based on the accumulation of “pecan scab hours” which are defined as one hour with relative humidity greater than or equal to 90% and temperatures greater than or equal to 70°F. The advisory calculates the number of pecan scab hours that have occurred for the growing season, the past 14 days, and forecasts estimates for the next 3 ½ days utilizing the North American Model (NAM) forecast. Spraying is recommended when 10 pecan scab hours have accumulated for highly susceptible varieties, and it has been either 30 days after March 1 or 5 to 14 days (user selected) from the last fungicide application. For moderately susceptible varieties, it is 20 pecan scab hours, and 30 scab hours for low susceptible varieties.
+# Highly Susceptible Varieties (10 Scab Hours): Burkett, Desirable, Maramec, Pawnee, Peruque, Western, and Wichita.
+# Moderately Susceptible Varieties (20 Scab Hours): Caddo, Choctaw, Colby, Creek, Giles, Kiowa, Mohawk, Nacono, Oconee, Stuart, and Zinner.
+# Low Susceptibile Varieties (30 Scab Hours): Excel, Hark, Kanza, Lakota, Mount, and Osage.
+
+#' Build from hourly weather
+#' @param hourly hourly weather data
+build_pecan_scab <- function(hourly) {
+  req(nrow(hourly) > 0)
+
+  hourly |>
+    mutate(
+      high_rh = relative_humidity >= 92,
+      high_temp = temperature > 21.1
+    ) |>
+    summarize(
+      hours_high_rh = sum(high_rh),
+      hours_high_temp = sum(high_temp),
+      daily_scab_hours = calc_sum(high_rh & high_temp),
+      .by = c(grid_id, date)
+    ) |>
+    mutate(
+      date = date,
+      hours_high_rh = hours_high_rh,
+      hours_high_temp = hours_high_temp,
+      scab_hours = cumsum(daily_scab_hours),
+      risk = case_when(
+        scab_hours < 10 ~ "Low",
+        scab_hours < 20 ~ "Moderate",
+        scab_hours < 30 ~ "High",
+        TRUE ~ "Very High"
+      ) |>
+        factor(levels = c("Low", "Moderate", "High", "Very High")),
+      risk_color = recode_values(
+        risk,
+        "Low" ~ "#0082b7",
+        "Moderate" ~ "#00cc00",
+        "High" ~ "#ffd700",
+        "Very High" ~ "#ff0000"
+      ),
+      value_label = sprintf(
+        "%s scab hours (%s)",
+        scab_hours,
+        risk
+      ),
+      .by = grid_id,
+      .keep = "used",
+    )
+}
+
+if (FALSE) {
+  test_hourly_wx |>
+    build_pecan_scab() |>
+    mutate(value = scab_hours) |>
+    test_plot()
+}
 
 # Insect models ----------------------------------------------------------------
 

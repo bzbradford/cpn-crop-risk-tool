@@ -147,6 +147,7 @@ OPTS <- lst(
     "Field crops" = "field",
     "Vegetable crops" = "vegetable",
     "Cover crops" = "cover",
+    "Tree crops" = "tree",
     "Insects" = "insect"
   ),
 
