@@ -15,8 +15,9 @@ Spraying is recommended when 10 pecan scab hours have accumulated for highly sus
 
 - **Highly Susceptible Varieties (10 Scab Hours):** Burkett, Desirable, Maramec, Pawnee, Peruque, Western, and Wichita.
 - **Moderately Susceptible Varieties (20 Scab Hours):** Caddo, Choctaw, Colby, Creek, Giles, Kiowa, Mohawk, Nacono, Oconee, Stuart, and Zinner.
-- **Low Susceptible Varieties (30 Scab Hours):** Excel, Hark, Kanza, Lakota, Mount, and Osage. 
+- **Low Susceptible Varieties (30 Scab Hours):** Excel, Hark, Kanza, Lakota, Mount, and Osage.
 
 ### References
 
-- https://www.mesonet.org/agriculture/horticulture/pecan/pecan-scab-advisor
+- Oklahoma Mesonet Pecan Scab Advisor: https://www.mesonet.org/agriculture/horticulture/pecan/pecan-scab-advisor
+- University of Arkansas Pecan Scab: https://pecanscab.uada.edu/

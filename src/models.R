@@ -2,6 +2,8 @@
 
 # Helper functions ----
 
+#' check that a partial date (eg 'Jan 1') is correctly formed
+#' @param dpart partial date string formatted as '%b %d'
 check_date_partial <- function(dpart) {
   withCallingHandlers(
     ymd(paste(year(today()), dpart)),
@@ -16,6 +18,9 @@ if (FALSE) {
   check_date_partial("Foo 1")
 }
 
+#' check if the partial (month/day) dates overlap with the full date range
+#' @param date_range vector of two dates or date strings
+#' @param dates_partial vector of two partial date strings
 check_date_overlap <- function(date_range, dates_partial) {
   date_range <- as_date(date_range)
   date_seq <- seq.Date(date_range[1], date_range[2], 1)
@@ -32,6 +37,7 @@ if (FALSE) {
   check_date_overlap(c("2025-4-1", "2025-7-1"), c("Jan 1", "Feb 1"))
   check_date_overlap(c("2024-10-1", "2025-7-1"), c("Jun 1", "Aug 1"))
 }
+
 
 # Daily weather ----------------------------------------------------------------
 # daily weather data used by most models
@@ -113,7 +119,10 @@ build_daily <- function(hourly) {
     arrange(grid_id, date)
 }
 
-# test_hourly_wx |> build_daily()
+if (FALSE) {
+  test_hourly_wx |> build_daily()
+}
+
 
 # Model definitions ----------------------------------------------------------
 
@@ -377,13 +386,13 @@ model_list <- list(
     crop = "Pecan",
     display_name = "Pecan scab [beta]",
     group = "tree",
-    info = "<b>Pecan is susceptible to pecan scab when in the growth stages shuck split through early nut development.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours.",
+    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours.",
     doc = "docs/pecan-scab.md",
     risk_period = c("Mar 1", "Aug 31"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Mar 1", "Aug 31"))
       if (!any(overlap)) {
-        "Pecan is only vulnerable to pecan scab between shuck split and early nut development. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+        "Pecan is most vulnerable to pecan scab between shuck split and early nut development. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
     ycol = "scab_hours",
@@ -399,29 +408,39 @@ logistic <- function(logit) exp(logit) / (1 + exp(logit))
 
 #' Assign risk for field crops spore probability models
 #' @param prob numeric vector of probabilities between 0 and 1
-#' @param high threshold for high risk, 0-1
-#' @param med threshold for medium risk, 0-1
-#' @param low threshold for low risk, 0-1
+#' @param low threshold for low risk (%)
+#' @param med threshold for medium risk (%)
+#' @param high threshold for high risk (%)
 #' @returns tibble
 risk_from_prob <- function(prob, low, med, high) {
-  if (isTRUE(any(prob < 0) | any(prob > 1))) {
-    warning("Risk probability out of range")
+  breaks <- c(0, low, med, high, 100) / 100
+  if (!identical(breaks, sort(breaks))) {
+    warning("Probability breaks are out of order!")
+    breaks <- sort(breaks)
   }
+  if (isTRUE(any(prob < 0) | any(prob > 1) | any(breaks > 1))) {
+    warning("Probability or breaks out of range")
+  }
+
   tibble(
     risk = cut(
       prob,
-      breaks = c(0, low, med, high, 1),
+      breaks = breaks,
       labels = c("Very low risk", "Low risk", "Moderate risk", "High risk"),
       include.lowest = TRUE,
       right = FALSE
     ),
-    # severity = as.numeric(risk) - 1,
     risk_color = colorFactor("Spectral", risk, reverse = TRUE)(risk),
     value_label = sprintf("%.0f%% (%s)", prob * 100, risk)
   )
 }
-# risk_from_prob(.3, 1, 50, 90)
-# risk_from_prob(2, 1, 50, 90)
+
+# test
+if (FALSE) {
+  risk_from_prob(0.3, 1, 50, 90)
+  risk_from_prob(2, 1, 50, 90)
+}
+
 
 # reduces spore probability as temperature falls below 10C
 attenuate_prob <- function(value, temp) {
@@ -452,9 +471,13 @@ risk_from_severity <- function(severity) {
 
 #' simple plot for viewing results
 #' @param df any of the data from build_* functions
-test_plot <- function(df) {
+#' @param .col which column to graph, usually 'value', 'probability', or 'severity'
+test_plot <- function(
+  df,
+  .col = any_of(c("value", "probability", "severity"))
+) {
   df |>
-    pivot_longer(cols = any_of(c("value", "probability", "severity"))) |>
+    pivot_longer(cols = .col) |>
     ggplot(aes(x = date, y = value)) +
     geom_col(aes(fill = risk_color), lwd = 0, width = 1) +
     geom_line(aes(color = name, group = grid_id)) +
@@ -463,10 +486,11 @@ test_plot <- function(df) {
     theme(legend.position = "none")
 }
 
+
 # Tar spot (corn) --------------------------------------------------------------
 
 #' Vulnerable growth stages V10-R3
-#' Risk criteria: High >=35%, Medium >=20%, Low >0%
+#' Risk criteria: Low 0-20%, Med 20-35%, High >35%
 #' No risk: Fungicide in last 14 days, temperature <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param mean_temp_30ma Mean daily temperature, 30-day moving average, Celsius
@@ -503,17 +527,22 @@ build_tar_spot <- function(daily) {
         hours_rh_over_90_night_14day
       ) |>
         attenuate_prob(temperature_min_21day),
-      risk_from_prob(probability, 0.35, 0.2, 0.01),
+      risk_from_prob(probability, 1, 20, 35),
       .by = grid_id,
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_tar_spot() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_tar_spot() |> test_plot()
+}
+
 
 # Gray leaf spot (corn) --------------------------------------------------------
 
 #' Vulnerable growth stages V10-R3
-#' Risk criteria: High >=60%, Medium >=40%, Low >0%
+#' Risk criteria: Low 0-40%, Med 40-60%, High >60%
 #' No risk: Fungicide app in last 14 days, min temp <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param min_temp_21ma minimum daily temperature, 21-day moving average, Celsius
@@ -537,17 +566,22 @@ build_gray_leaf_spot <- function(daily) {
       temperature_min_21day = roll_mean(temperature_min, 21),
       dew_point_min_30day = roll_mean(dew_point_min, 30),
       probability = predict_gls(temperature_min_21day, dew_point_min_30day),
-      risk_from_prob(probability, 0.6, 0.4, 0.01),
+      risk_from_prob(probability, 1, 40, 60),
       .by = grid_id,
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_gray_leaf_spot() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_gray_leaf_spot() |> test_plot()
+}
+
 
 # Gibberella ear rot / DON model (corn) ----------------------------------------
 
 #' Corn is susceptible during silking, ~Jul 15 - Aug 7
-#' Risk criteria: High >= 80%, Med >= 40%, Low >= 20%
+#' Risk criteria: Low 0-20%, Med 20-40%, High >40%
 #' "w7" weather window is 21-7 days before model date
 #' "w0" window is 14-0 days before model date
 #' Credit: Pierce Paul & Cristiano Nesi, Ohio State
@@ -600,13 +634,18 @@ build_don <- function(daily) {
         rh_mean_14day,
         days_rh_over_80_14day
       ),
-      risk_from_prob(probability, 0.8, 0.4, 0.2),
+      risk_from_prob(probability, 1, 20, 40),
       .by = grid_id,
       .keep = "used"
     ) |>
     drop_na(probability)
 }
-# test_hourly_wx |> build_daily() |> build_don() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_don() |> test_plot()
+}
+
 
 # White mold (soybean) ---------------------------------------------------------
 
@@ -615,7 +654,7 @@ build_don <- function(daily) {
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 
 #' Non-irrigated model
-#' Risk criteria: High >=40%, Med >=20%, Low >=5%
+#' Risk criteria: Low 1-20%, Med 20-35%, High >35%
 #' @param max_temp_30ma 30-day moving average of daily maximum temperature, Celsius
 #' @param max_wind_30ma 30-day moving average of daily maximum wind speed, m/s
 #' @param max_rh_30ma 30-day moving average of daily maximum relative humidity, 0-100%
@@ -628,7 +667,7 @@ predict_white_mold_dry <- function(max_temp_30ma, max_wind_30ma, max_rh_30ma) {
 }
 
 #' Irrigated model
-#' Risk criteria: High >=40%, Med >=20%, Low >=5%
+#' Risk criteria: Low 1-5%, Med 5-10%, High >10%
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
 #' @param row_spacing "30" or "15" inches
@@ -676,7 +715,7 @@ build_white_mold <- function(
           relative_humidity_max_30day,
           row_spacing
         ),
-        risk_from_prob(probability, 0.1, 0.005, 0.0001),
+        risk_from_prob(probability, 1, 5, 10),
         .by = grid_id
       )
   } else {
@@ -688,19 +727,30 @@ build_white_mold <- function(
           relative_humidity_max_30day
         ) |>
           attenuate_prob(temperature_min_21day),
-        risk_from_prob(probability, 0.35, 0.2, 0.0001),
+        risk_from_prob(probability, 1, 20, 35),
         .by = grid_id
       )
   }
 }
-# test_hourly_wx |> build_daily() |> build_white_mold(irrigated = FALSE) |> test_plot()
-# test_hourly_wx |> build_daily() |> build_white_mold(irrigated = TRUE) |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |>
+    build_daily() |>
+    build_white_mold(irrigated = FALSE) |>
+    test_plot()
+  test_hourly_wx |>
+    build_daily() |>
+    build_white_mold(irrigated = TRUE) |>
+    test_plot()
+}
+
 
 # Frogeye leaf spot (soybean) --------------------------------------------------
 
 #' Vulnerable growth stages R1-R5, ~Jun 15 - Sep 7
 #' No risk: Fungicide in last 14 days, temperature <32F
-#' Risk criteria: High >=50%, Medium >=40%, Low >0%
+#' Risk criteria: Low 1-40%, Med 40-50%, High >50%
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
 #' @param hours_rh80_30ma Daily hours RH > 80%, 30-day moving average, 0-24 hours
@@ -723,18 +773,117 @@ build_frogeye_leaf_spot <- function(daily) {
       temperature_max_30day = roll_mean(temperature_max, 30),
       hours_rh_over_80_30day = roll_mean(hours_rh_over_80, 30),
       probability = predict_fls(temperature_max_30day, hours_rh_over_80_30day),
-      risk_from_prob(probability, 0.5, 0.4, 0.01),
+      risk_from_prob(probability, 1, 40, 50),
       .by = grid_id,
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_frogeye_leaf_spot() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_frogeye_leaf_spot() |> test_plot()
+}
+
+
+# Soybean Cercospora spore complex ---------------------------------------------
+#' Three individual models:
+#' - Cercospora flagellaris (Risk: <10%=Low, <15%=Medium, else High)
+#' - Cercospora cf. sigesbeckiae (risk: <5%=Low, <10%=Medium, else High)
+#' - Cercospora kikuchii (risk: <5%=Low, <10%=Medium, else High)
+#' Credit: Richard (Wade) Webster, North Dakota State
+#' @param min_temp_5day 5-day average daily minimum air temperature
+#' @param mean_dpd_5day 5-day average daily dewpoint depression
+#' @param max_dpd_5day 5-day average daily maximum dewpoint depression
+#' @param max_wind_14day 14-day average daily maximum wind speed
+#' @param hours_rh90_10day 10-day average daily hours of relative humidity >= 90%
+#' @param hours_rh90_14day 14-day average daily hours of relative humidity >= 90%
+predict_soybean_cercospora <- function(
+  min_temp_5day,
+  mean_dpd_5day,
+  max_dpd_5day,
+  max_wind_14day,
+  hours_rh90_10day,
+  hours_rh90_14day
+) {
+  tibble(
+    cf = logistic(
+      -6.30565 +
+        0.19559 * min_temp_5day +
+        0.16999 * mean_dpd_5day
+    ),
+    cs = logistic(
+      3.25803 -
+        0.35362 * max_wind_14day +
+        0.05473 * hours_rh90_10day
+    ),
+    ck = logistic(
+      -7.67159 +
+        0.34914 * hours_rh90_14day +
+        0.25508 * max_dpd_5day
+    )
+  )
+}
+
+# Build wheat scab risk probability from daily weather
+#' @param daily daily weather data
+build_soybean_cercospora <- function(daily) {
+  req(nrow(daily) > 0)
+
+  daily |>
+    mutate(
+      date = date,
+      min_temp_5day = roll_mean(temperature_min, 5),
+      mean_dpd_5day = roll_mean(dew_point_depression_mean, 5),
+      max_dpd_5day = roll_mean(dew_point_depression_max, 5),
+      max_wind_14day = roll_mean(wind_speed_max, 14),
+      hours_rh90_10day = roll_mean(hours_rh_over_90, 10),
+      hours_rh90_14day = roll_mean(hours_rh_over_90, 14),
+      rh_mean_14day = roll_mean(relative_humidity_mean, 14),
+      predict_soybean_cercospora(
+        min_temp_5day,
+        mean_dpd_5day,
+        max_dpd_5day,
+        max_wind_14day,
+        hours_rh90_10day,
+        hours_rh90_14day
+      ),
+      .by = grid_id,
+      .keep = "used"
+    ) |>
+    pivot_longer(
+      cols = c("cf", "cs", "ck"),
+      names_to = "spore",
+      values_to = "probability"
+    ) |>
+    mutate(
+      species = recode_values(
+        spore,
+        "cf" ~ "Cercospora flagellaris",
+        "cs" ~ "Cercospora cf. sigesbeckiae",
+        "ck" ~ "Cercospora kikuchii"
+      ),
+      recode_values(
+        spore,
+        "cf" ~ risk_from_prob(probability, 1, 10, 15),
+        "cs" ~ risk_from_prob(probability, 1, 5, 10),
+        "ck" ~ risk_from_prob(probability, 1, 5, 10)
+      )
+    )
+}
+
+# test
+if (FALSE) {
+  test_hourly_wx |>
+    build_daily() |>
+    build_soybean_cercospora() |>
+    test_plot() +
+    facet_wrap(species ~ grid_id)
+}
 
 # Wheat scab FHB ---------------------------------------------------------------
-
 #' Wheat scab model - fusarium head blight
 #' Relevant during wheat flowering
-#' Risk criteria: High >= .32, Medium >= .24, Low > 0
+#' Risk criteria: Low 1-24%, Med 24-32%, High >32%
 #' Credit: Erick DeWolf, U. Kentucky
 #' @param mean_rh_14ma mean daily relative humidity 0-100, 14 day rolling mean
 #' @returns matrix of disease probabilities by scab resistance rating
@@ -762,13 +911,18 @@ build_wheat_scab <- function(daily, resistance) {
       date = date,
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
       probability = predict_wheat_scab(rh_mean_14day)[, resistance],
-      risk_from_prob(probability, 0.32, 0.24, 0.01),
+      risk_from_prob(probability, 1, 24, 32),
       .by = grid_id,
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_wheat_scab("VS") |> test_plot()
-# test_hourly_wx |> build_daily() |> build_wheat_scab("MR") |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_wheat_scab("VS") |> test_plot()
+  test_hourly_wx |> build_daily() |> build_wheat_scab("MR") |> test_plot()
+}
+
 
 # Early blight (Solanum) -------------------------------------------------------
 
@@ -845,7 +999,12 @@ build_early_blight <- function(daily) {
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_early_blight() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_early_blight() |> test_plot()
+}
+
 
 # Late blight (Solanum) --------------------------------------------------------
 
@@ -911,7 +1070,12 @@ build_late_blight <- function(daily) {
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_late_blight() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_late_blight() |> test_plot()
+}
+
 
 # Alternaria leaf blight (carrot) ----------------------------------------------
 
@@ -973,7 +1137,12 @@ build_alternaria <- function(daily) {
       .keep = "used"
     )
 }
-# test_hourly_wx |> build_daily() |> build_alternaria() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_alternaria() |> test_plot()
+}
+
 
 # Cercospora leaf blight (beet) ------------------------------------------------
 
@@ -1051,7 +1220,12 @@ build_cercospora <- function(daily) {
       .keep = "used",
     )
 }
-# test_hourly_wx |> build_daily() |> build_cercospora() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_cercospora() |> test_plot()
+}
+
 
 # Botrytis leaf blight (onion) -------------------------------------------------
 
@@ -1151,7 +1325,12 @@ build_botrytis <- function(daily) {
       .keep = "used",
     )
 }
-# test_hourly_wx |> build_daily() |> build_botrytis() |> test_plot()
+
+# test
+if (FALSE) {
+  test_hourly_wx |> build_daily() |> build_botrytis() |> test_plot()
+}
+
 
 # Cereal rye biomass -----------------------------------------------------------
 #' Cover crop termination model
@@ -1247,6 +1426,7 @@ if (FALSE) {
 
 # Cotton planting risk ---------------------------------------------------------
 #' Cotton planting risk model. Predicts the probability of emerged stand below the yield-limiting stand population
+#' Risk: Low 1-20%, Med 20-35%, High >35%
 #' Reference: Dr. Zachary Noel, Auburn University
 #' @param precip_next_3_days 3-day future/forecast total precipitation (mm)
 #' @param mean_min_temp_next_9_days 9-day future/forecast moving average of daily minimum air temperatures (C)
@@ -1343,7 +1523,7 @@ build_cotton_planting <- function(daily, pythium, planting_pop, limiting_pop) {
         limiting_pop = limiting_pop,
         year = year
       ),
-      risk_from_prob(probability, 0.01, 0.2, 0.35),
+      risk_from_prob(probability, 1, 20, 35),
       .by = grid_id,
       .keep = "used"
     )

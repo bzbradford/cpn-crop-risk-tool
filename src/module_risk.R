@@ -494,7 +494,7 @@ riskServer <- function(rv, rx) {
           sort_by <- req(input$sort_plots_by)
           if (sort_by == "value") {
             site_labels <- last_values |>
-              arrange(desc(risk)) |>
+              arrange(desc(model_value)) |>
               pull(site_label)
           } else if (sort_by == "name") {
             site_labels <- model_data |>

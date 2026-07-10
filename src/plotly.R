@@ -225,7 +225,14 @@ plot_risk <- function(
     config(displayModeBar = FALSE)
 }
 
-# test_hourly_wx |> filter(grid_id == sample(grid_id, 1)) |> build_daily() |> build_frogeye_leaf_spot() |> plot_risk(name = "Frogeye")
+if (FALSE) {
+  test_hourly_wx |>
+    filter(grid_id == sample(grid_id, 1)) |>
+    build_daily() |>
+    build_frogeye_leaf_spot() |>
+    plot_risk(name = "Frogeye")
+}
+
 
 # determine whether data should go on y1 or y2
 #' @param df data frame
