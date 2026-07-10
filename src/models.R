@@ -148,7 +148,7 @@ Model <- function(
   validate,
   ycol,
   yrange,
-  display_name = ifelse(is.null(crop), name, sprintf("%s (%s)", name, crop))
+  display_name = ifelse(is.null(crop), name, sprintf("%s - %s", crop, name))
 ) {
   args <- as.list(environment())
 
@@ -227,9 +227,9 @@ model_list <- list(
     group = "field",
     info = "<b>Corn is susceptible to Gibberella ear rot during silking.</b> Infection by this disease may lead to deoxynivalenol (DON) accumulation in the ear to dangerous levels. Risk is based on the probability of deoxynivalenol exceeding 1 ppm in harvested grain and silage. Model depends on temperature, precipitation, and relative humidity during the 3 weeks prior to silking. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/don.md",
-    risk_period = c("Jul 15", "Aug 7"),
+    risk_period = c("Jul 1", "Aug 7"),
     validate = function(params) {
-      overlap <- check_date_overlap(params$date_range, c("Jul 15", "Aug 7"))
+      overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 7"))
       if (!any(overlap)) {
         "Corn is only vulnerable to Gibberella ear rot during silking. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
@@ -265,9 +265,21 @@ model_list <- list(
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jun 15", "Sep 7"))
       if (!any(overlap)) {
-        "Soybean is only vulnerable to white mold between R1 and R5. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+        "Soybean is only vulnerable to frogeye leaf spot between R1 and R5. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
+    ycol = "probability",
+    yrange = c(0, 1)
+  ),
+
+  soybean_cercospora = Model(
+    name = "Cercospora [beta]",
+    crop = "Soybean",
+    group = "field",
+    info = "<b>Cercospora leaf blight is a foliar disease of soybean caused by the fungus <i>Cercospora flagellaris</i> and other <i>Cercospora</i> species.</b> Symptoms usually are seen at the beginning of seed set and occur in the uppermost canopy on leaves exposed to the sun. Leaves are typically only discolored on the upper surface with symptoms ranging from light purple, pinpoint spots to larger, irregularly shaped patches. Affected leaves may become leathery and dark purple with bronze highlights. Symptoms may be confused with sunburn, which typically occurs on the leaf underside. This model predicts the probability of spore presence for three species: <i>C. flagellaris</i>, <i>C. cf. sigesbeckiae</i>, and <i>C. kikuchii</i>. This model is currently in the testing phase.",
+    doc = "docs/cercospora-soybean.md",
+    risk_period = NULL,
+    validate = NULL,
     ycol = "probability",
     yrange = c(0, 1)
   ),
@@ -320,12 +332,12 @@ model_list <- list(
     yrange = c(0, 4)
   ),
 
-  cercospora = Model(
+  beet_cercospora = Model(
     name = "Cercospora leaf spot",
     crop = "Beet",
     group = "vegetable",
     info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
-    doc = "docs/cercospora.md",
+    doc = "docs/cercospora-beet.md",
     risk_period = NULL,
     validate = NULL,
     ycol = "severity",
@@ -344,7 +356,7 @@ model_list <- list(
     yrange = c(0, 4)
   ),
 
-  ryebiomass = Model(
+  rye_biomass = Model(
     name = "Winter rye biomass",
     display_name = "Winter rye biomass",
     crop = "Rye",
@@ -386,7 +398,7 @@ model_list <- list(
     crop = "Pecan",
     display_name = "Pecan scab [beta]",
     group = "tree",
-    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours.",
+    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
     doc = "docs/pecan-scab.md",
     risk_period = c("Mar 1", "Aug 31"),
     validate = function(params) {
@@ -791,6 +803,15 @@ if (FALSE) {
 #' - Cercospora cf. sigesbeckiae (risk: <5%=Low, <10%=Medium, else High)
 #' - Cercospora kikuchii (risk: <5%=Low, <10%=Medium, else High)
 #' Credit: Richard (Wade) Webster, North Dakota State
+
+SOYBEAN_CERCOSPORA_ATTR <- tribble(
+  ~id  , ~species          ,
+  "cf" , "C. flagellaris"  ,
+  "cs" , "C. sigesbeckiae" ,
+  "ck" , "C. kikuchii"     ,
+)
+
+
 #' @param min_temp_5day 5-day average daily minimum air temperature
 #' @param mean_dpd_5day 5-day average daily dewpoint depression
 #' @param max_dpd_5day 5-day average daily maximum dewpoint depression
@@ -829,6 +850,8 @@ predict_soybean_cercospora <- function(
 build_soybean_cercospora <- function(daily) {
   req(nrow(daily) > 0)
 
+  attr <- SOYBEAN_CERCOSPORA_ATTR
+
   daily |>
     mutate(
       date = date,
@@ -851,23 +874,18 @@ build_soybean_cercospora <- function(daily) {
       .keep = "used"
     ) |>
     pivot_longer(
-      cols = c("cf", "cs", "ck"),
-      names_to = "spore",
+      cols = attr$id,
+      names_to = "species",
       values_to = "probability"
     ) |>
     mutate(
-      species = recode_values(
-        spore,
-        "cf" ~ "Cercospora flagellaris",
-        "cs" ~ "Cercospora cf. sigesbeckiae",
-        "ck" ~ "Cercospora kikuchii"
-      ),
       recode_values(
-        spore,
+        species,
         "cf" ~ risk_from_prob(probability, 1, 10, 15),
         "cs" ~ risk_from_prob(probability, 1, 5, 10),
         "ck" ~ risk_from_prob(probability, 1, 5, 10)
-      )
+      ),
+      species = recode_values(species, from = attr$id, to = attr$species)
     )
 }
 
@@ -885,42 +903,69 @@ if (FALSE) {
 #' Relevant during wheat flowering
 #' Risk criteria: Low 1-24%, Med 24-32%, High >32%
 #' Credit: Erick DeWolf, U. Kentucky
+
+# resistance names and prediction constants
+WHEAT_SCAB_ATTR <- tribble(
+  ~id  , ~resistance              , ~const      ,
+  "vs" , "Very susceptible"       ,  0          ,
+  "s"  , "Susceptible"            , -0.82795556 ,
+  "ms" , "Moderately susceptible" , -1.4812696  ,
+  "mr" , "Moderately resistant"   , -1.8484537  ,
+)
+
 #' @param mean_rh_14ma mean daily relative humidity 0-100, 14 day rolling mean
 #' @returns matrix of disease probabilities by scab resistance rating
 predict_wheat_scab <- function(mean_rh_14ma) {
-  res <- c(
-    "VS" = 0, # very susceptible
-    "S" = -0.82795556, # susceptible
-    "MS" = -1.4812696, # moderately susceptible
-    "MR" = -1.8484537 # moderately resistant
-  )
-  sapply(res, function(r) {
+  attr <- WHEAT_SCAB_ATTR
+  res <- set_names(attr$const, attr$id)
+  lapply(res, function(r) {
     mu <- -3.6432643 + r + 0.051459669 * mean_rh_14ma
     logistic(mu)
-  })
+  }) |>
+    as_tibble()
+}
+
+if (FALSE) {
+  predict_wheat_scab(runif(10) * 100)
 }
 
 # Build wheat scab risk probability from daily weather
 #' @param daily daily weather data
-#' @param resistance wheat resistance to FHB, must match levels in `predict_wheat_scab`
-build_wheat_scab <- function(daily, resistance) {
+build_wheat_scab <- function(daily) {
   req(nrow(daily) > 0)
 
+  attr <- WHEAT_SCAB_ATTR
   daily |>
     mutate(
       date = date,
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
-      probability = predict_wheat_scab(rh_mean_14day)[, resistance],
-      risk_from_prob(probability, 1, 24, 32),
+      predict_wheat_scab(rh_mean_14day),
       .by = grid_id,
       .keep = "used"
+    ) |>
+    pivot_longer(
+      cols = attr$id,
+      names_to = "resistance",
+      values_to = "probability"
+    ) |>
+    mutate(
+      resistance = recode_values(
+        resistance,
+        from = attr$id,
+        to = attr$resistance
+      ) |>
+        factor(attr$resistance),
+      risk_from_prob(probability, 1, 24, 32)
     )
 }
 
 # test
 if (FALSE) {
-  test_hourly_wx |> build_daily() |> build_wheat_scab("VS") |> test_plot()
-  test_hourly_wx |> build_daily() |> build_wheat_scab("MR") |> test_plot()
+  test_hourly_wx |>
+    build_daily() |>
+    build_wheat_scab() |>
+    test_plot() +
+    facet_wrap(resistance ~ grid_id, ncol = 3)
 }
 
 
@@ -1670,7 +1715,7 @@ validate_biofix <- function(biofix) {
       biofix_date <- make_date(year(sd)) + biofix - 1
       paste(
         "This model requires the start date to be",
-        format(biofix_date, "%b %d")
+        format(biofix_date, "%b %e")
       )
     } else {
       NULL

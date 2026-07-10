@@ -108,6 +108,7 @@ riskServer <- function(rv, rx) {
           ),
           uiOutput(ns("whitemold_opts")),
           uiOutput(ns("wheatscab_opts")),
+          uiOutput(ns("soybean_cercospora_opts")),
           uiOutput(ns("cotton_opts")),
         )
       })
@@ -153,16 +154,36 @@ riskServer <- function(rv, rx) {
         )
       })
 
+      ## soybean_cercospora_opts ----
+      output$soybean_cercospora_opts <- renderUI({
+        req(identical(input$model, "soybean_cercospora"))
+
+        attr <- SOYBEAN_CERCOSPORA_ATTR
+        choices <- attr$species
+        choices[["Show all"]] <- "_all"
+
+        div(
+          style = "margin-top: 1rem;",
+          class = "label-inline",
+          tags$label("Species:", `for` = ns("species")),
+          radioButtons(
+            inputId = ns("species"),
+            label = NULL,
+            choices = choices,
+            selected = isolate(input$species) %||%
+              first(choices),
+            inline = TRUE
+          )
+        )
+      })
+
       ## wheat_scab_opts ----
       output$wheatscab_opts <- renderUI({
         req(identical(input$model, "wheatscab"))
 
-        choices <- list(
-          "Very susceptible" = "VS",
-          "Susceptible" = "S",
-          "Moderately susceptible" = "MS",
-          "Moderately resistant" = "MR"
-        )
+        attr <- WHEAT_SCAB_ATTR
+        choices <- attr$resistance
+        choices[["Show all"]] <- "_all"
 
         div(
           style = "margin-top: 1rem;",
@@ -257,16 +278,14 @@ riskServer <- function(rv, rx) {
               build_white_mold(daily_full, irrig, spacing)
             }),
             "frogeye" = build_frogeye_leaf_spot(daily_full),
-            "wheatscab" = local({
-              res <- req(input$resistance)
-              build_wheat_scab(daily_full, res)
-            }),
+            "soybean_cercospora" = build_soybean_cercospora(daily_full),
+            "wheatscab" = build_wheat_scab(daily_full),
             "earlyblight" = build_early_blight(daily_full),
             "lateblight" = build_late_blight(daily_full),
             "alternaria" = build_alternaria(daily_full),
-            "cercospora" = build_cercospora(daily_full),
+            "beet_cercospora" = build_cercospora(daily_full),
             "botrytis" = build_botrytis(daily_full),
-            "ryebiomass" = build_rye_biomass(daily),
+            "rye_biomass" = build_rye_biomass(daily),
             "cotton_planting" = local({
               py <- as.numeric(req(input$pythium))
               pp <- req(input$planting_pop)
@@ -277,12 +296,11 @@ riskServer <- function(rv, rx) {
           )
         }
 
-        if (is.null(results)) {
-          warning(
-            sprintf("Don't know how to build data for model '%s'", model$slug)
-          )
-          req(FALSE)
-        }
+        # validation
+        validate(need(
+          !is.null(results),
+          sprintf("Oops! Don't know how to build data for '%s'", model$slug)
+        ))
 
         # clip off any data outside of selected range
         results <- results |>
@@ -302,7 +320,7 @@ riskServer <- function(rv, rx) {
         model <- selected_model()
 
         if (is.function(model$validate)) {
-          dates <- rx$dates()
+          dates <- rx$wx()$dates
           params <- list(
             start_date = dates$start,
             date_range = c(dates$start, dates$end)
@@ -461,6 +479,24 @@ riskServer <- function(rv, rx) {
         model_data <- joined_data() |>
           rename(model_value = !!model$ycol)
 
+        # plot grouping
+        plot_group <- NULL
+        if (model$slug == "wheatscab") {
+          .res <- req(input$resistance)
+          if (.res == "_all") {
+            plot_group <- "resistance"
+          } else {
+            model_data <- filter(model_data, resistance == .res)
+          }
+        } else if (model$slug == "soybean_cercospora") {
+          .species <- req(input$species)
+          if (.species == "_all") {
+            plot_group <- "species"
+          } else {
+            model_data <- filter(model_data, species == .species)
+          }
+        }
+
         sites <- selected_sites()
         dates <- rx$dates()
         wx <- rx$wx()
@@ -474,35 +510,65 @@ riskServer <- function(rv, rx) {
             filter(date >= dates$start)
         }
 
-        # get risk values for either today or the most recent date
+        # Find the max value from the most recent date thru the forecast
         last_values <- model_data |>
-          filter(date == min(today(), max(date)), .by = id)
+          select(
+            id,
+            site_label,
+            date,
+            model_value,
+            value_label,
+            risk,
+            risk_color
+          ) |>
+          filter(date >= min(today(), max(date))) |>
+          mutate(
+            model_name = model$name,
+            min_date = min(date),
+            max_date = max(date),
+            max_value = max(model_value),
+            .by = id
+          )
 
-        # write values to shared reactive for map component to use
-        rv$map_risk_data <- last_values |>
-          select(id, model_value, value_label, risk, risk_color) |>
-          mutate(model_name = model$name)
+        # get site labels in the order they should be plotted based on sorting choice
         rv$map_title <- paste(
           model$name,
           "risk,",
-          format(dates$end, "%b %d, %Y")
+          format_date_range(dates$end)
         )
-
-        # get site labels in the order they should be plotted based on sorting choice
         site_labels <- unique(model_data$site_label)
         if (nrow(sites) > 1) {
           sort_by <- req(input$sort_plots_by)
           if (sort_by == "value") {
             site_labels <- last_values |>
-              arrange(desc(model_value)) |>
-              pull(site_label)
-          } else if (sort_by == "name") {
+              arrange(desc(max_value)) |>
+              pull(site_label) |>
+              unique()
+            rv$map_title <- paste(
+              model$name,
+              "risk,",
+              format_date_range(range(last_values$date))
+            )
+            last_values <- last_values |>
+              filter(model_value == max(model_value), .by = id)
+          }
+
+          if (sort_by == "name") {
             site_labels <- model_data |>
               distinct(name, site_label) |>
               arrange(name) |>
-              pull(site_label)
+              pull(site_label) |>
+              unique()
           }
         }
+
+        # reduce to single value per site
+        last_values <- last_values |>
+          filter(date == min(date), .by = id) |>
+          filter(model_value == max(model_value), .by = id)
+
+        # write values to shared reactive for map component to use
+        rv$map_risk_data <- last_values
 
         # generate plots
         elems <- lapply(site_labels, function(label) {
@@ -518,9 +584,11 @@ riskServer <- function(rv, rx) {
             plt <- plot_risk(
               df,
               name = model$name,
+              group = plot_group,
               yrange = model$yrange,
               xrange = date_range,
-              risk_period = model$risk_period
+              risk_period = model$risk_period,
+              plt_height = ifelse(is.null(plot_group), 125, 150)
             )
 
             div(
@@ -569,7 +637,7 @@ riskServer <- function(rv, rx) {
           model <- selected_model()
           fname <- sprintf(
             "%s - %s to %s.csv",
-            model$name,
+            model$display_name,
             dates$start,
             dates$end
           )

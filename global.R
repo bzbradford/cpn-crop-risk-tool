@@ -321,6 +321,78 @@ if (FALSE) {
   hours_diff(now() - days(1), now())
 }
 
+# #' format one or two dates in a minimal way
+# #' @param dates vector of dates, usually one or two
+# format_date_range <- function(dates) {
+#   d <- sort(as.Date(dates))
+
+#   if (length(dates) == 1 | (length(d) == 2 & (d[1] == d[2]))) {
+#     return(format(d[1], "%b %d, %Y"))
+#   }
+
+#   if (length(d) > 2) {
+#     d <- range(d)
+#   }
+
+#   d1 <- d[1]
+#   d2 <- d[2]
+
+#   y1 <- format(d1, "%Y")
+#   y2 <- format(d2, "%Y")
+#   m1 <- format(d1, "%b")
+#   m2 <- format(d2, "%b")
+
+#   day1 <- as.integer(format(d1, "%d"))
+#   day2 <- as.integer(format(d2, "%d"))
+
+#   if (y1 != y2) {
+#     sprintf("%s %d, %s-%s %d, %s", m1, day1, y1, m2, day2, y2)
+#   } else if (m1 != m2) {
+#     sprintf("%s %d-%s %d, %s", m1, day1, m2, day2, y1)
+#   } else {
+#     sprintf("%s %d-%d, %s", m1, day1, day2, y1)
+#   }
+# }
+
+#' format one or two dates in a minimal way
+#' @param dates vector of dates, usually one or two
+format_date_range <- function(dates) {
+  d <- range(as.Date(dates)) # Gets min/max dates directly; handles length 1, 2, or >2
+
+  # Vectorized extraction of date parts for both dates at once
+  y <- format(d, "%Y")
+  m <- format(d, "%b")
+  day <- as.integer(format(d, "%d"))
+
+  if (d[1] == d[2]) {
+    sprintf("%s %d, %s", m[1], day[1], y[1])
+  } else if (y[1] != y[2]) {
+    sprintf("%s %d, %s-%s %d, %s", m[1], day[1], y[1], m[2], day[2], y[2])
+  } else if (m[1] != m[2]) {
+    sprintf("%s %d-%s %d, %s", m[1], day[1], m[2], day[2], y[1])
+  } else {
+    sprintf("%s %d-%d, %s", m[1], day[1], day[2], y[1])
+  }
+}
+
+if (FALSE) {
+  format_date_range(today())
+
+  format_date_range(seq.Date(today() - days(7), today()))
+
+  format_date_range(c("2026-07-01", "2026-07-10"))
+  #> "Jul 1-10, 2026"
+
+  format_date_range(c("2026-06-01", "2026-07-01"))
+  #> "Jun 1-Jul 1, 2026"
+
+  format_date_range(c("2026-12-25", "2027-01-02"))
+  #> "Dec 25, 2026-Jan 2, 2027"
+
+  format_date_range(c("2026-07-04", "2026-07-04"))
+  #> "Jul 4-4, 2026"
+}
+
 
 # Tibble helpers ---------------------------------------------------------------
 

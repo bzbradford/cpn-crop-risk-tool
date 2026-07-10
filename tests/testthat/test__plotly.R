@@ -30,3 +30,19 @@ test_that("plot_risk works", {
       )
   })
 })
+
+test_that("plot_risk works with group", {
+  plt <- test_hourly_wx |>
+    filter(grid_id == sample(grid_id, 1)) |>
+    build_daily() |>
+    build_soybean_cercospora() |>
+    plot_risk(
+      name = "Cercospora",
+      ycol = "probability",
+      group = "species"
+    )
+
+  expect_s3_class(plt, "plotly")
+  # base attrs entry from plot_ly() + one add_trace() per species
+  expect_length(plt$x$attrs, 4)
+})

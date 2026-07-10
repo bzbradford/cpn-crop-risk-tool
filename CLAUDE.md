@@ -41,17 +41,19 @@ An R Shiny web application for agricultural weather monitoring and crop disease 
 - `rv$` reactive values object in `server.R` holds all app state
 - Sites persist across sessions via browser cookies (JSON-encoded)
 
-### Disease and Insect Models
-Defined in `src/models.R` and documented in `docs/`:
-- **Corn**: Tar spot, Gray leaf spot, DON/Gibberella
-- **Soybean**: White mold, Frogeye
-- **Wheat**: Wheat scab
-- **Vegetables**: Early blight, Late blight (potato/tomato), Alternaria/Cercospora (carrot), Cercospora (beet), Botrytis (onion)
-- **Cover crops**: Winter rye biomass
-- **Insect models**: Calculated from GDD
+## Disease Models
+Defined in `src/models.R` and documented in `docs/`. Models differ but typically consist of a `predict_` function with base logic applied to computed weather variables, coupled with a `build_` function that generates variables from hourly or daily weather data, applies the `predict_` function, and characterizes the crop risk from the model output as risk words and color codes to be displayed in the app. Some models may include additional helper functions. Model metadata is defined into `model_list` through a `Model()` constructor.
+
+## Insect Models
+Insect models build from growing degree days. Defined in `src/models.R` and documented in `docs/insects`. Models are defined entirely as specs in `insect_models` constructed by `Insect()`.
 
 ## Key Conventions
 - Indentation: 2 spaces
 - R 4.5.3, dependencies managed with `renv` (see `renv.lock`)
 - Test fixtures stored as `.rds` files in `tests/testthat/`
-- Update CLAUDE.md after any major revisions as needed to maintain accuracy
+- Assume the development environment is Windows
+
+## Additional Instructions
+- Update CLAUDE.md after any major revisions as needed to maintain accuracy, but keep the document generalized
+- Do not try to test the app yourself, ask the developer to test and provide feedback
+- Stop and ask the developer a question if anything is unclear or you become stuck
