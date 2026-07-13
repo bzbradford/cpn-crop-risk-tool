@@ -489,7 +489,7 @@ test_plot <- function(
   .col = any_of(c("value", "probability", "severity"))
 ) {
   df |>
-    pivot_longer(cols = .col) |>
+    pivot_longer(cols = all_of(.col)) |>
     ggplot(aes(x = date, y = value)) +
     geom_col(aes(fill = risk_color), lwd = 0, width = 1) +
     geom_line(aes(color = name, group = grid_id)) +
