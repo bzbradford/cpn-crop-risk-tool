@@ -31,10 +31,7 @@ ui <- fluidPage(
       img(src = OPTS$app_header_badge),
       h1(OPTS$app_title)
     ),
-    div(
-      class = "info-btn",
-      actionLink("about", icon("circle-info"))
-    )
+    uiOutput("info_btns")
   ),
 
   div(

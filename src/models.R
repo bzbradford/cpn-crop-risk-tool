@@ -140,15 +140,16 @@ if (FALSE) {
 Model <- function(
   name,
   crop,
+  display_name = ifelse(is.null(crop), name, sprintf("%s - %s", crop, name)),
   group,
+  beta = FALSE,
   info,
   doc,
   risk_period,
   biofix = NULL,
   validate,
   ycol,
-  yrange,
-  display_name = ifelse(is.null(crop), name, sprintf("%s - %s", crop, name))
+  yrange
 ) {
   args <- as.list(environment())
 
@@ -276,12 +277,13 @@ model_list <- list(
     name = "Cercospora [beta]",
     crop = "Soybean",
     group = "field",
+    beta = TRUE,
     info = "<b>Cercospora leaf blight is a foliar disease of soybean caused by the fungus <i>Cercospora flagellaris</i> and other <i>Cercospora</i> species.</b> Symptoms usually are seen at the beginning of seed set and occur in the uppermost canopy on leaves exposed to the sun. Leaves are typically only discolored on the upper surface with symptoms ranging from light purple, pinpoint spots to larger, irregularly shaped patches. Affected leaves may become leathery and dark purple with bronze highlights. Symptoms may be confused with sunburn, which typically occurs on the leaf underside. This model predicts the probability of spore presence for three species: <i>C. flagellaris</i>, <i>C. cf. sigesbeckiae</i>, and <i>C. kikuchii</i>. This model is currently in the testing phase.",
     doc = "docs/cercospora-soybean.md",
     risk_period = NULL,
     validate = NULL,
     ycol = "probability",
-    yrange = c(0, 1)
+    yrange = c(0, 0.5)
   ),
 
   wheatscab = Model(
@@ -396,7 +398,6 @@ model_list <- list(
   pecan_scab = Model(
     name = "Pecan scab",
     crop = "Pecan",
-    display_name = "Pecan scab [beta]",
     group = "tree",
     info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
     doc = "docs/pecan-scab.md",

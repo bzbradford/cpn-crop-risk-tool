@@ -55,7 +55,11 @@ riskServer <- function(rv, rx) {
 
       output$model_picker <- renderUI({
         model_group <- req(input$model_group)
+        beta_mode <- isTRUE(rv$settings$beta_mode)
         selected_models <- Filter(\(m) m$group == model_group, model_list)
+        if (!isTRUE(rv$settings$beta)) {
+          selected_models <- Filter(\(m) isFALSE(m$beta), selected_models)
+        }
         choices <- build_choices(selected_models, "display_name", "slug")
 
         div(
@@ -159,8 +163,10 @@ riskServer <- function(rv, rx) {
         req(identical(input$model, "soybean_cercospora"))
 
         attr <- SOYBEAN_CERCOSPORA_ATTR
-        choices <- attr$species
-        choices[["Show all"]] <- "_all"
+        choices <- c(
+          list("All species" = "_all"),
+          attr$species
+        )
 
         div(
           style = "margin-top: 1rem;",
