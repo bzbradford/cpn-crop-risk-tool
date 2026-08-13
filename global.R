@@ -40,10 +40,7 @@ if (FALSE) {
   renv::update()
   renv::snapshot()
   renv::clean()
-  renv::install("sf@1.0-24")
-  renv::install("terra@1.9-11")
-  renv::settings$ignored.packages("watcher", persist = TRUE)
-  renv::install("watcher")
+  renv::install("terra@1.9-27")
 
   # turn warnings into errors
   options(warn = 2)

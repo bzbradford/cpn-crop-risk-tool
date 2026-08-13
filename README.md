@@ -8,7 +8,30 @@ This app is designed as a decision support tool featuring plant disease and grow
 2.  **View crop risk model results.** Use the "Crop risk models" tab to select a crop and risk model to display in the charts feed and on the map.
 3.  **Explore weather data.** Use the "Charts and data" tab to explore hourly, daily, and other derived weather variables on a chart. This weather data can also be downloaded from this tab.
 
-### Weather datasets
+### Crop risk models
+
+Selected field crops and vegetable disease model outputs are provided. These models are subject to change. The calculations used to generate each model prediction can be viewed in the source code.
+
+- **Field crops models**
+  - Corn: Tar spot, Gray leaf spot, Gibberella/DON
+  - Soybean: White mold, Frogeye leaf spot, Cercospora (beta)
+  - Wheat: Wheat scab
+  - Cotton: Cotton planting risk
+- **Vegetable crop diseases**
+  - Potato/tomato: Early blight, late blight
+  - Carrot: Alternaria and Cercospora leaf blights
+  - Beet: Cercospora leaf spot
+  - Onion: Botrytis leaf blight
+- **Cover crops**
+  - Winter rye biomass
+- **Tree crops**
+  - Pecan scab
+- **Insects**
+  - Seedcorn maggot
+  - Alfalfa weevil
+  - Colorado potato beetle
+
+### Data and methods
 
 Hourly weather measures include:
 
@@ -36,7 +59,7 @@ Hourly data includes the timestamp in UTC and an adjustment to local time based 
 
 Note: A wind gust is defined as a brief increase in wind speed that is at least 10 mph (16 km/h) faster than the average wind speed and peaks above 18 mph (30 km/h). Due to these definitions not every hour or day will have recorded wind gusts.
 
-#### Hourly weather forecast
+#### Weather forecast
 
 When the End Date is set to today's date, 14-day forecasts are retrieved from [Open Meteo](https://open-meteo.com/en/docs) and incorporated into charts and model calculations. Open Meteo sources weather forecasts from multiple governmental sources to ensure broad coverage.
 
@@ -66,35 +89,27 @@ Most values can be shown in either imperial or metric units.
 - Wind direction: compass degrees (N=0°, E=90°, etc.)
 - Growing degree day base/upper thresholds and accumulations are always in Fahrenheit Degree Days. Conversion to Celsius Degree Days may be accomplished by dividing by 1.8.
 
-### Crop risk models
-
-Selected field crops and vegetable disease model outputs are provided. These models are subject to change. The calculations used to generate each model prediction can be viewed in the source code.
-
-- Field crops diseases
-  - White mold (soybean): <https://cropprotectionnetwork.org/encyclopedia/white-mold-of-soybean>
-  - Frogeye leaf spot (soybean): <https://cropprotectionnetwork.org/encyclopedia/frogeye-leaf-spot-of-soybean>
-  - Gray leaf spot (corn): <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
-  - Tarspot (corn): <https://cropprotectionnetwork.org/encyclopedia/tar-spot-of-corn>
-  - Gibberella ear rot/DON contamination (corn): <https://cropprotectionnetwork.org/encyclopedia/gibberella-ear-rot-of-corn>
-  - Wheat scab/Fusarium head blight (wheat): <https://cropprotectionnetwork.org/publications/an-overview-of-fusarium-head-blight>
-- Vegetable crop diseases
-  - Early blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/>
-  - Late blight (potato/tomato): <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>
-  - Alternaria and Cercospora leaf blights (carrot): <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>
-  - Cercospora leaf spot (beet): <https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/>
-  - Botrytis leaf blight (onion): <https://vegpath.plantpath.wisc.edu/diseases/onion-botrytis/>
-
-### Cropland data layer
+#### Cropland data layer
 
 Optionally, the [Cropland Data Layer](https://www.nass.usda.gov/Research_and_Science/Cropland/SARS1a.php) (CDL) can be shown as an overlay on the map by expanding the layers control in the upper right of the map and enabling a CDL overlay. This map is generated annually from satellite observations and represents the best estimate of the land cover class (eg water, forest, cultivated crop) grown at each pixel location. Dataset resolution has been 30 meters until 2024 when it increased to 10 meters. [Click here](https://www.nass.usda.gov/Research_and_Science/Cropland/sarsfaqs2.php) for frequently asked questions about the CDL. [Click here](https://www.nass.usda.gov/Research_and_Science/Cropland/docs/US_2024_CDL_legend.jpg) for a legend showing the display color used for each crop. Non-crop landcover is intuitively colored (eg forest is green, grass/shrubland is lighter green, water is blue, urban is grey). Crop colors vary but corn is yellow, soybean is green, potato is maroon. The CDL may also be explored on official websites such as [CroplandCROS](https://croplandcros.scinet.usda.gov/) and [Cropscape](https://nassgeodata.gmu.edu/CropScape/).
 
-### Credits and Contacts
+### Credits and contacts
 
 - Ben Bradford (Developer, Data Scientist, Entomologist): [bbradford\@wisc.edu](mailto:bbradford@wisc.edu)
 - Damon Smith (Extension Field Crops Pathologist): [damon.smith\@wisc.edu](mailto:damon.smith@wisc.edu)
 - Amanda Gevens (Extension Vegetable Crops Pathologist): [gevens\@wisc.edu](mailto:gevens@wisc.edu)
 - Crop Protection Network: [info\@cropprotectionnetwork.org](mailto:info@cropprotectionnetwork.org)
+- Additional contributors may be listed for individual models within the app.
 
-### Funding Sources
+#### Funding sources
 
-This project is partial supported by the National Predictive Modeling Tool Initiative, National Corn Growers Association, North Central Soybean Research Program, and United Soybean Board. This tool also relies on contributions from the University of Wisconsin-Madison Department of Entomology.
+This project is supported by funding or in-kind contributions from the following organizations:
+
+- [Crop Protection Network](https://cropprotectionnetwork.org/)
+- [National Predictive Modeling Tool Initiative](https://agpmt.org/)
+- [North Central IPM Center](https://www.ncipmc.org/)
+- [National Corn Growers Association](https://www.ncga.com/)
+- [North Central Soybean Research Program](https://ncsrp.com/)
+- [United Soybean Board](https://unitedsoybean.org/)
+- [Cotton Incorporated](https://www.cottoninc.com/)
+- [University of Wisconsin-Madison](https://www.wisc.edu)
