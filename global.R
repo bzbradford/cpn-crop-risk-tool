@@ -1,5 +1,12 @@
 #-- global.R --#
 
+# Packages ---------------------------------------------------------------------
+
+library(tictoc)
+
+tic("Total startup time")
+
+tic("Package load time")
 message("sf version: ", packageVersion("sf"))
 library(sf) # GIS
 
@@ -25,6 +32,8 @@ suppressPackageStartupMessages({
   library(htmlwidgets)
   library(plotly)
 })
+
+toc() # package load time
 
 
 # Dev settings -----------------------------------------------------------------
@@ -61,10 +70,10 @@ options(shiny.fullstacktrace = FALSE)
 
 # Async setup ------------------------------------------------------------------
 
-# set up background session for asynchronous tasks but not in tests
-if (!identical(Sys.getenv("TESTTHAT"), "true")) {
+# set up background session for asynchronous tasks for shiny app
+if (any(grepl(sys.calls(), pattern = "shiny::runApp"))) {
   # start background workers
-  mirai::daemons(4)
+  mirai::daemons(4L)
 
   # load required packages on workers
   mirai::everywhere({
@@ -73,6 +82,17 @@ if (!identical(Sys.getenv("TESTTHAT"), "true")) {
     library(sf)
     library(fst)
   })
+
+  # close background workers on app exit
+  shiny::onStop(function() {
+    mirai::daemons(0L)
+  })
+}
+
+# check or stop background daemons
+if (FALSE) {
+  mirai::status()
+  mirai::daemons(0)
 }
 
 
@@ -296,7 +316,6 @@ minmax <- function(x) {
 round_to <- function(x, d = 5) {
   round(x / d) * d
 }
-
 
 #' prints to tribble format in the console for pasting
 #' @param df a data frame to convert to tribble
@@ -582,9 +601,45 @@ conversion_lookup <- tribble(
   "wind_gust"            , "kmh"   , "mph"     , km_to_mi     ,
   "wind_direction"       , "°"     , "°"       , \(x) x       ,
   "soil_temp"            , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l2"         , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l3"         , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l4"         , "°C"    , "°F"      , c_to_f       ,
   "soil_moisture"        , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l2"     , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l3"     , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l4"     , "%"     , "%"       , \(x) x       ,
   "base"                 , "GDD"   , "GDD"     , \(x) x
 )
+
+#' Formats column names for plotting and display
+#' @param cols character vector of column names
+fmt_plot_names <- function(cols) {
+  janitor::make_clean_names(
+    cols,
+    "title",
+    abbreviations = c(
+      "l1" = "L1",
+      "l2" = "L2",
+      "l3" = "L3",
+      "l4" = "L4",
+      "msl" = "MSL",
+      "gdd" = "GDD",
+      "rh" = "RH"
+    )
+  )
+}
+
+# test
+if (FALSE) {
+  fmt_plot_names(c(
+    "dew_point",
+    "temperature_mean",
+    "soil_moisture_l3",
+    "soil_temp_l2_mean",
+    "pressure_msl",
+    "mean_rh"
+  ))
+}
 
 
 #' Converts all measures from default metric to imperial values
@@ -627,7 +682,7 @@ find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
   matched <- conversion_lookup |>
     rowwise() |>
     filter(grepl(measure, col_name))
-  if (nrow(matched) == 1) matched[[unit_system]] else ""
+  if (nrow(matched) >= 1) first(matched[[unit_system]]) else ""
 }
 
 if (FALSE) {
@@ -1046,3 +1101,5 @@ if (FALSE) {
 
 list.files("src", pattern = "\\.[Rr]$", full.names = TRUE) |>
   lapply(source)
+
+toc() # total startup time

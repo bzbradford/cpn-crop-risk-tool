@@ -347,10 +347,11 @@ build_data_plot <- function(df, sites, opts) {
   col_ranges <- assign_axes(df, opts$cols)
 
   y1_title <- filter(col_ranges, axis == "y1")$name |>
-    janitor::make_clean_names("title") |>
+    fmt_plot_names() |>
     paste(collapse = ", ")
+
   y2_title <- filter(col_ranges, axis == "y2")$name |>
-    janitor::make_clean_names("title") |>
+    fmt_plot_names() |>
     paste(collapse = ", ")
 
   plt <- plot_ly() |>
@@ -398,7 +399,7 @@ build_data_plot <- function(df, sites, opts) {
     )
 
   for (col in opts$cols) {
-    col_name <- janitor::make_clean_names(col, "title")
+    col_name <- fmt_plot_names(col)
     col_axis <- filter(col_ranges, name == col)$axis
 
     add_trace_to_plot <- function(plt, x, y, name) {
@@ -410,12 +411,13 @@ build_data_plot <- function(df, sites, opts) {
         plt,
         x = x,
         y = y,
+        text = prettyNum(y, digits = 3),
         name = name,
         type = "scatter",
         mode = mode,
         yaxis = col_axis,
         hovertemplate = paste0(
-          "%{y:.3~f}",
+          "%{text}",
           find_unit(col, opts$unit_system)
         ),
         line = list(shape = "spline", width = linewidth)

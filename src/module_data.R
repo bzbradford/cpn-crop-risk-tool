@@ -357,7 +357,10 @@ dataServer <- function(rv, rx) {
       plot_cols <- reactive({
         cols <- names(selected_data())
         cols <- cols[!(cols %in% OPTS$plot_ignore_cols)]
-        set_names(cols, janitor::make_clean_names(cols, "title"))
+        set_names(
+          cols,
+          fmt_plot_names(cols)
+        )
       })
 
       ## plot_cols_ui ----

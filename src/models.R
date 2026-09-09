@@ -67,7 +67,10 @@ build_daily <- function(hourly) {
       across(c(snow_depth, pressure_msl, wind_speed), summary_fns),
       wind_gust_max = calc_max(wind_gust),
       across(wind_direction, summary_fns),
-      across(c(soil_temp, soil_moisture), c("mean" = calc_mean)),
+      across(
+        starts_with(c("soil_temp", "soil_moisture")),
+        c("mean" = calc_mean)
+      ),
       hours_temp_over_20 = sum(temperature >= 20),
       hours_temp_over_30 = sum(temperature >= 30),
       hours_rh_under_70 = sum(relative_humidity < 70),
@@ -298,18 +301,6 @@ model_list <- list(
     yrange = c(0, 1)
   ),
 
-  earlyblight = Model(
-    name = "Early blight",
-    crop = "Potato/Tomato",
-    group = "vegetable",
-    info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
-    doc = "docs/early-blight.md",
-    risk_period = NULL,
-    validate = NULL,
-    ycol = "severity",
-    yrange = c(0, 4)
-  ),
-
   lateblight = Model(
     name = "Late blight",
     crop = "Potato/Tomato",
@@ -317,7 +308,31 @@ model_list <- list(
     info = "<b>Late blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of disease severity values generated in the last 14 days and since crop emergence. Model depends on temperature and hours of high humidity.",
     doc = "docs/late-blight.md",
     risk_period = NULL,
-    validate = NULL,
+    biofix = 135, # May 15
+    validate = function(params) {
+      dr <- params$date_range
+      if (!between(yday(dr[1]), 100, 180)) {
+        "Ensure start date is set to approximate crop emergence date."
+      }
+    },
+    ycol = "severity",
+    yrange = c(0, 4)
+  ),
+
+  earlyblight = Model(
+    name = "Early blight",
+    crop = "Potato/Tomato",
+    group = "vegetable",
+    info = "<b>Early blight may affect potato, tomato, pepper, eggplant, and other Solanaceous plants.</b> Risk depends on the number of potato physiological days (P-days) accumulated since crop emergence, which are generated based on daily min/max temperatures.",
+    doc = "docs/early-blight.md",
+    risk_period = NULL,
+    biofix = 135, # May 15
+    validate = function(params) {
+      dr <- params$date_range
+      if (!between(yday(dr[1]), 100, 180)) {
+        "Ensure start date is set to approximate crop emergence date."
+      }
+    },
     ycol = "severity",
     yrange = c(0, 4)
   ),
@@ -1076,16 +1091,17 @@ calc_late_blight_dsv <- function(t, h) {
 }
 
 #' Assign risk score for late blight dsv accumulation
+#' spray threshold is typically 18 DSV
 #' @param value dsv from `calc_late_blight_dsv` function
 risk_for_late_blight <- function(value) {
   tibble(
     total14 = data.table::frollapply(value, 14, sum, partial = TRUE),
     total = cumsum(value),
     severity = case_when(
-      total14 >= 21 & total >= 30 ~ 4,
-      total14 >= 14 & total >= 30 ~ 3,
-      total14 >= 3 | total >= 30 ~ 2,
-      total14 >= 1 ~ 1,
+      total14 >= 21 & total >= 30 ~ 4, # 14-day dsv >= 21 is very high risk after season total >= 30
+      total14 >= 14 & total >= 18 ~ 3, # 14-day dsv >= 14 is high risk after season total >= 18
+      total >= 18 ~ 2, # after 18 dsv threshold, any accumulation is moderate risk
+      total14 >= 1 ~ 1, # low/background risk
       TRUE ~ 0
     ),
     risk_from_severity(severity),

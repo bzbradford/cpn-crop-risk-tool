@@ -58,13 +58,13 @@ openmeteo_vars <- vctrs::vec_c(
   # "cloud_cover_mid",
   # "cloud_cover_high",
   soil_temp = "soil_temperature_0_to_7cm",
-  # "soil_temperature_7_to_28cm",
-  # "soil_temperature_28_to_100cm",
-  # "soil_temperature_100_to_255cm",
+  soil_temp_l2 = "soil_temperature_7_to_28cm",
+  soil_temp_l3 = "soil_temperature_28_to_100cm",
+  soil_temp_l4 = "soil_temperature_100_to_255cm",
   soil_moisture = "soil_moisture_0_to_7cm",
-  # "soil_moisture_7_to_28cm",
-  # "soil_moisture_28_to_100cm",
-  # "soil_moisture_100_to_255cm",
+  soil_moisture_l2 = "soil_moisture_7_to_28cm",
+  soil_moisture_l3 = "soil_moisture_28_to_100cm",
+  soil_moisture_l4 = "soil_moisture_100_to_255cm",
   # "weather_code",
 )
 
@@ -177,7 +177,7 @@ om_resp_ok <- function(resp) {
 
 # Parse a validated response into a tidy tibble (assumes resp passed om_resp_ok)
 om_parse_json <- function(resp) {
-  json <- resp_body_json(resp)
+  json <- resp_body_json(resp, simplifyVector = TRUE)
   attr <- tibble(
     grid_lat = json$latitude,
     grid_lng = json$longitude,
