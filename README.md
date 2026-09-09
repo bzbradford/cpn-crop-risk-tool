@@ -43,6 +43,10 @@ Hourly weather measures include:
 - Wind speed and direction
 - Atmospheric pressure
 - Soil temperature and moisture
+  - Level 1: 0-7 cm (0-3 in)
+  - Level 2: 7-28 cm (3-11 in)
+  - Level 3: 28-100 cm (11-39 in)
+  - Level 4: 100-255 cm (39-100 in)
 
 In addition to hourly weather, derived datasets are generated including:
 

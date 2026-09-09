@@ -527,12 +527,12 @@ riskServer <- function(rv, rx) {
             risk,
             risk_color
           ) |>
-          filter(date >= min(today(), max(date))) |>
+          filter(date >= calc_min(c(today(), calc_max(date)))) |>
           mutate(
             model_name = model$name,
-            min_date = min(date),
-            max_date = max(date),
-            max_value = max(model_value),
+            min_date = calc_min(date),
+            max_date = calc_max(date),
+            max_value = calc_max(model_value),
             .by = id
           )
 
@@ -556,7 +556,7 @@ riskServer <- function(rv, rx) {
               format_date_range(range(last_values$date))
             )
             last_values <- last_values |>
-              filter(model_value == max(model_value), .by = id)
+              filter(model_value == calc_max(model_value), .by = id)
           }
 
           if (sort_by == "name") {
@@ -570,8 +570,8 @@ riskServer <- function(rv, rx) {
 
         # reduce to single value per site
         last_values <- last_values |>
-          filter(date == min(date), .by = id) |>
-          filter(model_value == max(model_value), .by = id)
+          filter(date == calc_min(date), .by = id) |>
+          filter(model_value == calc_max(model_value), .by = id)
 
         # write values to shared reactive for map component to use
         rv$map_risk_data <- last_values
