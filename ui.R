@@ -40,10 +40,8 @@ ui <- fluidPage(
     # left sidebar
     div(
       class = "sidebar-col",
-      style = "display: flex; flex-direction: column; justify-content: space-between;",
       div(
         class = "column",
-        style = "flex: 1;",
         h2("Site selection"),
         div(
           style = "margin-top: 1rem;",

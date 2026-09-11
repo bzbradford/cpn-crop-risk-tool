@@ -188,6 +188,16 @@ footer {
 
 .sidebar-col {
   grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  /* lets the column shrink within .main instead of pushing past the footer */
+  min-height: 0;
+}
+
+/* site selection scrolls, leaving the status card pinned below it */
+.sidebar-col>.column {
+  flex: 1;
+  min-height: 0;
 }
 
 .column.map-col {
