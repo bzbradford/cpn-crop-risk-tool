@@ -400,6 +400,7 @@ riskServer <- function(rv, rx) {
         tagList(
           uiOutput(ns("plot_feed_opts")),
           uiOutput(ns("date_range_ui")),
+          uiOutput(ns("plot_extras_ui")),
           uiOutput(ns("plots_ui"))
         )
       })
@@ -437,7 +438,7 @@ riskServer <- function(rv, rx) {
                 "Site name" = "name",
                 "Model value" = "value"
               ),
-              selected = isolate(input$sort_plots_by),
+              selected = isolate(input$sort_plots_by) %||% "id",
               inline = TRUE
             )
           )
@@ -463,7 +464,7 @@ riskServer <- function(rv, rx) {
               "All" = FALSE,
               "Last 30 days" = TRUE
             ),
-            selected = TRUE,
+            selected = isolate(input$date_range_clamp) %||% TRUE,
             inline = TRUE
           )
         )
@@ -478,12 +479,34 @@ riskServer <- function(rv, rx) {
         }
       })
 
+      ## plot_extras_ui ----
+      # toggle for plotting the model's additional ycols, shown when it has any
+      output$plot_extras_ui <- renderUI({
+        model <- selected_model()
+        req(length(model$ycol) > 1)
+
+        div(
+          style = "margin-bottom: 0.5rem;",
+          title = paste(fmt_plot_names(model$ycol[-1]), collapse = ", "),
+          materialSwitch(
+            inputId = ns("show_extra_ycols"),
+            label = "Show additional variables",
+            value = isolate(input$show_extra_ycols) %||% FALSE,
+            status = "primary"
+          )
+        )
+      })
+
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
         model_data <- joined_data() |>
-          rename(model_value = !!model$ycol)
+          rename(model_value = !!first(model$ycol))
+
+        # optional additional columns plotted on hidden axes
+        extra_ycols <- if (isTRUE(input$show_extra_ycols)) model$ycol[-1]
+        unit_system <- if (isTRUE(rv$settings$metric)) "metric" else "imperial"
 
         # plot grouping
         plot_group <- NULL
@@ -590,11 +613,13 @@ riskServer <- function(rv, rx) {
             plt <- plot_risk(
               df,
               name = model$name,
+              ycol = c("model_value", extra_ycols),
               group = plot_group,
               yrange = model$yrange,
               xrange = date_range,
               risk_period = model$risk_period,
-              plt_height = ifelse(is.null(plot_group), 125, 150)
+              plt_height = ifelse(is.null(plot_group), 125, 150),
+              unit_system = unit_system
             )
 
             div(
