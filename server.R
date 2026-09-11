@@ -5,7 +5,8 @@ server <- function(input, output, session) {
 
   rv <- reactiveValues(
     settings = list(
-      beta = getOption("shiny.devmode") %||% FALSE
+      beta = getOption("shiny.devmode") %||% FALSE,
+      metric = FALSE # display units shared by the data and risk modules
     ),
     weather = tibble(),
     weather_ready = FALSE, # toggles to TRUE if > 0 rows in weather
@@ -592,6 +593,19 @@ server <- function(input, output, session) {
             status = "primary"
           )
         )
+      ),
+      div(
+        h4("Use metric units?"),
+        div(
+          class = "settings-item",
+          "Display weather values in metric units (°C, mm, km/h) instead of imperial units (°F, in, mph).",
+          materialSwitch(
+            inputId = "use_metric",
+            label = NULL,
+            value = rv$settings$metric,
+            status = "primary"
+          )
+        )
       )
     )
 
@@ -607,6 +621,10 @@ server <- function(input, output, session) {
 
   observeEvent(input$enable_beta_models, {
     rv$settings$beta <- input$enable_beta_models
+  })
+
+  observeEvent(input$use_metric, {
+    rv$settings$metric <- input$use_metric
   })
 
   # Site selection -------------------------------------------------------------

@@ -137,7 +137,9 @@ if (FALSE) {
 #' @param risk_period NULL or length two character vector eg 'Jul 1'
 #' @param biofix NULL or day of year
 #' @param validate validation function that returns a message or NULL from params passed by risk module
-#' @param ycol column name to plot on y axis
+#' @param ycol column name or vector of column names to plot. The first is the
+#'   primary model output (risk coloring, plot sorting, map); any others are
+#'   optional extra traces drawn on hidden y axes when the user enables them
 #' @param yrange default range for y axis
 #' @param display_name full model name displayed in the model picker
 Model <- function(
@@ -160,6 +162,7 @@ Model <- function(
   stopifnot(is.character(name))
   stopifnot(is.null(crop) | is.character(crop))
   stopifnot(is.null(info) | is.character(info))
+  stopifnot(is.character(ycol), length(ycol) >= 1)
 
   # validate group
   if (!(group %in% OPTS$model_group_choices)) {
@@ -204,7 +207,12 @@ model_list <- list(
         "Corn is only vulnerable to tarspot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "probability",
+    ycol = c(
+      "probability",
+      "temperature_mean_30day",
+      "relative_humidity_max_30day",
+      "hours_rh_over_90_night_14day"
+    ),
     yrange = c(0, 1)
   ),
 
@@ -221,7 +229,7 @@ model_list <- list(
         "Corn is only vulnerable to tar spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "probability",
+    ycol = c("probability", "temperature_min_21day", "dew_point_min_30day"),
     yrange = c(0, 1)
   ),
 
@@ -238,7 +246,12 @@ model_list <- list(
         "Corn is only vulnerable to Gibberella ear rot during silking. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "probability",
+    ycol = c(
+      "probability",
+      "temperature_mean",
+      "relative_humidity_mean",
+      "precipitation_daily"
+    ),
     yrange = c(0, 1)
   ),
 
@@ -255,7 +268,12 @@ model_list <- list(
         "Soybean is only vulnerable to white mold between R1 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "probability",
+    ycol = c(
+      "probability",
+      "temperature_max_30day",
+      "relative_humidity_max_30day",
+      "wind_speed_max_30day"
+    ),
     yrange = c(0, 1)
   ),
 
@@ -272,7 +290,7 @@ model_list <- list(
         "Soybean is only vulnerable to frogeye leaf spot between R1 and R5. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "probability",
+    ycol = c("probability", "temperature_max_30day", "hours_rh_over_80_30day"),
     yrange = c(0, 1)
   ),
 
@@ -285,7 +303,7 @@ model_list <- list(
     doc = "docs/cercospora-soybean.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "probability",
+    ycol = c("probability", "temperature_min", "hours_rh90_14day"),
     yrange = c(0, 0.5)
   ),
 
@@ -297,7 +315,7 @@ model_list <- list(
     doc = "docs/wheat-scab.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "probability",
+    ycol = c("probability", "rh_mean_14day"),
     yrange = c(0, 1)
   ),
 
@@ -315,7 +333,7 @@ model_list <- list(
         "Ensure start date is set to approximate crop emergence date."
       }
     },
-    ycol = "severity",
+    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
     yrange = c(0, 4)
   ),
 
@@ -333,7 +351,7 @@ model_list <- list(
         "Ensure start date is set to approximate crop emergence date."
       }
     },
-    ycol = "severity",
+    ycol = c("severity", "temperature_min", "temperature_max"),
     yrange = c(0, 4)
   ),
 
@@ -345,7 +363,7 @@ model_list <- list(
     doc = "docs/alternaria.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "severity",
+    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
     yrange = c(0, 4)
   ),
 
@@ -357,7 +375,7 @@ model_list <- list(
     doc = "docs/cercospora-beet.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "severity",
+    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
     yrange = c(0, 4)
   ),
 
@@ -369,7 +387,7 @@ model_list <- list(
     doc = "docs/botrytis.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "severity",
+    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
     yrange = c(0, 4)
   ),
 
@@ -394,7 +412,7 @@ model_list <- list(
       )
       if (length(msg) > 0) msg else NULL
     },
-    ycol = "biomass",
+    ycol = c("biomass", "gdd_total"),
     yrange = c(0, 10000)
   ),
 
@@ -406,7 +424,7 @@ model_list <- list(
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = "probability",
+    ycol = c("probability", "temperature_min", "precipitation_daily"),
     yrange = c(0, 1)
   ),
 
@@ -423,7 +441,7 @@ model_list <- list(
         "Pecan is most vulnerable to pecan scab between shuck split and early nut development. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
-    ycol = "scab_hours",
+    ycol = c("scab_hours", "daily_scab_hours"),
     yrange = c(0, 40)
   )
 )
@@ -1765,7 +1783,7 @@ Insect <- function(
     risk_period = NULL,
     biofix = biofix,
     validate = validate_biofix(biofix),
-    ycol = "severity",
+    ycol = c("severity", "cum_gdd"),
     yrange = c(0, NA)
   )
   stopifnot(tmin < tmax)

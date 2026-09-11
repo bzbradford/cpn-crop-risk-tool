@@ -259,7 +259,7 @@ dataServer <- function(rv, rx) {
         }
 
         # convert units
-        if (input$metric) df else convert_measures(df)
+        if (use_metric()) df else convert_measures(df)
       })
 
       dataset_name <- reactive({
@@ -273,6 +273,27 @@ dataServer <- function(rv, rx) {
 
       # Interface ----
 
+      ## use_metric - reactive ----
+      # unit system is shared with the risk module via rv$settings$metric
+      use_metric <- reactive(isTRUE(rv$settings$metric))
+
+      # keep the switch and the shared setting in sync
+      observeEvent(input$metric, {
+        if (!identical(input$metric, use_metric())) {
+          rv$settings$metric <- input$metric
+        }
+      })
+
+      observeEvent(
+        use_metric(),
+        {
+          if (!identical(input$metric, use_metric())) {
+            updateMaterialSwitch(session, "metric", value = use_metric())
+          }
+        },
+        ignoreInit = TRUE
+      )
+
       ## metric_switch ----
       output$switches_ui <- renderUI({
         div(
@@ -280,7 +301,7 @@ dataServer <- function(rv, rx) {
           materialSwitch(
             inputId = ns("metric"),
             label = "Use metric",
-            value = isolate(input$metric) %||% FALSE,
+            value = isolate(use_metric()),
             status = "primary"
           ),
           uiOutput(ns("forecast_switch"))
@@ -474,7 +495,7 @@ dataServer <- function(rv, rx) {
           data_type = req(input$data_type),
           data_name = dataset_name(),
           cols = req(input$plot_cols),
-          unit_system = ifelse(input$metric, "metric", "imperial"),
+          unit_system = ifelse(use_metric(), "metric", "imperial"),
           site_ids = unique(df$site_id),
           show_forecast = input$forecast
         )
@@ -522,7 +543,7 @@ dataServer <- function(rv, rx) {
       })
 
       fmt_download_data <- function(df) {
-        unit_system <- if_else(input$metric, "metric", "imperial")
+        unit_system <- if_else(use_metric(), "metric", "imperial")
         df |>
           rename_with_units(unit_system) |>
           mutate(across(
