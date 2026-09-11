@@ -8,6 +8,8 @@ This model estimates the probability that a planting population will fall below 
 
 The model was built assuming no seed treatments were used. Utilization of seed treatments containing fungicides active against *Pythium* spp., *Rhizoctonia solani*, *Fusarium* spp., and *Thielaviopsis basicola* can support higher plant stands (Faske et al. 2025; Rothrock et al. 2012).
 
+The model was developed by Zachary Noel, Assistant Professor of Plant Health and Microbiomes, Auburn University, with funding provided by Cotton Incorporated.
+
 ### References:
 
 - Adams, C., Thapa, S., and Kimura, E. 2019. Determination of a plant population density threshold for optimizing cotton lint yield: A synthesis. Field Crop. Res. 230:11-16.

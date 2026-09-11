@@ -1,5 +1,12 @@
 #-- global.R --#
 
+# Packages ---------------------------------------------------------------------
+
+library(tictoc)
+
+tic("Total startup time")
+
+tic("Package load time")
 message("sf version: ", packageVersion("sf"))
 library(sf) # GIS
 
@@ -26,6 +33,8 @@ suppressPackageStartupMessages({
   library(plotly)
 })
 
+toc() # package load time
+
 
 # Dev settings -----------------------------------------------------------------
 
@@ -40,10 +49,7 @@ if (FALSE) {
   renv::update()
   renv::snapshot()
   renv::clean()
-  renv::install("sf@1.0-24")
-  renv::install("terra@1.9-11")
-  renv::settings$ignored.packages("watcher", persist = TRUE)
-  renv::install("watcher")
+  renv::install("terra@1.9-27")
 
   # turn warnings into errors
   options(warn = 2)
@@ -64,10 +70,10 @@ options(shiny.fullstacktrace = FALSE)
 
 # Async setup ------------------------------------------------------------------
 
-# set up background session for asynchronous tasks but not in tests
-if (!identical(Sys.getenv("TESTTHAT"), "true")) {
+# set up background session for asynchronous tasks for shiny app
+if (any(grepl(sys.calls(), pattern = "shiny::runApp"))) {
   # start background workers
-  mirai::daemons(4)
+  mirai::daemons(4L)
 
   # load required packages on workers
   mirai::everywhere({
@@ -76,6 +82,17 @@ if (!identical(Sys.getenv("TESTTHAT"), "true")) {
     library(sf)
     library(fst)
   })
+
+  # close background workers on app exit
+  shiny::onStop(function() {
+    mirai::daemons(0L)
+  })
+}
+
+# check or stop background daemons
+if (FALSE) {
+  mirai::status()
+  mirai::daemons(0)
 }
 
 
@@ -147,6 +164,7 @@ OPTS <- lst(
     "Field crops" = "field",
     "Vegetable crops" = "vegetable",
     "Cover crops" = "cover",
+    "Tree crops" = "tree",
     "Insects" = "insect"
   ),
 
@@ -299,7 +317,6 @@ round_to <- function(x, d = 5) {
   round(x / d) * d
 }
 
-
 #' prints to tribble format in the console for pasting
 #' @param df a data frame to convert to tribble
 print_tribble <- function(df) {
@@ -318,6 +335,78 @@ if (FALSE) {
   hours_diff(now(), now())
   hours_diff(now() - hours(6), now())
   hours_diff(now() - days(1), now())
+}
+
+# #' format one or two dates in a minimal way
+# #' @param dates vector of dates, usually one or two
+# format_date_range <- function(dates) {
+#   d <- sort(as.Date(dates))
+
+#   if (length(dates) == 1 | (length(d) == 2 & (d[1] == d[2]))) {
+#     return(format(d[1], "%b %d, %Y"))
+#   }
+
+#   if (length(d) > 2) {
+#     d <- range(d)
+#   }
+
+#   d1 <- d[1]
+#   d2 <- d[2]
+
+#   y1 <- format(d1, "%Y")
+#   y2 <- format(d2, "%Y")
+#   m1 <- format(d1, "%b")
+#   m2 <- format(d2, "%b")
+
+#   day1 <- as.integer(format(d1, "%d"))
+#   day2 <- as.integer(format(d2, "%d"))
+
+#   if (y1 != y2) {
+#     sprintf("%s %d, %s-%s %d, %s", m1, day1, y1, m2, day2, y2)
+#   } else if (m1 != m2) {
+#     sprintf("%s %d-%s %d, %s", m1, day1, m2, day2, y1)
+#   } else {
+#     sprintf("%s %d-%d, %s", m1, day1, day2, y1)
+#   }
+# }
+
+#' format one or two dates in a minimal way
+#' @param dates vector of dates, usually one or two
+format_date_range <- function(dates) {
+  d <- range(as.Date(dates)) # Gets min/max dates directly; handles length 1, 2, or >2
+
+  # Vectorized extraction of date parts for both dates at once
+  y <- format(d, "%Y")
+  m <- format(d, "%b")
+  day <- as.integer(format(d, "%d"))
+
+  if (d[1] == d[2]) {
+    sprintf("%s %d, %s", m[1], day[1], y[1])
+  } else if (y[1] != y[2]) {
+    sprintf("%s %d, %s-%s %d, %s", m[1], day[1], y[1], m[2], day[2], y[2])
+  } else if (m[1] != m[2]) {
+    sprintf("%s %d-%s %d, %s", m[1], day[1], m[2], day[2], y[1])
+  } else {
+    sprintf("%s %d-%d, %s", m[1], day[1], day[2], y[1])
+  }
+}
+
+if (FALSE) {
+  format_date_range(today())
+
+  format_date_range(seq.Date(today() - days(7), today()))
+
+  format_date_range(c("2026-07-01", "2026-07-10"))
+  #> "Jul 1-10, 2026"
+
+  format_date_range(c("2026-06-01", "2026-07-01"))
+  #> "Jun 1-Jul 1, 2026"
+
+  format_date_range(c("2026-12-25", "2027-01-02"))
+  #> "Dec 25, 2026-Jan 2, 2027"
+
+  format_date_range(c("2026-07-04", "2026-07-04"))
+  #> "Jul 4-4, 2026"
 }
 
 
@@ -512,9 +601,45 @@ conversion_lookup <- tribble(
   "wind_gust"            , "kmh"   , "mph"     , km_to_mi     ,
   "wind_direction"       , "°"     , "°"       , \(x) x       ,
   "soil_temp"            , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l2"         , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l3"         , "°C"    , "°F"      , c_to_f       ,
+  "soil_temp_l4"         , "°C"    , "°F"      , c_to_f       ,
   "soil_moisture"        , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l2"     , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l3"     , "%"     , "%"       , \(x) x       ,
+  "soil_moisture_l4"     , "%"     , "%"       , \(x) x       ,
   "base"                 , "GDD"   , "GDD"     , \(x) x
 )
+
+#' Formats column names for plotting and display
+#' @param cols character vector of column names
+fmt_plot_names <- function(cols) {
+  janitor::make_clean_names(
+    cols,
+    "title",
+    abbreviations = c(
+      "l1" = "L1",
+      "l2" = "L2",
+      "l3" = "L3",
+      "l4" = "L4",
+      "msl" = "MSL",
+      "gdd" = "GDD",
+      "rh" = "RH"
+    )
+  )
+}
+
+# test
+if (FALSE) {
+  fmt_plot_names(c(
+    "dew_point",
+    "temperature_mean",
+    "soil_moisture_l3",
+    "soil_temp_l2_mean",
+    "pressure_msl",
+    "mean_rh"
+  ))
+}
 
 
 #' Converts all measures from default metric to imperial values
@@ -557,7 +682,7 @@ find_unit <- function(col_name, unit_system = c("metric", "imperial")) {
   matched <- conversion_lookup |>
     rowwise() |>
     filter(grepl(measure, col_name))
-  if (nrow(matched) == 1) matched[[unit_system]] else ""
+  if (nrow(matched) >= 1) first(matched[[unit_system]]) else ""
 }
 
 if (FALSE) {
@@ -976,3 +1101,5 @@ if (FALSE) {
 
 list.files("src", pattern = "\\.[Rr]$", full.names = TRUE) |>
   lapply(source)
+
+toc() # total startup time
