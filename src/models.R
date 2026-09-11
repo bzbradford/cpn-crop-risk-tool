@@ -1765,7 +1765,7 @@ Insect <- function(
     risk_period = NULL,
     biofix = biofix,
     validate = validate_biofix(biofix),
-    ycol = "cum_gdd",
+    ycol = "severity",
     yrange = c(0, NA)
   )
   stopifnot(tmin < tmax)
