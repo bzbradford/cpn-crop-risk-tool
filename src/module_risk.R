@@ -114,6 +114,41 @@ riskServer <- function(rv, rx) {
           uiOutput(ns("wheatscab_opts")),
           uiOutput(ns("soybean_cercospora_opts")),
           uiOutput(ns("cotton_opts")),
+          uiOutput(ns("red_crown_rot_opts")),
+        )
+      })
+
+      ## red_crown_rot_opts ----
+      # R1 date slider spanning the selected dates through the forecast
+      output$red_crown_rot_opts <- renderUI({
+        req(identical(input$model, "red_crown_rot"))
+
+        dates <- rx$dates()
+        # weather dates extend through the forecast once weather is loaded
+        wx_end <- tryCatch(rx$wx()$dates$end, error = \(e) NULL)
+        min_date <- dates$start
+        max_date <- max(dates$end, wx_end)
+
+        # keep the current value if still in range, otherwise default to Jul 1
+        value <- isolate(input$r1_date)
+        if (is.null(value) || !between(value, min_date, max_date)) {
+          value <- make_date(year(max_date), 7, 1) |>
+            max(min_date) |>
+            min(max_date)
+        }
+
+        div(
+          style = "margin-top: 1rem;",
+          sliderInput(
+            inputId = ns("r1_date"),
+            label = "R1 (beginning flowering) date:",
+            min = min_date,
+            max = max_date,
+            value = value,
+            step = 1,
+            timeFormat = "%b %d, %Y",
+            width = "100%"
+          )
         )
       })
 
@@ -285,7 +320,12 @@ riskServer <- function(rv, rx) {
             }),
             "frogeye" = build_frogeye_leaf_spot(daily_full),
             "soybean_cercospora" = build_soybean_cercospora(daily_full),
-            "red_crown_rot" = build_red_crown_rot(daily_full, date_range$start),
+            "red_crown_rot" = local({
+              # force req() here: inside a lazy argument it would be evaluated
+              # during as_date() S4 dispatch, which converts it to a hard error
+              r1_date <- req(input$r1_date)
+              build_red_crown_rot(daily_full, r1_date)
+            }),
             "wheatscab" = build_wheat_scab(daily_full),
             "earlyblight" = build_early_blight(daily_full),
             "lateblight" = build_late_blight(daily_full),
@@ -447,13 +487,17 @@ riskServer <- function(rv, rx) {
       })
 
       ## date_range_ui ----
+      LAST_N_DAYS <- 60
+
       long_date_range <- reactive({
         dates <- rx$dates()
-        as.integer(dates$end - dates$start) > 60
+        as.integer(dates$end - dates$start) > LAST_N_DAYS
       })
 
       output$date_range_ui <- renderUI({
         req(long_date_range())
+        choices <- c(FALSE, TRUE)
+        names(choices) <- c("All", paste("Last", LAST_N_DAYS, "days"))
         div(
           style = "margin-bottom: 0.5rem;",
           class = "label-inline",
@@ -461,10 +505,7 @@ riskServer <- function(rv, rx) {
           radioButtons(
             inputId = ns("date_range_clamp"),
             label = NULL,
-            choices = list(
-              "All" = FALSE,
-              "Last 30 days" = TRUE
-            ),
+            choices = choices,
             selected = isolate(input$date_range_clamp) %||% TRUE,
             inline = TRUE
           )
@@ -509,6 +550,12 @@ riskServer <- function(rv, rx) {
         extra_ycols <- if (isTRUE(input$show_extra_ycols)) model$ycol[-1]
         unit_system <- if (isTRUE(rv$settings$metric)) "metric" else "imperial"
 
+        # optional event date marked on the plots
+        event_date <- NULL
+        if (model$slug == "red_crown_rot") {
+          event_date <- req(input$r1_date)
+        }
+
         # plot grouping
         plot_group <- NULL
         if (model$slug == "wheatscab") {
@@ -533,9 +580,9 @@ riskServer <- function(rv, rx) {
 
         req(nrow(model_data) > 0)
 
-        # respond to the "clamp date range" option by filtering model data to the most recent 30 days
+        # respond to the "clamp date range" option by filtering model data to the most recent N days
         if (should_clamp_dates()) {
-          dates$start <- dates$end - days(30)
+          dates$start <- dates$end - days(LAST_N_DAYS)
           model_data <- model_data |>
             filter(date >= dates$start)
         }
@@ -551,6 +598,7 @@ riskServer <- function(rv, rx) {
             risk,
             risk_color
           ) |>
+          drop_na(model_value) |>
           filter(date >= calc_min(c(today(), calc_max(date)))) |>
           mutate(
             model_name = model$name,
@@ -602,9 +650,14 @@ riskServer <- function(rv, rx) {
 
         # generate plots
         elems <- lapply(site_labels, function(label) {
+          # keep rows without a model value if any additional columns have data
           df <- model_data |>
             filter(site_label == !!label) |>
-            drop_na(grid_id, date, model_value)
+            drop_na(grid_id, date) |>
+            filter(if_any(
+              c(model_value, any_of(extra_ycols)),
+              \(x) !is.na(x)
+            ))
 
           # to show in site feed
           content <- if (nrow(df) > 0) {
@@ -619,6 +672,8 @@ riskServer <- function(rv, rx) {
               yrange = model$yrange,
               xrange = date_range,
               risk_period = model$risk_period,
+              event_date = event_date,
+              event_label = "R1",
               plt_height = ifelse(is.null(plot_group), 125, 150),
               unit_system = unit_system
             )

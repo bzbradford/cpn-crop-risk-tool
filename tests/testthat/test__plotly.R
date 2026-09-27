@@ -115,3 +115,40 @@ test_that("plot_risk warns and skips missing ycols", {
   )
   expect_null(plt)
 })
+
+test_that("plotly_get_event_annot works", {
+  annot <- plotly_get_event_annot(ymd("2025-7-1"), "R1")
+  expect_length(annot$shapes, 1)
+  expect_equal(annot$annotations[[1]]$text, "R1")
+})
+
+test_that("plot_risk marks an event date and handles missing primary values", {
+  r1 <- ymd("2025-7-1")
+  df <- test_daily_wx |>
+    filter(grid_id == first(grid_id)) |>
+    build_red_crown_rot(r1)
+
+  plt <- plot_risk(
+    df,
+    name = "Red crown rot",
+    ycol = c("incidence", "precipitation_veg"),
+    yrange = c(0, 1),
+    event_date = r1,
+    event_label = "R1"
+  )
+
+  expect_s3_class(plt, "plotly")
+  built <- plotly_build(plt)$x
+  expect_false(anyNA(built$layout$yaxis$range))
+
+  # event point trace sits on the primary trace at the event date
+  event_trace <- Filter(\(t) identical(t$name, "R1"), built$data)
+  expect_length(event_trace, 1)
+  expect_equal(
+    as.numeric(event_trace[[1]]$y),
+    df$incidence[df$date == r1]
+  )
+
+  # event line and label are added to the layout
+  expect_true(any(sapply(built$layout$annotations, \(a) identical(a$text, "R1"))))
+})

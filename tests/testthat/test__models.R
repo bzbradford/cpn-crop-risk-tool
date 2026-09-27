@@ -298,8 +298,18 @@ test_that("build_red_crown_rot", {
   n <- RED_CROWN_ROT_WINDOW
   res <- build_red_crown_rot(test_daily_wx, r1)
 
-  expect_equal(min(res$date), r1)
-  expect_true(all(between(res$incidence, 0, 1)))
+  # incidence is only predicted from R1 onward
+  expect_equal(min(res$date), min(test_daily_wx$date))
+  expect_true(all(is.na(res$incidence[res$date < r1])))
+  expect_true(all(between(res$incidence[res$date >= r1], 0, 1)))
+
+  # vegetative precipitation accumulates over the window before R1
+  expect_true(all(is.na(res$precipitation_veg[res$date < r1 - n])))
+  veg_running <- res |> filter(between(date, r1 - n, r1))
+  expect_equal(
+    veg_running |> filter(date == r1 - 1) |> pull(precipitation_veg),
+    veg_running |> filter(date == r1) |> pull(precipitation_veg)
+  )
 
   # final values match the full-window weather summaries
   expected <- test_daily_wx |>
