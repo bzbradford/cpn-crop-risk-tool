@@ -263,7 +263,7 @@ riskServer <- function(rv, rx) {
 
         # Collect weather data for models
         # use full weather for models that have moving averages or lookback windows
-        # includes 30 days prior to start_date
+        # includes 31 days prior to start_date
         daily_full <- wx$daily_full
         daily <- wx$daily
         hourly <- wx$hourly
@@ -285,6 +285,7 @@ riskServer <- function(rv, rx) {
             }),
             "frogeye" = build_frogeye_leaf_spot(daily_full),
             "soybean_cercospora" = build_soybean_cercospora(daily_full),
+            "red_crown_rot" = build_red_crown_rot(daily_full, date_range$start),
             "wheatscab" = build_wheat_scab(daily_full),
             "earlyblight" = build_early_blight(daily_full),
             "lateblight" = build_late_blight(daily_full),

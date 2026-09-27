@@ -245,6 +245,90 @@ test_that("build_soybean_cercospora", {
   })
 })
 
+# Red crown rot ----
+
+test_that("predict_red_crown_rot", {
+  # individual models from Ochi et al. 2026
+  res <- predict_red_crown_rot(25, 100, 100)
+  expect_equal(res$incidence_temp_rep, 1 / (1 + exp(15.067 - 0.602 * 25)))
+  expect_equal(res$incidence_precip_veg, 1 / (1 + exp(0.184 - 0.004 * 100)))
+  expect_equal(res$incidence_precip_rep, 1 / (1 + exp(-1.257 + 0.005 * 100)))
+  expect_equal(
+    res$incidence,
+    0.66 * res$incidence_temp_rep +
+      0.16 * res$incidence_precip_veg +
+      0.18 * res$incidence_precip_rep
+  )
+
+  # warmer, wetter vegetative stage, and drier reproductive stage increase risk
+  expect_gt(
+    predict_red_crown_rot(28, 100, 100)$incidence,
+    predict_red_crown_rot(22, 100, 100)$incidence
+  )
+  expect_gt(
+    predict_red_crown_rot(25, 300, 100)$incidence,
+    predict_red_crown_rot(25, 50, 100)$incidence
+  )
+  expect_gt(
+    predict_red_crown_rot(25, 100, 50)$incidence,
+    predict_red_crown_rot(25, 100, 300)$incidence
+  )
+
+  expect_silent({
+    expand_grid(
+      temp = 15:35,
+      precip_veg = seq(0, 400, 50),
+      precip_rep = seq(0, 400, 50)
+    ) |>
+      mutate(predict_red_crown_rot(temp, precip_veg, precip_rep)) |>
+      ggplot(aes(x = temp, y = precip_rep, fill = incidence)) +
+      geom_tile() +
+      facet_wrap(~precip_veg, labeller = "label_both") +
+      scale_fill_distiller(palette = "Spectral", limits = c(0, 1)) +
+      coord_cartesian(expand = F)
+  })
+})
+
+test_that("cummean_na", {
+  expect_equal(cummean_na(c(NA, 1, 3, NA, 5)), c(NA, 1, 2, 2, 3))
+})
+
+test_that("build_red_crown_rot", {
+  r1 <- ymd("2025-7-1")
+  n <- RED_CROWN_ROT_WINDOW
+  res <- build_red_crown_rot(test_daily_wx, r1)
+
+  expect_equal(min(res$date), r1)
+  expect_true(all(between(res$incidence, 0, 1)))
+
+  # final values match the full-window weather summaries
+  expected <- test_daily_wx |>
+    summarize(
+      temp_rep = mean(temperature_mean[between(date, r1, r1 + n - 1)]),
+      precip_veg = sum(precipitation_daily[between(date, r1 - n, r1 - 1)]),
+      precip_rep = sum(precipitation_daily[between(date, r1, r1 + n - 1)]),
+      .by = grid_id
+    )
+  final <- res |>
+    filter(date == r1 + n - 1) |>
+    left_join(expected, join_by(grid_id))
+  expect_equal(final$rep_days, rep(n, nrow(final)))
+  expect_equal(final$temperature_mean_rep, final$temp_rep)
+  expect_equal(final$precipitation_veg, final$precip_veg)
+  expect_equal(final$precipitation_rep, final$precip_rep)
+
+  # values are held after the reproductive window
+  after <- res |> filter(date > r1 + n - 1)
+  expect_equal(
+    n_distinct(after$incidence),
+    n_distinct(after$grid_id)
+  )
+
+  expect_silent({
+    res |> test_plot("incidence")
+  })
+})
+
 # Wheat scab ----
 
 test_that("predict_wheat_scab", {
