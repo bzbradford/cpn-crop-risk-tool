@@ -211,6 +211,40 @@ test_that("build_frogeye_leaf_spot", {
   })
 })
 
+# Soybean cercospora ----
+
+test_that("predict_soybean_cercospora", {
+  expect_silent({
+    expand_grid(
+      min_temp_5day = seq(0, 30, 5),
+      mean_dpd_5day = seq(0, 30, 5),
+      max_dpd_5day = seq(0, 30, 5),
+      max_wind_14day = seq(0, 30, 5),
+      hours_rh90_10day = seq(0, 24, 3),
+      hours_rh90_14day = seq(0, 24, 3)
+    ) |>
+      mutate(
+        predict_soybean_cercospora(
+          min_temp_5day,
+          mean_dpd_5day,
+          max_dpd_5day,
+          max_wind_14day,
+          hours_rh90_10day,
+          hours_rh90_14day
+        )
+      )
+  })
+})
+
+test_that("build_soybean_cercospora", {
+  expect_silent({
+    test_daily_wx |>
+      build_soybean_cercospora() |>
+      test_plot() +
+      facet_wrap(species ~ grid_id)
+  })
+})
+
 # Wheat scab ----
 
 test_that("predict_wheat_scab", {
@@ -228,8 +262,9 @@ test_that("predict_wheat_scab", {
 test_that("build_wheat_scab", {
   expect_silent({
     test_daily_wx |>
-      build_wheat_scab(resistance = "VS") |>
-      test_plot()
+      build_wheat_scab() |>
+      test_plot() +
+      facet_wrap(resistance ~ grid_id, ncol = 3)
   })
 })
 
@@ -465,6 +500,6 @@ test_that("build_rye_biomass", {
   expect_silent({
     test_daily_wx |>
       build_rye_biomass() |>
-      test_plot()
+      test_plot("biomass")
   })
 })

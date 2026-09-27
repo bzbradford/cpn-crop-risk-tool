@@ -4,6 +4,10 @@ server <- function(input, output, session) {
   # Reactive values ------------------------------------------------------------
 
   rv <- reactiveValues(
+    settings = list(
+      beta = getOption("shiny.devmode") %||% FALSE,
+      metric = FALSE # display units shared by the data and risk modules
+    ),
     weather = tibble(),
     weather_ready = FALSE, # toggles to TRUE if > 0 rows in weather
     last_fetch_key = NULL, # track last weather params attempted to fetch
@@ -545,12 +549,82 @@ server <- function(input, output, session) {
     )
   })
 
-  # Help modal -----------------------------------------------------------------
+  # Info/settings buttons ------------------------------------------------------
 
-  observeEvent(input$about, show_modal(md = "README.md"))
+  output$info_btns <- renderUI({
+    div(
+      class = "info-btns",
+      if (isTRUE(rv$settings$beta)) {
+        span("[dev mode]")
+      },
+      div(class = "info-btn", actionLink("about", icon("circle-info"))),
+      div(class = "info-btn", actionLink("settings", icon("gear")))
+    )
+  })
+
+  ## 'More information' modals ----
   observe({
     mod <- req(input$show_modal)
     show_modal(md = mod$md)
+  })
+
+  ## Help modal ----
+  observeEvent(
+    input$about,
+    show_modal(md = "README.md", title = "About this tool")
+  )
+
+  # Settings modal ----
+  observeEvent(input$settings, {
+    ui <- tagList(
+      div(
+        h4(
+          "Show models currently under development?",
+          style = "margin-top: 0;"
+        ),
+        div(
+          class = "settings-item",
+          "Some models have been deployed to this tool, but have not been fully completed or validated. Enable this option to show these models in the model list. Model names will include the [beta] tag.",
+          materialSwitch(
+            inputId = "enable_beta_models",
+            # label = "Show new/beta models",
+            label = NULL,
+            value = rv$settings$beta,
+            status = "primary"
+          )
+        )
+      ),
+      div(
+        h4("Use metric units?"),
+        div(
+          class = "settings-item",
+          "Display weather values in metric units (°C, mm, km/h) instead of imperial units (°F, in, mph).",
+          materialSwitch(
+            inputId = "use_metric",
+            label = NULL,
+            value = rv$settings$metric,
+            status = "primary"
+          )
+        )
+      )
+    )
+
+    m <- modalDialog(
+      ui,
+      title = "Settings",
+      footer = modalButton("Close"),
+      easyClose = TRUE
+    )
+
+    showModal(m)
+  })
+
+  observeEvent(input$enable_beta_models, {
+    rv$settings$beta <- input$enable_beta_models
+  })
+
+  observeEvent(input$use_metric, {
+    rv$settings$metric <- input$use_metric
   })
 
   # Site selection -------------------------------------------------------------
