@@ -411,24 +411,6 @@ plot_risk <- function(
         inherit = FALSE
       )
 
-    # transparent markers on missing dates so the tooltip still reports them
-    if (any(missing)) {
-      plt <- plt |>
-        add_trace(
-          x = trace_df$date[missing],
-          y = rep(if (all(missing)) 0 else calc_min(values), sum(missing)),
-          name = trace_name,
-          text = "n/a",
-          type = "scatter",
-          mode = "markers",
-          yaxis = yaxis_id,
-          marker = list(color = color, opacity = 0),
-          hovertemplate = "%{text}",
-          showlegend = FALSE,
-          inherit = FALSE
-        )
-    }
-
     axis_layout <- list(
       modifyList(axis_defaults$y, list(overlaying = "y", visible = FALSE))
     )

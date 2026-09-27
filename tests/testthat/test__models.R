@@ -255,7 +255,8 @@ test_that("predict_red_crown_rot", {
   expect_equal(res$incidence_precip_rep, 1 / (1 + exp(-1.257 + 0.005 * 100)))
   expect_equal(
     res$incidence,
-    0.66 * res$incidence_temp_rep +
+    0.66 *
+      res$incidence_temp_rep +
       0.16 * res$incidence_precip_veg +
       0.18 * res$incidence_precip_rep
   )
@@ -284,8 +285,20 @@ test_that("predict_red_crown_rot", {
       ggplot(aes(x = temp, y = precip_rep, fill = incidence)) +
       geom_tile() +
       facet_wrap(~precip_veg, labeller = "label_both") +
-      scale_fill_distiller(palette = "Spectral", limits = c(0, 1)) +
-      coord_cartesian(expand = F)
+      scale_fill_distiller(palette = "Spectral") +
+      coord_cartesian(expand = F) +
+      guides(
+        fill = guide_coloursteps(
+          title.position = "top",
+          title.hjust = 0.5,
+          show.limits = TRUE
+        )
+      ) +
+      labs(
+        x = "Mean temperature during reproductive stage (°C)",
+        y = "Precipitation during reproductive stage (mm)",
+        fill = "Model value"
+      )
   })
 })
 

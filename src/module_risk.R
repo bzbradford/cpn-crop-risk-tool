@@ -146,7 +146,12 @@ riskServer <- function(rv, rx) {
             max = max_date,
             value = value,
             step = 1,
-            timeFormat = "%b %d, %Y",
+            # only show the year when the slider spans more than one
+            timeFormat = if (year(min_date) == year(max_date)) {
+              "%b %-d"
+            } else {
+              "%b %-d, %Y"
+            },
             width = "100%"
           )
         )

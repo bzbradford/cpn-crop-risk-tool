@@ -90,10 +90,9 @@ test_that("plot_risk breaks lines at missing values in additional ycols", {
     ycol = c("severity", "temperature_mean_rh_over_90")
   )
 
-  # base attrs + scatter + bar + line + missing value markers
-  expect_length(plt$x$attrs, 5)
+  # base attrs + scatter + bar + line, no markers for missing values
+  expect_length(plt$x$attrs, 4)
   expect_true(anyNA(plt$x$attrs[[4]]$y))
-  expect_false(anyNA(plt$x$attrs[[5]]$y))
 })
 
 test_that("plot_risk warns and skips missing ycols", {
