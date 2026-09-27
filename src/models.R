@@ -307,6 +307,29 @@ model_list <- list(
     yrange = c(0, 0.5)
   ),
 
+  red_crown_rot = Model(
+    name = "Red crown rot [beta]",
+    crop = "Soybean",
+    group = "field",
+    beta = TRUE,
+    info = "<b>Red crown rot is a soilborne disease of soybean caused by the fungus <i>Calonectria ilicicola</i>.</b> Plants can be infected soon after emergence, but symptoms typically appear after flowering. This model predicts the field-level incidence of red crown rot from mean temperature during the 31 days after beginning flowering (R1) and precipitation during the 31 days before and after R1. <b>Set the start date to the R1 date.</b> Until 31 days after R1, predictions use the weather so far. The model was developed from field surveys in Japan and is currently in the testing phase.",
+    doc = "docs/red-crown-rot.md",
+    risk_period = NULL,
+    biofix = 182, # Jul 1
+    validate = function(params) {
+      if (!between(yday(params$start_date), 152, 244)) {
+        "Ensure start date is set to the soybean R1 (beginning flowering) date."
+      }
+    },
+    ycol = c(
+      "incidence",
+      "temperature_mean_rep",
+      "precipitation_veg",
+      "precipitation_rep"
+    ),
+    yrange = c(0, 1)
+  ),
+
   wheatscab = Model(
     name = "Wheat scab FHB",
     crop = "Wheat",
@@ -930,6 +953,121 @@ if (FALSE) {
     build_soybean_cercospora() |>
     test_plot() +
     facet_wrap(species ~ grid_id)
+}
+
+
+# Red crown rot (soybean) ------------------------------------------------------
+#' Predicts field-level incidence (FLI) of red crown rot (Calonectria ilicicola)
+#' Ochi et al. 2026, Phytopathology 116:1405-1413. doi:10.1094/PHYTO-06-25-0207-R
+#' Weather windows are anchored to the R1 (beginning flowering) date:
+#' - Vegetative: 31 days before R1, ending the day before R1
+#' - Reproductive: 31 days beginning on R1
+#' Each predictor is fit as FLI = 100 / (1 + exp(logit)), then combined in an
+#' ensemble weighted by each model's R² / ΣR² (0.33, 0.08, 0.09 of 0.50)
+#' Risk (provisional): Very low <5%, Low 5-30%, Moderate 30-60%, High >=60%
+#' Algorithm: CPN CRT ver. 1.0, 2026-08-12
+
+RED_CROWN_ROT_WINDOW <- 31
+
+#' @param temp_rep mean daily air temperature over the reproductive window, Celsius
+#' @param precip_veg total precipitation over the vegetative window, mm
+#' @param precip_rep total precipitation over the reproductive window, mm
+#' @returns tibble of incidence (0-1) for each predictor and the ensembles
+predict_red_crown_rot <- function(temp_rep, precip_veg, precip_rep) {
+  # FLI = 100 / (1 + exp(logit)), as a proportion
+  fli <- \(logit) 1 / (1 + exp(logit))
+  fli_temp_rep <- fli(15.067 - 0.602 * temp_rep)
+  fli_precip_veg <- fli(0.184 - 0.004 * precip_veg)
+  fli_precip_rep <- fli(-1.257 + 0.005 * precip_rep)
+  tibble(
+    incidence_temp_rep = fli_temp_rep,
+    incidence_precip_veg = fli_precip_veg,
+    incidence_precip_rep = fli_precip_rep,
+    incidence_unweighted = (fli_temp_rep + fli_precip_veg + fli_precip_rep) / 3,
+    incidence = 0.66 * fli_temp_rep + 0.16 * fli_precip_veg + 0.18 * fli_precip_rep
+  )
+}
+
+if (FALSE) {
+  predict_red_crown_rot(25, 100, 100)
+}
+
+#' Cumulative mean ignoring missing values, NA until the first non-missing value
+cummean_na <- function(x) {
+  n <- cumsum(!is.na(x))
+  if_else(n > 0, cumsum(coalesce(x, 0)) / n, NA)
+}
+
+#' Build from weather
+#' The start date is used as the R1 date. Until the reproductive window is
+#' complete, the running mean temperature is used and precipitation is
+#' pro-rated to a full window. After the window, the final values are held.
+#' @param daily daily weather data, including the 31 days before R1
+#' @param r1_date R1 (beginning flowering) date
+build_red_crown_rot <- function(daily, r1_date) {
+  req(nrow(daily) > 0)
+
+  n <- RED_CROWN_ROT_WINDOW
+  r1_date <- as_date(r1_date)
+  rep_end <- r1_date + n - 1
+
+  # vegetative window precipitation, pro-rated if any days are missing
+  veg <- daily |>
+    filter(between(date, r1_date - n, r1_date - 1)) |>
+    summarize(
+      precipitation_veg = calc_mean(precipitation_daily) * n,
+      .by = grid_id
+    )
+
+  daily |>
+    filter(date >= r1_date) |>
+    arrange(grid_id, date) |>
+    left_join(veg, join_by(grid_id)) |>
+    mutate(
+      in_rep = date <= rep_end,
+      rep_days = cumsum(in_rep & !is.na(temperature_mean)),
+      temperature_mean_rep = cummean_na(if_else(in_rep, temperature_mean, NA)),
+      precipitation_rep = cummean_na(
+        if_else(in_rep, precipitation_daily, NA)
+      ) *
+        n,
+      .by = grid_id
+    ) |>
+    mutate(
+      predict_red_crown_rot(
+        temperature_mean_rep,
+        precipitation_veg,
+        precipitation_rep
+      ),
+      risk_from_prob(incidence, 5, 30, 60)
+    ) |>
+    mutate(
+      value_label = if_else(
+        rep_days < n,
+        sprintf("%s, %s of %s days after R1", value_label, rep_days, n),
+        value_label
+      )
+    ) |>
+    select(
+      grid_id,
+      date,
+      rep_days,
+      temperature_mean_rep,
+      precipitation_veg,
+      precipitation_rep,
+      starts_with("incidence"),
+      risk,
+      risk_color,
+      value_label
+    )
+}
+
+# test
+if (FALSE) {
+  test_hourly_wx |>
+    build_daily() |>
+    build_red_crown_rot("2025-7-1") |>
+    test_plot("incidence")
 }
 
 # Wheat scab FHB ---------------------------------------------------------------
