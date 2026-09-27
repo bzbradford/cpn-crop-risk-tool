@@ -312,7 +312,7 @@ model_list <- list(
     crop = "Soybean",
     group = "field",
     beta = TRUE,
-    info = "<b>Red crown rot is a soilborne disease of soybean caused by the fungus <i>Calonectria ilicicola</i>.</b> Plants can be infected soon after emergence, but symptoms typically appear after flowering. This model predicts the field-level incidence of red crown rot from mean temperature during the 31 days after beginning flowering (R1) and precipitation during the 31 days before and after R1. <b>Set the R1 date below.</b> Until 31 days after R1, predictions use the weather so far. The model was developed from field surveys in Japan and is currently in the testing phase.",
+    info = "<b>Red crown rot is a soilborne disease of soybean caused by the fungus <i>Calonectria ilicicola</i>.</b> Plants can be infected soon after emergence, but symptoms typically appear after flowering. This model predicts the field-level incidence of red crown rot from mean temperature during the 31 days after beginning flowering (R1) and precipitation during the 31 days before and after R1. <b>Set the R1 date below.</b> Risk predictions will vary with the underlying weather variables until 31 days after R1, after which the risk remains stable through the end of the season. The model was developed from field surveys in Japan and is currently in the testing phase for application in the US.",
     doc = "docs/red-crown-rot.md",
     risk_period = NULL,
     validate = function(params) {
@@ -984,7 +984,10 @@ predict_red_crown_rot <- function(temp_rep, precip_veg, precip_rep) {
     incidence_precip_veg = fli_precip_veg,
     incidence_precip_rep = fli_precip_rep,
     incidence_unweighted = (fli_temp_rep + fli_precip_veg + fli_precip_rep) / 3,
-    incidence = 0.66 * fli_temp_rep + 0.16 * fli_precip_veg + 0.18 * fli_precip_rep
+    incidence = 0.66 *
+      fli_temp_rep +
+      0.16 * fli_precip_veg +
+      0.18 * fli_precip_rep
   )
 }
 
