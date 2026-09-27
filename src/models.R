@@ -312,13 +312,13 @@ model_list <- list(
     crop = "Soybean",
     group = "field",
     beta = TRUE,
-    info = "<b>Red crown rot is a soilborne disease of soybean caused by the fungus <i>Calonectria ilicicola</i>.</b> Plants can be infected soon after emergence, but symptoms typically appear after flowering. This model predicts the field-level incidence of red crown rot from mean temperature during the 31 days after beginning flowering (R1) and precipitation during the 31 days before and after R1. <b>Set the start date to the R1 date.</b> Until 31 days after R1, predictions use the weather so far. The model was developed from field surveys in Japan and is currently in the testing phase.",
+    info = "<b>Red crown rot is a soilborne disease of soybean caused by the fungus <i>Calonectria ilicicola</i>.</b> Plants can be infected soon after emergence, but symptoms typically appear after flowering. This model predicts the field-level incidence of red crown rot from mean temperature during the 31 days after beginning flowering (R1) and precipitation during the 31 days before and after R1. <b>Set the R1 date below.</b> Until 31 days after R1, predictions use the weather so far. The model was developed from field surveys in Japan and is currently in the testing phase.",
     doc = "docs/red-crown-rot.md",
     risk_period = NULL,
-    biofix = 182, # Jul 1
     validate = function(params) {
-      if (!between(yday(params$start_date), 152, 244)) {
-        "Ensure start date is set to the soybean R1 (beginning flowering) date."
+      overlap <- check_date_overlap(params$date_range, c("Jun 1", "Aug 31"))
+      if (!any(overlap)) {
+        "Soybean typically reaches R1 (beginning flowering) between June and August. Ensure the selected dates include the R1 date."
       }
     },
     ycol = c(
@@ -999,9 +999,11 @@ cummean_na <- function(x) {
 }
 
 #' Build from weather
-#' The start date is used as the R1 date. Until the reproductive window is
+#' Incidence is predicted from R1 onward. Until the reproductive window is
 #' complete, the running mean temperature is used and precipitation is
 #' pro-rated to a full window. After the window, the final values are held.
+#' Before R1, `precipitation_veg` shows the running total over the vegetative
+#' window for display.
 #' @param daily daily weather data, including the 31 days before R1
 #' @param r1_date R1 (beginning flowering) date
 build_red_crown_rot <- function(daily, r1_date) {
@@ -1009,23 +1011,29 @@ build_red_crown_rot <- function(daily, r1_date) {
 
   n <- RED_CROWN_ROT_WINDOW
   r1_date <- as_date(r1_date)
+  veg_start <- r1_date - n
   rep_end <- r1_date + n - 1
 
   # vegetative window precipitation, pro-rated if any days are missing
   veg <- daily |>
-    filter(between(date, r1_date - n, r1_date - 1)) |>
+    filter(between(date, veg_start, r1_date - 1)) |>
     summarize(
-      precipitation_veg = calc_mean(precipitation_daily) * n,
+      veg_total = calc_mean(precipitation_daily) * n,
       .by = grid_id
     )
 
   daily |>
-    filter(date >= r1_date) |>
     arrange(grid_id, date) |>
     left_join(veg, join_by(grid_id)) |>
     mutate(
-      in_rep = date <= rep_end,
+      in_veg = between(date, veg_start, r1_date - 1),
+      in_rep = between(date, r1_date, rep_end),
       rep_days = cumsum(in_rep & !is.na(temperature_mean)),
+      precipitation_veg = case_when(
+        date < veg_start ~ NA,
+        in_veg ~ cumsum(if_else(in_veg, coalesce(precipitation_daily, 0), 0)),
+        .default = veg_total
+      ),
       temperature_mean_rep = cummean_na(if_else(in_rep, temperature_mean, NA)),
       precipitation_rep = cummean_na(
         if_else(in_rep, precipitation_daily, NA)
@@ -1036,16 +1044,17 @@ build_red_crown_rot <- function(daily, r1_date) {
     mutate(
       predict_red_crown_rot(
         temperature_mean_rep,
-        precipitation_veg,
+        veg_total,
         precipitation_rep
       ),
       risk_from_prob(incidence, 5, 30, 60)
     ) |>
     mutate(
-      value_label = if_else(
-        rep_days < n,
-        sprintf("%s, %s of %s days after R1", value_label, rep_days, n),
-        value_label
+      value_label = case_when(
+        date < r1_date ~ NA,
+        rep_days < n ~
+          sprintf("%s, %s of %s days after R1", value_label, rep_days, n),
+        .default = value_label
       )
     ) |>
     select(
