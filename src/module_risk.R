@@ -55,7 +55,11 @@ riskServer <- function(rv, rx) {
 
       output$model_picker <- renderUI({
         model_group <- req(input$model_group)
+        beta_mode <- isTRUE(rv$settings$beta_mode)
         selected_models <- Filter(\(m) m$group == model_group, model_list)
+        if (!isTRUE(rv$settings$beta)) {
+          selected_models <- Filter(\(m) isFALSE(m$beta), selected_models)
+        }
         choices <- build_choices(selected_models, "display_name", "slug")
 
         div(
@@ -108,6 +112,7 @@ riskServer <- function(rv, rx) {
           ),
           uiOutput(ns("whitemold_opts")),
           uiOutput(ns("wheatscab_opts")),
+          uiOutput(ns("soybean_cercospora_opts")),
           uiOutput(ns("cotton_opts")),
         )
       })
@@ -153,16 +158,38 @@ riskServer <- function(rv, rx) {
         )
       })
 
+      ## soybean_cercospora_opts ----
+      output$soybean_cercospora_opts <- renderUI({
+        req(identical(input$model, "soybean_cercospora"))
+
+        attr <- SOYBEAN_CERCOSPORA_ATTR
+        choices <- c(
+          list("All species" = "_all"),
+          attr$species
+        )
+
+        div(
+          style = "margin-top: 1rem;",
+          class = "label-inline",
+          tags$label("Species:", `for` = ns("species")),
+          radioButtons(
+            inputId = ns("species"),
+            label = NULL,
+            choices = choices,
+            selected = isolate(input$species) %||%
+              first(choices),
+            inline = TRUE
+          )
+        )
+      })
+
       ## wheat_scab_opts ----
       output$wheatscab_opts <- renderUI({
         req(identical(input$model, "wheatscab"))
 
-        choices <- list(
-          "Very susceptible" = "VS",
-          "Susceptible" = "S",
-          "Moderately susceptible" = "MS",
-          "Moderately resistant" = "MR"
-        )
+        attr <- WHEAT_SCAB_ATTR
+        choices <- attr$resistance
+        choices[["Show all"]] <- "_all"
 
         div(
           style = "margin-top: 1rem;",
@@ -234,12 +261,12 @@ riskServer <- function(rv, rx) {
         wx <- rx$wx()
         date_range <- rx$dates()
 
+        # Collect weather data for models
         # use full weather for models that have moving averages or lookback windows
         # includes 30 days prior to start_date
         daily_full <- wx$daily_full
-
-        # use exact weather for models without moving averages
         daily <- wx$daily
+        hourly <- wx$hourly
 
         req(nrow(daily) > 0)
 
@@ -257,31 +284,29 @@ riskServer <- function(rv, rx) {
               build_white_mold(daily_full, irrig, spacing)
             }),
             "frogeye" = build_frogeye_leaf_spot(daily_full),
-            "wheatscab" = local({
-              res <- req(input$resistance)
-              build_wheat_scab(daily_full, res)
-            }),
+            "soybean_cercospora" = build_soybean_cercospora(daily_full),
+            "wheatscab" = build_wheat_scab(daily_full),
             "earlyblight" = build_early_blight(daily_full),
             "lateblight" = build_late_blight(daily_full),
             "alternaria" = build_alternaria(daily_full),
-            "cercospora" = build_cercospora(daily_full),
+            "beet_cercospora" = build_cercospora(daily_full),
             "botrytis" = build_botrytis(daily_full),
-            "ryebiomass" = build_rye_biomass(daily),
+            "rye_biomass" = build_rye_biomass(daily),
             "cotton_planting" = local({
               py <- as.numeric(req(input$pythium))
               pp <- req(input$planting_pop)
               lp <- req(input$limiting_pop)
               build_cotton_planting(daily, py, pp, lp)
-            })
+            }),
+            "pecan_scab" = build_pecan_scab(hourly)
           )
         }
 
-        if (is.null(results)) {
-          warning(
-            sprintf("Don't know how to build data for model '%s'", model$slug)
-          )
-          req(FALSE)
-        }
+        # validation
+        validate(need(
+          !is.null(results),
+          sprintf("Oops! Don't know how to build data for '%s'", model$slug)
+        ))
 
         # clip off any data outside of selected range
         results <- results |>
@@ -301,7 +326,7 @@ riskServer <- function(rv, rx) {
         model <- selected_model()
 
         if (is.function(model$validate)) {
-          dates <- rx$dates()
+          dates <- rx$wx()$dates
           params <- list(
             start_date = dates$start,
             date_range = c(dates$start, dates$end)
@@ -373,11 +398,9 @@ riskServer <- function(rv, rx) {
         )
 
         tagList(
-          div(
-            style = "display: flex; gap: 5px 20px;",
-            uiOutput(ns("plot_feed_opts")),
-            uiOutput(ns("date_range_ui"))
-          ),
+          uiOutput(ns("plot_feed_opts")),
+          uiOutput(ns("date_range_ui")),
+          uiOutput(ns("plot_extras_ui")),
           uiOutput(ns("plots_ui"))
         )
       })
@@ -389,18 +412,35 @@ riskServer <- function(rv, rx) {
         req(nrow(sites) > 1)
 
         div(
-          style = "margin-bottom: 0.5rem;",
-          class = "label-inline",
-          tags$label("Show results for:", `for` = ns("show_all_sites")),
-          radioButtons(
-            inputId = ns("show_all_sites"),
-            label = NULL,
-            choices = list(
-              "All sites" = TRUE,
-              "Selected site" = FALSE
-            ),
-            selected = isolate(input$show_all_sites) %||% TRUE,
-            inline = TRUE
+          style = "display: flex; flex-wrap: wrap; gap: 0.5rem 2rem; margin-bottom: 0.5rem;",
+          div(
+            class = "label-inline",
+            tags$label("Show results for:", `for` = ns("show_all_sites")),
+            radioButtons(
+              inputId = ns("show_all_sites"),
+              label = NULL,
+              choices = list(
+                "All sites" = TRUE,
+                "Selected site" = FALSE
+              ),
+              selected = isolate(input$show_all_sites) %||% TRUE,
+              inline = TRUE
+            )
+          ),
+          div(
+            class = "label-inline",
+            tags$label("Sort plots by:", `for` = ns("sort_plots_by")),
+            radioButtons(
+              inputId = ns("sort_plots_by"),
+              label = NULL,
+              choices = list(
+                "Site ID" = "id",
+                "Site name" = "name",
+                "Model value" = "value"
+              ),
+              selected = isolate(input$sort_plots_by) %||% "id",
+              inline = TRUE
+            )
           )
         )
       })
@@ -424,7 +464,7 @@ riskServer <- function(rv, rx) {
               "All" = FALSE,
               "Last 30 days" = TRUE
             ),
-            selected = TRUE,
+            selected = isolate(input$date_range_clamp) %||% TRUE,
             inline = TRUE
           )
         )
@@ -439,12 +479,52 @@ riskServer <- function(rv, rx) {
         }
       })
 
+      ## plot_extras_ui ----
+      # toggle for plotting the model's additional ycols, shown when it has any
+      output$plot_extras_ui <- renderUI({
+        model <- selected_model()
+        req(length(model$ycol) > 1)
+
+        div(
+          style = "margin-bottom: 0.5rem;",
+          title = paste(fmt_plot_names(model$ycol[-1]), collapse = ", "),
+          materialSwitch(
+            inputId = ns("show_extra_ycols"),
+            label = "Show additional variables",
+            value = isolate(input$show_extra_ycols) %||% FALSE,
+            status = "primary"
+          )
+        )
+      })
+
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
         model <- selected_model()
         model_data <- joined_data() |>
-          rename(model_value = !!model$ycol)
+          rename(model_value = !!first(model$ycol))
+
+        # optional additional columns plotted on hidden axes
+        extra_ycols <- if (isTRUE(input$show_extra_ycols)) model$ycol[-1]
+        unit_system <- if (isTRUE(rv$settings$metric)) "metric" else "imperial"
+
+        # plot grouping
+        plot_group <- NULL
+        if (model$slug == "wheatscab") {
+          .res <- req(input$resistance)
+          if (.res == "_all") {
+            plot_group <- "resistance"
+          } else {
+            model_data <- filter(model_data, resistance == .res)
+          }
+        } else if (model$slug == "soybean_cercospora") {
+          .species <- req(input$species)
+          if (.species == "_all") {
+            plot_group <- "species"
+          } else {
+            model_data <- filter(model_data, species == .species)
+          }
+        }
 
         sites <- selected_sites()
         dates <- rx$dates()
@@ -452,26 +532,72 @@ riskServer <- function(rv, rx) {
 
         req(nrow(model_data) > 0)
 
+        # respond to the "clamp date range" option by filtering model data to the most recent 30 days
         if (should_clamp_dates()) {
           dates$start <- dates$end - days(30)
           model_data <- model_data |>
             filter(date >= dates$start)
         }
 
+        # Find the max value from the most recent date thru the forecast
         last_values <- model_data |>
-          filter(date == min(today(), max(date)), .by = id)
+          select(
+            id,
+            site_label,
+            date,
+            model_value,
+            value_label,
+            risk,
+            risk_color
+          ) |>
+          filter(date >= calc_min(c(today(), calc_max(date)))) |>
+          mutate(
+            model_name = model$name,
+            min_date = calc_min(date),
+            max_date = calc_max(date),
+            max_value = calc_max(model_value),
+            .by = id
+          )
 
-        # write values for map
-        rv$map_risk_data <- last_values |>
-          select(id, model_value, value_label, risk, risk_color) |>
-          mutate(model_name = model$name)
+        # get site labels in the order they should be plotted based on sorting choice
         rv$map_title <- paste(
           model$name,
           "risk,",
-          format(dates$end, "%b %d, %Y")
+          format_date_range(dates$end)
         )
-
         site_labels <- unique(model_data$site_label)
+        if (nrow(sites) > 1) {
+          sort_by <- req(input$sort_plots_by)
+          if (sort_by == "value") {
+            site_labels <- last_values |>
+              arrange(desc(max_value)) |>
+              pull(site_label) |>
+              unique()
+            rv$map_title <- paste(
+              model$name,
+              "risk,",
+              format_date_range(range(last_values$date))
+            )
+            last_values <- last_values |>
+              filter(model_value == calc_max(model_value), .by = id)
+          }
+
+          if (sort_by == "name") {
+            site_labels <- model_data |>
+              distinct(name, site_label) |>
+              arrange(name) |>
+              pull(site_label) |>
+              unique()
+          }
+        }
+
+        # reduce to single value per site
+        last_values <- last_values |>
+          filter(date == calc_min(date), .by = id) |>
+          filter(model_value == calc_max(model_value), .by = id)
+
+        # write values to shared reactive for map component to use
+        rv$map_risk_data <- last_values
 
         # generate plots
         elems <- lapply(site_labels, function(label) {
@@ -487,18 +613,25 @@ riskServer <- function(rv, rx) {
             plt <- plot_risk(
               df,
               name = model$name,
+              ycol = c("model_value", extra_ycols),
+              group = plot_group,
               yrange = model$yrange,
               xrange = date_range,
-              risk_period = model$risk_period
+              risk_period = model$risk_period,
+              plt_height = ifelse(is.null(plot_group), 125, 150),
+              unit_system = unit_system
             )
 
             div(
               strong(model$name),
-              # span(
-              #   style = "font-size: small",
-              #   em("For", format(last_value$date, "%b %d, %Y")),
-              #   last_value$value_label
-              # ),
+              span(
+                style = "font-size: small",
+                sprintf(
+                  "For %s: %s",
+                  format(last_value$date, "%b %d, %Y"),
+                  last_value$value_label
+                )
+              ),
               plt
             )
           } else {
@@ -535,7 +668,7 @@ riskServer <- function(rv, rx) {
           model <- selected_model()
           fname <- sprintf(
             "%s - %s to %s.csv",
-            model$name,
+            model$display_name,
             dates$start,
             dates$end
           )

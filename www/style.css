@@ -70,12 +70,34 @@ header {
   font-size: 3rem;
 }
 
+/* Info/settings buttons and modals */
+
+.info-btns {
+  display: flex;
+  align-items: center;
+  margin-right: 10px;
+  gap: 15px;
+}
+
 .info-btn {
-  margin: 10px;
+  display: flex;
+  justify-items: center;
+  align-items: center;
+  font-size: 25px;
 }
 
 .info-btn a {
   color: #fff;
+}
+
+.settings-item {
+  border: 1px solid hsl(0, 0%, 90%);
+  border-radius: 1rem;
+  background: hsl(0, 0%, 95%);
+  padding: 1rem;
+  display: inline-flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 .modal-body>h2 {
@@ -166,6 +188,16 @@ footer {
 
 .sidebar-col {
   grid-column: 1;
+  display: flex;
+  flex-direction: column;
+  /* lets the column shrink within .main instead of pushing past the footer */
+  min-height: 0;
+}
+
+/* site selection scrolls, leaving the status card pinned below it */
+.sidebar-col>.column {
+  flex: 1;
+  min-height: 0;
 }
 
 .column.map-col {
@@ -471,6 +503,8 @@ table {
   border: 1px solid lightsteelblue;
   border-radius: 5px;
   background: white;
+  box-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+  box-sizing: border-box;
 }
 
 .app-status--error {

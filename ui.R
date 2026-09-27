@@ -31,10 +31,7 @@ ui <- fluidPage(
       img(src = OPTS$app_header_badge),
       h1(OPTS$app_title)
     ),
-    div(
-      class = "info-btn",
-      actionLink("about", icon("circle-info"))
-    )
+    uiOutput("info_btns")
   ),
 
   div(
@@ -42,22 +39,27 @@ ui <- fluidPage(
 
     # left sidebar
     div(
-      class = "column sidebar-col",
-      h2("Site selection"),
+      class = "sidebar-col",
       div(
-        style = "margin-top: 1rem;",
-        uiOutput("site_help_ui"),
-        uiOutput("sites_list", style = "max-height: 400px; overflow: auto;"),
-        uiOutput("site_btns"),
-        uiOutput("file_upload_ui")
-      ),
+        class = "column",
+        h2("Site selection"),
+        div(
+          style = "margin-top: 1rem;",
+          uiOutput("site_help_ui"),
+          uiOutput("sites_list", style = "max-height: 400px; overflow: auto;"),
+          uiOutput("site_btns"),
+          uiOutput("file_upload_ui")
+        ),
 
-      h2("Weather data", style = "margin-top: 2rem;"),
-      div(
-        uiOutput("date_select_ui"),
-        uiOutput("date_btns_ui", style = "margin-top: 1rem;"),
+        h2("Weather data", style = "margin-top: 2rem;"),
+        div(
+          uiOutput("date_select_ui"),
+          uiOutput("date_btns_ui", style = "margin-top: 1rem;"),
+        ),
       ),
-      uiOutput("status_ui", style = "margin-top: 1rem;")
+      div(
+        uiOutput("status_ui")
+      )
     ),
 
     # center map

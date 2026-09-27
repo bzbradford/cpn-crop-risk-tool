@@ -9,6 +9,12 @@ if (FALSE) {
   # load 3 example sites
   test_sites <- load_sites("tests/testthat/example-sites.csv")
 
+  # get and store raw json response for tests
+  test_json <- om_build_req(45, -89, today() - days(7), today()) |>
+    req_perform() |>
+    resp_body_string()
+  writeLines(test_json, "tests/testthat/om_response.json")
+
   # get and store weather data for testing
   test_hourly_wx <- om_fetch_weather(
     om_build_site_grids(test_sites),
