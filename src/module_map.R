@@ -344,10 +344,15 @@ mapServer <- function(rv, rx) {
           # ) |>
           fit_bounds(OPTS$map_bounds_wi)
 
-        # add basemaps
+        # add basemap options
         basemaps <- OPTS$map_tiles
-        for (name in names(basemaps)) {
-          map <- addProviderTiles(map, basemaps[[name]], group = name)
+        for (group in names(basemaps)) {
+          provider <- basemaps[[group]]
+          map <- if (provider == "carto_positron") {
+            add_carto_basemap(map, group = group)
+          } else {
+            addProviderTiles(map, provider, group = group)
+          }
         }
 
         # set up the js callback for cropland data layer (CDL)
