@@ -191,7 +191,7 @@ server <- function(input, output, session) {
   ## expanded_dates ----
   expanded_dates <- reactive({
     dates <- selected_dates()
-    dates$start <- dates$start - days(30)
+    dates$start <- dates$start - days(31)
     dates$end <- dates$end + days(30)
     dates
   })
@@ -517,7 +517,7 @@ server <- function(input, output, session) {
       tibble()
     }
 
-    # includes 30 days prior to selected dates
+    # includes 31 days prior to selected dates
     hourly_full <- bind_rows(wx, fc_data) |>
       drop_na(datetime_utc) |>
       arrange(grid_id, datetime_utc) |>

@@ -127,7 +127,7 @@ OPTS <- lst(
     "ESRI Topo" = providers$Esri.WorldTopoMap,
     "Satellite" = providers$Esri.WorldImagery,
     "OpenStreetMap" = providers$OpenStreetMap,
-    "Grey Canvas" = providers$CartoDB.Positron
+    "Grey Canvas" = "carto_positron"
   ),
   map_layers = list(
     grid = "Weather data grids"
@@ -241,9 +241,10 @@ OPTS <- lst(
 
 # add keys unless testing
 if (!identical(Sys.getenv("TESTTHAT"), "true")) {
-  OPTS$open_meteo_key <- Sys.getenv("open_meteo_key")
-  OPTS$google_geocoding_key <- Sys.getenv("google_geocoding_key")
-  OPTS$google_places_key <- Sys.getenv("google_places_key")
+  OPTS$open_meteo_key <- Sys.getenv("OPEN_METEO_KEY")
+  OPTS$google_geocoding_key <- Sys.getenv("GOOGLE_GEOCODING_KEY")
+  OPTS$google_places_key <- Sys.getenv("GOOGLE_PLACES_KEY")
+  OPTS$carto_map_key <- Sys.getenv("CARTO_MAP_KEY")
 }
 
 
@@ -442,6 +443,21 @@ add_date_cols <- function(df) {
       .after = date,
       .by = grid_id
     )
+}
+
+## Map helpers ----
+
+add_carto_basemap <- function(map, group, key = OPTS$carto_map_key) {
+  addTiles(
+    map,
+    urlTemplate = paste0(
+      "https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}.png?key=",
+      key
+    ),
+    attribution = '&copy; <a href="https://carto.com/attributions">CARTO</a>',
+    options = tileOptions(subdomains = "abcd", maxZoom = 20),
+    group = group
+  )
 }
 
 
