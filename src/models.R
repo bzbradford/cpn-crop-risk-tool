@@ -879,7 +879,7 @@ predict_soybean_cercospora <- function(
   min_temp_5day,
   mean_dpd_5day,
   max_dpd_5day,
-  max_wind_14day,
+  max_wind_14day, # need to convert from km/h to m/s
   hours_rh90_10day,
   hours_rh90_14day
 ) {
@@ -1322,10 +1322,11 @@ calc_alternaria_dsv <- function(temp, h) {
   case_when(
     is.na(temp) | is.na(h) ~ 0,
     temp < 13 ~ 0,
-    temp <= 18 ~ (h > 20) + (h > 15) + (h > 7),
-    temp <= 21 ~ (h > 22) + (h > 15) + (h > 8) + (h > 4),
-    temp <= 26 ~ (h > 20) + (h > 12) + (h > 5) + (h > 2),
-    temp > 26 ~ (h > 22) + (h > 15) + (h > 8) + (h > 3)
+    temp <= 17 ~ (h >= 7) + (h >= 16) + (h >= 21),
+    temp <= 20 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    temp <= 25 ~ (h >= 3) + (h >= 6) + (h >= 13) + (h >= 21),
+    temp <= 29 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    TRUE ~ 0
   )
 }
 

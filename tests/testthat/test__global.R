@@ -223,35 +223,113 @@ test_that("gdd_sine", {
   })
 })
 
-test_that("gdd_sine numerical parity — all 6 branches", {
-  # NA propagation
+# Independent reference: area above base and below upper under the sine curve
+# through tmin and tmax, integrated numerically over one daily cycle
+gdd_sine_ref <- function(tmin, tmax, base, upper = 150) {
+  avg <- (tmin + tmax) / 2
+  alpha <- (tmax - tmin) / 2
+  f <- function(t) pmin(pmax(avg + alpha * sin(t), base), upper) - base
+  integrate(
+    f,
+    -pi / 2,
+    3 * pi / 2,
+    subdivisions = 1000L,
+    rel.tol = 1e-10,
+    abs.tol = 1e-10
+  )$value /
+    (2 * pi)
+}
+
+test_that("gdd_sine matches numerical integration", {
+  grid <- expand.grid(
+    tmin = c(-5, 0, 5, 10, 15, 20, 30),
+    tmax = c(0, 10, 12, 20, 25, 35, 45),
+    base = c(0, 10),
+    upper = c(30, 86)
+  )
+  grid <- grid[grid$tmax >= grid$tmin, ]
+  expected <- mapply(gdd_sine_ref, grid$tmin, grid$tmax, grid$base, grid$upper)
+  actual <- gdd_sine(grid$tmin, grid$tmax, grid$base, grid$upper)
+  expect_equal(actual, expected, tolerance = 1e-6)
+})
+
+test_that("gdd_sine hand-derivable cases", {
   expect_true(is.na(gdd_sine(NA_real_, 20, 10)))
-  # tmax <= base → 0
+  expect_true(is.na(gdd_sine(5, NA_real_, 10)))
+  # entirely below base
   expect_equal(gdd_sine(0, 5, 10), 0)
-  # tmin >= base → simple average
+  expect_equal(gdd_sine(0, 10, 10), 0)
+  # entirely between thresholds -> plain average minus base
   expect_equal(gdd_sine(15, 25, 10), 10)
-  # tmin < base, tmax <= upper → sine formula
-  expect_equal(gdd_sine(5, 25, 10), 6.089978, tolerance = 1e-6)
-  # tmax > upper, tmin >= base → upper-clamp formula
-  expect_equal(gdd_sine(15, 200, 10), 97.5, tolerance = 1e-6)
-  # tmin < base, tmax > upper → both-threshold formula
-  expect_equal(gdd_sine(5, 200, 10), 81.793794, tolerance = 1e-6)
-  # custom upper threshold
-  expect_equal(gdd_sine(5, 200, 10, upper = 100), 60.545264, tolerance = 1e-6)
-  # out-of-order tmin/tmax → same result as corrected order
+  # entirely above upper -> capped at upper - base
+  expect_equal(gdd_sine(30, 40, 10, upper = 25), 15)
+  # constant temperature
+  expect_equal(gdd_sine(20, 20, 10), 10)
+  expect_equal(gdd_sine(5, 5, 10), 0)
+  expect_equal(gdd_sine(200, 200, 10), 140)
+  # symmetric curve straddling base (avg == base) -> alpha / pi
+  expect_equal(gdd_sine(0, 20, 10), 10 / pi)
+  # tmin >= base, tmax > upper must be capped (regression)
+  expect_lt(gdd_sine(15, 30, 10, upper = 25), gdd_sine(15, 30, 10, upper = 150))
+  # out-of-order tmin/tmax
   expect_equal(gdd_sine(25, 5, 10), gdd_sine(5, 25, 10))
 })
 
-test_that("gdd_sine grid parity (base=10)", {
-  grid <- expand.grid(tmin = 0:50, tmax = 0:50)
+test_that("gdd_sine properties", {
+  grid <- expand.grid(tmin = -5:40, tmax = -5:40)
   grid <- grid[grid$tmax >= grid$tmin, ]
-  vals <- gdd_sine(grid$tmin, grid$tmax, 10)
-  expect_equal(length(vals), 1326)
-  expect_equal(sum(vals, na.rm = TRUE), 20743.31, tolerance = 1e-2)
+  base <- 10
+  upper <- 30
+  vals <- gdd_sine(grid$tmin, grid$tmax, base, upper)
+
+  # bounded
+  expect_true(all(vals >= 0 & vals <= upper - base + 1e-9))
+  # vectorized, no NA introduced
+  expect_length(vals, nrow(grid))
+  expect_false(anyNA(vals))
+  # monotonic in tmin, tmax, and upper
+  expect_true(all(gdd_sine(grid$tmin + 1, grid$tmax + 1, base, upper) >= vals - 1e-9))
+  expect_true(all(gdd_sine(grid$tmin, grid$tmax + 1, base, upper) >= vals - 1e-9))
+  expect_true(all(gdd_sine(grid$tmin, grid$tmax, base, upper + 5) >= vals - 1e-9))
+  # very high upper -> same as no cap
   expect_equal(
-    vals[c(100, 200, 300, 400, 500, 700, 900, 1100)],
-    c(1.061744, 4.135599, 13, 14, 8.525969, 24.5, 29.5, 22),
-    tolerance = 1e-5
+    gdd_sine(grid$tmin, grid$tmax, base, 1e6),
+    gdd_sine(grid$tmin, grid$tmax, base)
+  )
+})
+
+test_that("gdd_sine is continuous across branch boundaries", {
+  eps <- 1e-8
+  base <- 10
+  upper <- 30
+  # tmin crossing base
+  expect_equal(
+    gdd_sine(base - eps, 25, base, upper),
+    gdd_sine(base + eps, 25, base, upper),
+    tolerance = 1e-6
+  )
+  # tmax crossing upper
+  expect_equal(
+    gdd_sine(15, upper - eps, base, upper),
+    gdd_sine(15, upper + eps, base, upper),
+    tolerance = 1e-6
+  )
+  expect_equal(
+    gdd_sine(5, upper - eps, base, upper),
+    gdd_sine(5, upper + eps, base, upper),
+    tolerance = 1e-6
+  )
+  # tmax crossing base
+  expect_equal(
+    gdd_sine(0, base - eps, base, upper),
+    gdd_sine(0, base + eps, base, upper),
+    tolerance = 1e-6
+  )
+  # tmin crossing upper
+  expect_equal(
+    gdd_sine(upper - eps, 40, base, upper),
+    gdd_sine(upper + eps, 40, base, upper),
+    tolerance = 1e-6
   )
 })
 

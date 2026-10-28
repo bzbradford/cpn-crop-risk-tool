@@ -765,7 +765,7 @@ gdd_sine <- function(tmin, tmax, base, upper = 150) {
     is.na(tmin) | is.na(tmax) ~ NA_real_,
     tmax_adj <= base ~ 0,
     tmin_adj >= upper ~ upper - base, # both thresholds exceeded
-    tmin_adj >= base ~ val_simple,
+    tmin_adj >= base & tmax_adj <= upper ~ val_simple,
     tmax_adj <= upper ~ val_sine,
     TRUE ~ val_both
   )
