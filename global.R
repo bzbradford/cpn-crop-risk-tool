@@ -49,7 +49,6 @@ if (FALSE) {
   renv::update()
   renv::snapshot()
   renv::clean()
-  renv::install("terra@1.9-27")
 
   # turn warnings into errors
   options(warn = 2)

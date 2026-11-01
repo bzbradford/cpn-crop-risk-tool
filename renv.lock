@@ -917,7 +917,7 @@
     },
     "constructive": {
       "Package": "constructive",
-      "Version": "1.3.0",
+      "Version": "1.4.0",
       "Source": "Repository",
       "Title": "Display Idiomatic Code to Construct Most R Objects",
       "Authors@R": "c( person(\"Antoine\", \"Fabri\", , \"antoine.fabri@gmail.com\", role = c(\"aut\", \"cre\")), person(\"Kirill\", \"Müller\", , \"kirill@cynkra.com\", role = \"ctb\", comment = c(ORCID = \"0000-0002-1416-3412\")), person(\"Jacob\", \"Scott\", , \"jscott2718@gmail.com\", role = \"ctb\"), person(\"cynkra GmbH\", , , \"mail@cynkra.com\", role = \"fnd\", comment = c(ROR = \"0335t7e62\")) )",
@@ -925,6 +925,9 @@
       "License": "MIT + file LICENSE",
       "URL": "https://github.com/cynkra/constructive, https://cynkra.github.io/constructive/",
       "BugReports": "https://github.com/cynkra/constructive/issues",
+      "Depends": [
+        "R (>= 4.0.0)"
+      ],
       "Imports": [
         "cli (>= 3.1.0)",
         "diffobj",
@@ -935,6 +938,7 @@
       "Suggests": [
         "bit64",
         "blob",
+        "clock",
         "clipr",
         "data.table",
         "DiagrammeR",
@@ -943,12 +947,18 @@
         "dplyr",
         "ellmer",
         "forcats",
+        "fs",
         "ggplot2",
+        "glue",
+        "haven",
+        "hms",
+        "htmltools",
         "jsonlite",
         "knitr",
         "lubridate",
-        "pixarfilms",
+        "Matrix",
         "R6",
+        "readr",
         "reprex",
         "rmarkdown",
         "roxygen2",
@@ -956,20 +966,23 @@
         "S7",
         "scales",
         "sf",
+        "survival",
         "testthat (>= 3.0.0)",
         "tibble",
         "tidyselect",
+        "tsibble",
+        "units",
         "vctrs",
         "withr",
         "xml2",
         "xts",
         "zoo"
       ],
-      "VignetteBuilder": "knitr",
+      "VignetteBuilder": "knitr, rmarkdown",
       "Config/Needs/website": "cynkra/cynkratemplate",
       "Config/testthat/edition": "3",
       "Encoding": "UTF-8",
-      "RoxygenNote": "7.3.3.9000",
+      "Config/roxygen2/version": "8.1.1.9000",
       "NeedsCompilation": "yes",
       "Author": "Antoine Fabri [aut, cre], Kirill Müller [ctb] (ORCID: <https://orcid.org/0000-0002-1416-3412>), Jacob Scott [ctb], cynkra GmbH [fnd] (ROR: <https://ror.org/0335t7e62>)",
       "Maintainer": "Antoine Fabri <antoine.fabri@gmail.com>",
@@ -1086,7 +1099,7 @@
     },
     "curl": {
       "Package": "curl",
-      "Version": "8.0.0",
+      "Version": "8.1.0",
       "Source": "Repository",
       "Type": "Package",
       "Title": "A Modern and Flexible Web Client for R",
@@ -1257,7 +1270,7 @@
     },
     "diffobj": {
       "Package": "diffobj",
-      "Version": "0.3.8",
+      "Version": "0.3.9",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Diffs for R Objects",
@@ -1728,16 +1741,16 @@
     },
     "gargle": {
       "Package": "gargle",
-      "Version": "1.6.1",
+      "Version": "1.7.0",
       "Source": "Repository",
       "Title": "Utilities for Working with Google APIs",
-      "Authors@R": "c( person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Craig\", \"Citro\", , \"craigcitro@google.com\", role = \"aut\"), person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-4757-117X\")), person(\"Google Inc\", role = \"cph\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
+      "Authors@R": "c( person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Craig\", \"Citro\", , \"craigcitro@google.com\", role = \"aut\"), person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-4757-117X\")), person(\"Google Inc\", role = \"cph\"), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\"), comment = c(ROR = \"03wc8by49\")) )",
       "Description": "Provides utilities for working with Google APIs <https://developers.google.com/apis-explorer>.  This includes functions and classes for handling common credential types and for preparing, executing, and processing HTTP requests.",
       "License": "MIT + file LICENSE",
       "URL": "https://gargle.r-lib.org, https://github.com/r-lib/gargle",
       "BugReports": "https://github.com/r-lib/gargle/issues",
       "Depends": [
-        "R (>= 4.1)"
+        "R (>= 4.2)"
       ],
       "Imports": [
         "cli (>= 3.0.1)",
@@ -1745,8 +1758,9 @@
         "glue (>= 1.3.0)",
         "httr (>= 1.4.5)",
         "jsonlite",
-        "lifecycle (>= 0.2.0)",
+        "lifecycle",
         "openssl",
+        "R6",
         "rappdirs",
         "rlang (>= 1.1.0)",
         "stats",
@@ -1760,18 +1774,18 @@
         "httpuv",
         "knitr",
         "rmarkdown",
-        "sodium",
         "spelling",
         "testthat (>= 3.1.7)"
       ],
       "VignetteBuilder": "knitr",
       "Config/Needs/website": "tidyverse/tidytemplate",
+      "Config/roxygen2/version": "8.1.0",
       "Config/testthat/edition": "3",
+      "Config/usethis/last-upkeep": "2026-10-20",
       "Encoding": "UTF-8",
       "Language": "en-US",
-      "RoxygenNote": "7.3.3",
       "NeedsCompilation": "no",
-      "Author": "Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Craig Citro [aut], Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Google Inc [cph], Posit Software, PBC [cph, fnd]",
+      "Author": "Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Craig Citro [aut], Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Google Inc [cph], Posit Software, PBC [cph, fnd] (ROR: <https://ror.org/03wc8by49>)",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
       "Repository": "CRAN"
     },
@@ -1923,20 +1937,20 @@
     },
     "googledrive": {
       "Package": "googledrive",
-      "Version": "2.1.2",
+      "Version": "2.2.0",
       "Source": "Repository",
       "Title": "An Interface to Google Drive",
-      "Authors@R": "c( person(\"Lucy\", \"D'Agostino McGowan\", , role = \"aut\"), person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
+      "Authors@R": "c( person(\"Lucy\", \"D'Agostino McGowan\", role = \"aut\"), person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
       "Description": "Manage Google Drive files from R.",
       "License": "MIT + file LICENSE",
       "URL": "https://googledrive.tidyverse.org, https://github.com/tidyverse/googledrive",
       "BugReports": "https://github.com/tidyverse/googledrive/issues",
       "Depends": [
-        "R (>= 4.1)"
+        "R (>= 4.2)"
       ],
       "Imports": [
         "cli (>= 3.0.0)",
-        "gargle (>= 1.6.0)",
+        "gargle (>= 1.7.0)",
         "glue (>= 1.4.2)",
         "httr",
         "jsonlite",
@@ -1944,7 +1958,7 @@
         "magrittr",
         "pillar (>= 1.9.0)",
         "purrr (>= 1.0.1)",
-        "rlang (>= 1.0.2)",
+        "rlang (>= 1.2.0)",
         "tibble (>= 2.0.0)",
         "utils",
         "uuid",
@@ -1954,17 +1968,14 @@
       "Suggests": [
         "curl",
         "dplyr (>= 1.0.0)",
-        "knitr",
-        "rmarkdown",
         "spelling",
         "testthat (>= 3.1.5)"
       ],
-      "VignetteBuilder": "knitr",
-      "Config/Needs/website": "tidyverse, tidyverse/tidytemplate",
+      "Config/Needs/website": "quarto, tidyverse, tidyverse/tidytemplate",
+      "Config/roxygen2/version": "8.1.0",
       "Config/testthat/edition": "3",
       "Encoding": "UTF-8",
       "Language": "en-US",
-      "RoxygenNote": "7.3.3",
       "NeedsCompilation": "no",
       "Author": "Lucy D'Agostino McGowan [aut], Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
@@ -1972,7 +1983,7 @@
     },
     "googlesheets4": {
       "Package": "googlesheets4",
-      "Version": "1.1.2",
+      "Version": "1.1.3",
       "Source": "Repository",
       "Title": "Access Google Sheets using the Sheets API V4",
       "Authors@R": "c( person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"cre\", \"aut\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
@@ -1981,18 +1992,17 @@
       "URL": "https://googlesheets4.tidyverse.org, https://github.com/tidyverse/googlesheets4",
       "BugReports": "https://github.com/tidyverse/googlesheets4/issues",
       "Depends": [
-        "R (>= 3.6)"
+        "R (>= 4.2)"
       ],
       "Imports": [
         "cellranger",
         "cli (>= 3.0.0)",
         "curl",
-        "gargle (>= 1.6.0)",
+        "gargle (>= 1.7.0)",
         "glue (>= 1.3.0)",
         "googledrive (>= 2.1.0)",
         "httr",
         "ids",
-        "lifecycle",
         "magrittr",
         "methods",
         "purrr",
@@ -2011,10 +2021,10 @@
       ],
       "ByteCompile": "true",
       "Config/Needs/website": "tidyverse, tidyverse/tidytemplate",
+      "Config/roxygen2/version": "8.1.0",
       "Config/testthat/edition": "3",
       "Encoding": "UTF-8",
       "Language": "en-US",
-      "RoxygenNote": "7.3.2.9000",
       "NeedsCompilation": "no",
       "Author": "Jennifer Bryan [cre, aut] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Posit Software, PBC [cph, fnd]",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
@@ -2808,11 +2818,11 @@
     },
     "leaflet.extras": {
       "Package": "leaflet.extras",
-      "Version": "2.0.2",
+      "Version": "2.1.0",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Extra Functionality for 'leaflet' Package",
-      "Authors@R": "c( person(\"Sebastian\", \"Gatscha\", email = \"sebastian_gatscha@gmx.at\", role = c(\"aut\")), person(\"Sebastien\", \"Plutniak\", email = \"sebastien.plutniak@posteo.net\", role = c(\"cre\"), comment = \"Package maintainance\"), person(\"Bhaskar\", \"Karambelkar\", email = \"bhaskarvk@gmail.com\", role = c(\"aut\")), person(\"Barret\", \"Schloerke\", email = \"barret@rstudio.com\", role = c(\"aut\")), person(\"Bangyou\", \"Zheng\", email= \"Bangyou.Zheng@csiro.au\", role = c(\"ctb\"), comment = \"Leaflet-search and Leaflet-GPS plugin integration\"), person(\"Robin\", \"Cura\", email= \"robin@cura.info\", role = c(\"ctb\"), comment = \"Fixes for Draw Options\"), person(\"Markus\", \"Voge\", email= \"markus.voge@ea-aw.de\", role = c(\"ctb\"), comment = \"Enhancements for Draw Options\"), person(\"Markus\", \"Dumke\", role = c(\"ctb\"), comment = \"Bounce Marker addition\"), person(family = \"Mapbox\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-omnivore, csv2geojson, and togeojson libraries\"), person(\"Henry\", \"Thasler\", role = c(\"ctb\", \"cph\"), comment = \"Leaflet.Geodesic library\"), person(\"Dennis\", \"Wilhelm\", role = c(\"ctb\", \"cph\"), comment = \"Leaflet.StyleEditor library\"), person(\"Kirollos\", \"Risk\", role = c(\"ctb\", \"cph\"), comment = \"fuse.js library\"), person(\"Tim\", \"Wisniewski\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-choropleth library\"), person(family = \"Leaflet\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-draw library\"), person(\"Alexander\", \"Milevski\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-draw-drag library\"), person(\"John\", \"Firebaugh\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-fullscreen library\"), person(\"Stefano\", \"Cudini\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-gps library\"), person(\"Johannes\", \"Rudolph\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-hash library\"), person(\"Per\", \"Liedman\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-measure-path library\"), person(\"Pavel\", \"Shramov\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-plugins library\"), person(\"Filip\", \"Zavadil\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-pulse-icon library\"), person(\"Stefano\", \"Cudini\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-search library\"), person(family = \"CliffCloud\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-sleep library\"), person(family = \"Ursudio\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-webgl-heatmap library\"), person(\"Maxime\", \"Hadjinlian\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.BounceMarker library\"), person(\"Vladimir\", \"Agafonkin\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.heat library\"), person(\"Iván Sánchez\", \"Ortega\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.tilelayer.pouchdbcached library\"), person(\"Dale\", \"Harvey\", role = c(\"ctb\", \"cph\"), comment = \"pouchdb-browser library\"), person(\"Mike\", \"Bostock\", role = c(\"ctb\", \"cph\"), comment = \"topojson library\") )",
+      "Authors@R": "c( person(\"Sebastian\", \"Gatscha\", email = \"sebastian_gatscha@gmx.at\", role = c(\"aut\", \"cre\")), person(\"Bhaskar\", \"Karambelkar\", email = \"bhaskarvk@gmail.com\", role = c(\"aut\")), person(\"Barret\", \"Schloerke\", email = \"barret@rstudio.com\", role = c(\"aut\")), person(\"Bangyou\", \"Zheng\", email= \"Bangyou.Zheng@csiro.au\", role = c(\"ctb\"), comment = \"Leaflet-search and Leaflet-GPS plugin integration\"), person(\"Robin\", \"Cura\", email= \"robin@cura.info\", role = c(\"ctb\"), comment = \"Fixes for Draw Options\"), person(\"Markus\", \"Voge\", email= \"markus.voge@ea-aw.de\", role = c(\"ctb\"), comment = \"Enhancements for Draw Options\"), person(\"Markus\", \"Dumke\", role = c(\"ctb\"), comment = \"Bounce Marker addition\"), person(family = \"Mapbox\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-omnivore, csv2geojson, and togeojson libraries\"), person(\"Henry\", \"Thasler\", role = c(\"ctb\", \"cph\"), comment = \"Leaflet.Geodesic library\"), person(\"Dennis\", \"Wilhelm\", role = c(\"ctb\", \"cph\"), comment = \"Leaflet.StyleEditor library\"), person(\"Kirollos\", \"Risk\", role = c(\"ctb\", \"cph\"), comment = \"fuse.js library\"), person(\"Tim\", \"Wisniewski\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-choropleth library\"), person(family = \"Leaflet\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-draw library\"), person(\"Alexander\", \"Milevski\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-draw-drag library\"), person(\"John\", \"Firebaugh\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-fullscreen library\"), person(\"Stefano\", \"Cudini\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-gps library\"), person(\"Johannes\", \"Rudolph\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-hash library\"), person(\"Per\", \"Liedman\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-measure-path library\"), person(\"Pavel\", \"Shramov\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-plugins library\"), person(\"Filip\", \"Zavadil\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-pulse-icon library\"), person(\"Stefano\", \"Cudini\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-search library\"), person(family = \"CliffCloud\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-sleep library\"), person(family = \"Ursudio\", role = c(\"ctb\", \"cph\"), comment = \"leaflet-webgl-heatmap library\"), person(\"Maxime\", \"Hadjinlian\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.BounceMarker library\"), person(\"Vladimir\", \"Agafonkin\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.heat library\"), person(\"Iván Sánchez\", \"Ortega\", role = c(\"ctb\", \"cph\"), comment = \"leaflet.tilelayer.pouchdbcached library\"), person(\"Dale\", \"Harvey\", role = c(\"ctb\", \"cph\"), comment = \"pouchdb-browser library\"), person(\"Mike\", \"Bostock\", role = c(\"ctb\", \"cph\"), comment = \"topojson library\") )",
       "Description": "The 'leaflet' JavaScript library provides many plugins some of which are available in the core 'leaflet' package, but there are many more. It is not possible to support them all in the core 'leaflet' package. This package serves as an add-on to the 'leaflet' package by providing extra functionality via 'leaflet' plugins.",
       "License": "GPL-3 | file LICENSE",
       "Encoding": "UTF-8",
@@ -2833,13 +2843,13 @@
         "xfun",
         "testthat (>= 3.0.0)"
       ],
-      "URL": "https://github.com/sebastien-plutniak/leaflet.extras",
-      "BugReports": "https://github.com/sebastien-plutniak/leaflet.extras/issues",
-      "RoxygenNote": "7.3.3",
+      "URL": "https://github.com/trafficonese/leaflet.extras, https://trafficonese.github.io/leaflet.extras/",
+      "BugReports": "https://github.com/trafficonese/leaflet.extras/issues",
+      "RoxygenNote": "7.3.2",
       "Config/testthat/edition": "3",
       "NeedsCompilation": "no",
-      "Author": "Sebastian Gatscha [aut], Sebastien Plutniak [cre] (Package maintainance), Bhaskar Karambelkar [aut], Barret Schloerke [aut], Bangyou Zheng [ctb] (Leaflet-search and Leaflet-GPS plugin integration), Robin Cura [ctb] (Fixes for Draw Options), Markus Voge [ctb] (Enhancements for Draw Options), Markus Dumke [ctb] (Bounce Marker addition), Mapbox [ctb, cph] (leaflet-omnivore, csv2geojson, and togeojson libraries), Henry Thasler [ctb, cph] (Leaflet.Geodesic library), Dennis Wilhelm [ctb, cph] (Leaflet.StyleEditor library), Kirollos Risk [ctb, cph] (fuse.js library), Tim Wisniewski [ctb, cph] (leaflet-choropleth library), Leaflet [ctb, cph] (leaflet-draw library), Alexander Milevski [ctb, cph] (leaflet-draw-drag library), John Firebaugh [ctb, cph] (leaflet-fullscreen library), Stefano Cudini [ctb, cph] (leaflet-gps library), Johannes Rudolph [ctb, cph] (leaflet-hash library), Per Liedman [ctb, cph] (leaflet-measure-path library), Pavel Shramov [ctb, cph] (leaflet-plugins library), Filip Zavadil [ctb, cph] (leaflet-pulse-icon library), Stefano Cudini [ctb, cph] (leaflet-search library), CliffCloud [ctb, cph] (leaflet-sleep library), Ursudio [ctb, cph] (leaflet-webgl-heatmap library), Maxime Hadjinlian [ctb, cph] (leaflet.BounceMarker library), Vladimir Agafonkin [ctb, cph] (leaflet.heat library), Iván Sánchez Ortega [ctb, cph] (leaflet.tilelayer.pouchdbcached library), Dale Harvey [ctb, cph] (pouchdb-browser library), Mike Bostock [ctb, cph] (topojson library)",
-      "Maintainer": "Sebastien Plutniak <sebastien.plutniak@posteo.net>",
+      "Author": "Sebastian Gatscha [aut, cre], Bhaskar Karambelkar [aut], Barret Schloerke [aut], Bangyou Zheng [ctb] (Leaflet-search and Leaflet-GPS plugin integration), Robin Cura [ctb] (Fixes for Draw Options), Markus Voge [ctb] (Enhancements for Draw Options), Markus Dumke [ctb] (Bounce Marker addition), Mapbox [ctb, cph] (leaflet-omnivore, csv2geojson, and togeojson libraries), Henry Thasler [ctb, cph] (Leaflet.Geodesic library), Dennis Wilhelm [ctb, cph] (Leaflet.StyleEditor library), Kirollos Risk [ctb, cph] (fuse.js library), Tim Wisniewski [ctb, cph] (leaflet-choropleth library), Leaflet [ctb, cph] (leaflet-draw library), Alexander Milevski [ctb, cph] (leaflet-draw-drag library), John Firebaugh [ctb, cph] (leaflet-fullscreen library), Stefano Cudini [ctb, cph] (leaflet-gps library), Johannes Rudolph [ctb, cph] (leaflet-hash library), Per Liedman [ctb, cph] (leaflet-measure-path library), Pavel Shramov [ctb, cph] (leaflet-plugins library), Filip Zavadil [ctb, cph] (leaflet-pulse-icon library), Stefano Cudini [ctb, cph] (leaflet-search library), CliffCloud [ctb, cph] (leaflet-sleep library), Ursudio [ctb, cph] (leaflet-webgl-heatmap library), Maxime Hadjinlian [ctb, cph] (leaflet.BounceMarker library), Vladimir Agafonkin [ctb, cph] (leaflet.heat library), Iván Sánchez Ortega [ctb, cph] (leaflet.tilelayer.pouchdbcached library), Dale Harvey [ctb, cph] (pouchdb-browser library), Mike Bostock [ctb, cph] (topojson library)",
+      "Maintainer": "Sebastian Gatscha <sebastian_gatscha@gmx.at>",
       "Repository": "CRAN"
     },
     "leaflet.providers": {
@@ -3028,14 +3038,14 @@
     },
     "markdown": {
       "Package": "markdown",
-      "Version": "2.0",
+      "Version": "2.1",
       "Source": "Repository",
       "Type": "Package",
-      "Title": "Render Markdown with 'commonmark'",
+      "Title": "A Thin Wrapper of 'litedown' to Render Markdown Documents",
       "Authors@R": "c( person(\"Yihui\", \"Xie\", role = c(\"aut\", \"cre\"), email = \"xie@yihui.name\", comment = c(ORCID = \"0000-0003-0645-5666\")), person(\"JJ\", \"Allaire\", role = \"aut\"), person(\"Jeffrey\", \"Horner\", role = \"aut\"), person(\"Henrik\", \"Bengtsson\", role = \"ctb\"), person(\"Jim\", \"Hester\", role = \"ctb\"), person(\"Yixuan\", \"Qiu\", role = \"ctb\"), person(\"Kohske\", \"Takahashi\", role = \"ctb\"), person(\"Adam\", \"November\", role = \"ctb\"), person(\"Nacho\", \"Caballero\", role = \"ctb\"), person(\"Jeroen\", \"Ooms\", role = \"ctb\"), person(\"Thomas\", \"Leeper\", role = \"ctb\"), person(\"Joe\", \"Cheng\", role = \"ctb\"), person(\"Andrzej\", \"Oles\", role = \"ctb\"), person(given = \"Posit Software, PBC\", role = c(\"cph\", \"fnd\")) )",
-      "Description": "Render Markdown to full and lightweight HTML/LaTeX documents with the 'commonmark' package. This package has been superseded by 'litedown'.",
+      "Description": "Render Markdown to HTML/LaTeX. This package has been superseded by 'litedown'. Please call 'litedown::mark()' directly.",
       "Depends": [
-        "R (>= 2.11.1)"
+        "R (>= 3.2.0)"
       ],
       "Imports": [
         "utils",
@@ -3051,10 +3061,10 @@
       "License": "MIT + file LICENSE",
       "URL": "https://github.com/rstudio/markdown",
       "BugReports": "https://github.com/rstudio/markdown/issues",
-      "RoxygenNote": "7.3.2",
       "Encoding": "UTF-8",
+      "Config/roxygen2/version": "8.1.1",
       "NeedsCompilation": "no",
-      "Author": "Yihui Xie [aut, cre] (<https://orcid.org/0000-0003-0645-5666>), JJ Allaire [aut], Jeffrey Horner [aut], Henrik Bengtsson [ctb], Jim Hester [ctb], Yixuan Qiu [ctb], Kohske Takahashi [ctb], Adam November [ctb], Nacho Caballero [ctb], Jeroen Ooms [ctb], Thomas Leeper [ctb], Joe Cheng [ctb], Andrzej Oles [ctb], Posit Software, PBC [cph, fnd]",
+      "Author": "Yihui Xie [aut, cre] (ORCID: <https://orcid.org/0000-0003-0645-5666>), JJ Allaire [aut], Jeffrey Horner [aut], Henrik Bengtsson [ctb], Jim Hester [ctb], Yixuan Qiu [ctb], Kohske Takahashi [ctb], Adam November [ctb], Nacho Caballero [ctb], Jeroen Ooms [ctb], Thomas Leeper [ctb], Joe Cheng [ctb], Andrzej Oles [ctb], Posit Software, PBC [cph, fnd]",
       "Maintainer": "Yihui Xie <xie@yihui.name>",
       "Repository": "CRAN"
     },
@@ -3111,7 +3121,7 @@
     },
     "mirai": {
       "Package": "mirai",
-      "Version": "2.7.2",
+      "Version": "2.7.3",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Minimalist Async Evaluation Framework for R",
@@ -3124,7 +3134,7 @@
         "R (>= 3.6)"
       ],
       "Imports": [
-        "nanonext (>= 1.10.1)"
+        "nanonext (>= 1.10.3)"
       ],
       "Suggests": [
         "cli",
@@ -3142,7 +3152,7 @@
       "Config/Needs/coverage": "rlang",
       "Config/Needs/website": "tidyverse/tidytemplate",
       "Config/roxygen2/markdown": "TRUE",
-      "Config/roxygen2/version": "8.0.0.9000",
+      "Config/roxygen2/version": "8.1.0",
       "Config/usethis/last-upkeep": "2026-07-11",
       "Encoding": "UTF-8",
       "NeedsCompilation": "no",
@@ -3191,7 +3201,7 @@
     },
     "nanonext": {
       "Package": "nanonext",
-      "Version": "1.10.2",
+      "Version": "1.10.4",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Lightweight Toolkit for Messaging, Concurrency and the Web",
@@ -3205,7 +3215,8 @@
       ],
       "Suggests": [
         "later",
-        "litedown"
+        "litedown",
+        "yaml"
       ],
       "Enhances": [
         "promises"
@@ -3215,7 +3226,7 @@
       "Config/build/compilation-database": "true",
       "Config/Needs/website": "tidyverse/tidytemplate",
       "Config/roxygen2/markdown": "TRUE",
-      "Config/roxygen2/version": "8.0.0",
+      "Config/roxygen2/version": "8.1.0",
       "Config/usethis/last-upkeep": "2026-07-11",
       "Encoding": "UTF-8",
       "SystemRequirements": "'libnng' >= 1.12 and 'libmbedtls' >= 3.0 (optional, bundled sources compiled otherwise)",
@@ -4006,23 +4017,26 @@
     },
     "readxl": {
       "Package": "readxl",
-      "Version": "1.5.0",
+      "Version": "1.6.0",
       "Source": "Repository",
       "Title": "Read Excel Files",
-      "Authors@R": "c( person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-4757-117X\")), person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Posit, PBC\", role = c(\"cph\", \"fnd\"), comment = \"Copyright holder of all R code and all C/C++ code without explicit copyright attribution\"), person(\"Marcin\", \"Kalicinski\", role = c(\"ctb\", \"cph\"), comment = \"Author of included RapidXML code\"), person(\"Komarov Valery\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Christophe Leitienne\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Bob Colbert\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"David Hoerl\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Evan Miller\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\") )",
-      "Description": "Import excel files into R. Supports '.xls' via the embedded 'libxls' C library <https://github.com/libxls/libxls> and '.xlsx' via the embedded 'RapidXML' C++ library <https://rapidxml.sourceforge.net/>.  Works on Windows, Mac and Linux without external dependencies.",
+      "Authors@R": "c( person(\"Hadley\", \"Wickham\", , \"hadley@posit.co\", role = \"aut\", comment = c(ORCID = \"0000-0003-4757-117X\")), person(\"Jennifer\", \"Bryan\", , \"jenny@posit.co\", role = c(\"aut\", \"cre\"), comment = c(ORCID = \"0000-0002-6983-2759\")), person(\"Posit, PBC\", role = c(\"cph\", \"fnd\"), comment = \"Copyright holder of all R code and all C/C++ code without explicit copyright attribution\"), person(\"Marcin\", \"Kalicinski\", role = c(\"ctb\", \"cph\"), comment = \"Author of included RapidXML code\"), person(\"Komarov Valery\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Christophe Leitienne\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Bob Colbert\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"David Hoerl\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"Evan Miller\", role = c(\"ctb\", \"cph\"), comment = \"Author of included libxls code\"), person(\"kokke\", role = \"ctb\", comment = \"Author of included tiny-AES-c code\") )",
+      "Description": "Import excel files into R. Supports '.xls' via the embedded 'libxls' C library <https://github.com/libxls/libxls> and '.xlsx' via the embedded 'RapidXML' C++ library <https://rapidxml.sourceforge.net/>.  Works on Windows, Mac and Linux without external dependencies. Reading of password-encrypted '.xlsx' files is supported via the embedded 'tiny-AES-c' C library <https://github.com/kokke/tiny-AES-c>.",
       "License": "MIT + file LICENSE",
       "URL": "https://readxl.tidyverse.org, https://github.com/tidyverse/readxl",
       "BugReports": "https://github.com/tidyverse/readxl/issues",
       "Depends": [
-        "R (>= 4.1)"
+        "R (>= 4.2)"
       ],
       "Imports": [
         "cellranger",
+        "cli",
+        "rlang",
         "tibble (>= 2.0.1)",
         "utils"
       ],
       "Suggests": [
+        "askpass",
         "covr",
         "knitr",
         "rmarkdown",
@@ -4036,12 +4050,12 @@
       "VignetteBuilder": "knitr",
       "Config/build/compilation-database": "true",
       "Config/Needs/website": "tidyverse/tidytemplate, tidyverse",
-      "Config/roxygen2/version": "8.0.0",
+      "Config/roxygen2/version": "8.1.0",
       "Config/testthat/edition": "3",
       "Encoding": "UTF-8",
-      "Note": "libxls v1.6.3 c199d13",
+      "Note": "libxls v1.6.4 34c7cc6; tiny-AES-c 2385675",
       "NeedsCompilation": "yes",
-      "Author": "Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Posit, PBC [cph, fnd] (Copyright holder of all R code and all C/C++ code without explicit copyright attribution), Marcin Kalicinski [ctb, cph] (Author of included RapidXML code), Komarov Valery [ctb, cph] (Author of included libxls code), Christophe Leitienne [ctb, cph] (Author of included libxls code), Bob Colbert [ctb, cph] (Author of included libxls code), David Hoerl [ctb, cph] (Author of included libxls code), Evan Miller [ctb, cph] (Author of included libxls code)",
+      "Author": "Hadley Wickham [aut] (ORCID: <https://orcid.org/0000-0003-4757-117X>), Jennifer Bryan [aut, cre] (ORCID: <https://orcid.org/0000-0002-6983-2759>), Posit, PBC [cph, fnd] (Copyright holder of all R code and all C/C++ code without explicit copyright attribution), Marcin Kalicinski [ctb, cph] (Author of included RapidXML code), Komarov Valery [ctb, cph] (Author of included libxls code), Christophe Leitienne [ctb, cph] (Author of included libxls code), Bob Colbert [ctb, cph] (Author of included libxls code), David Hoerl [ctb, cph] (Author of included libxls code), Evan Miller [ctb, cph] (Author of included libxls code), kokke [ctb] (Author of included tiny-AES-c code)",
       "Maintainer": "Jennifer Bryan <jenny@posit.co>",
       "Repository": "CRAN"
     },
@@ -4092,7 +4106,7 @@
     },
     "renv": {
       "Package": "renv",
-      "Version": "1.2.4",
+      "Version": "1.3.1",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Project Environments",
@@ -4121,6 +4135,7 @@
         "modules",
         "packrat",
         "pak",
+        "pkgload",
         "R6",
         "remotes",
         "reticulate",
@@ -4420,7 +4435,7 @@
     },
     "s2": {
       "Package": "s2",
-      "Version": "1.1.12",
+      "Version": "1.1.13",
       "Source": "Repository",
       "Title": "Spherical Geometry Operators Using the S2 Geometry Library",
       "Authors@R": "c( person(given = \"Dewey\", family = \"Dunnington\", role = c(\"aut\"), email = \"dewey@fishandwhistle.net\", comment = c(ORCID = \"0000-0002-9415-4582\")), person(given = \"Edzer\", family = \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(\"Ege\", \"Rubak\", email=\"rubak@math.aau.dk\", role = c(\"aut\")), person(\"Jeroen\", \"Ooms\", , \"jeroen.ooms@stat.ucla.edu\", role = \"ctb\", comment = \"configure script\"), person(family = \"Google, Inc.\", role = \"cph\", comment = \"Original s2geometry.io source code\") )",
@@ -4536,7 +4551,7 @@
     },
     "selectr": {
       "Package": "selectr",
-      "Version": "0.6-0",
+      "Version": "0.8-0",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Translate CSS Selectors to XPath Expressions",
@@ -4544,19 +4559,18 @@
       "License": "BSD_3_clause + file LICENCE",
       "Encoding": "UTF-8",
       "Depends": [
-        "R (>= 3.3)"
-      ],
-      "Imports": [
-        "R6"
+        "R (>= 3.6)"
       ],
       "Suggests": [
-        "testthat",
+        "testthat (>= 3.0.0)",
         "XML",
         "xml2"
       ],
+      "Config/testthat/edition": "3",
       "URL": "https://sjp.co.nz/projects/selectr/",
       "BugReports": "https://github.com/sjp/selectr/issues",
-      "Description": "Translates a CSS selector into an equivalent XPath expression. This allows us to use CSS selectors when working with the XML package as it can only evaluate XPath expressions. Also provided are convenience functions useful for using CSS selectors on XML nodes. This package is a port of the Python package 'cssselect' (<https://cssselect.readthedocs.io/>).",
+      "Language": "en-GB",
+      "Description": "Translates a CSS selector into an equivalent XPath expression. This allows us to use CSS selectors when working with the 'XML' and 'xml2' packages, which can only evaluate XPath expressions. Also provided are convenience functions for querying XML and HTML documents with CSS selectors. This package was originally a port of the Python package 'cssselect' (<https://cssselect.readthedocs.io/>).",
       "NeedsCompilation": "no",
       "Author": "Simon Potter [aut, trl, cre], Simon Sapin [aut], Ian Bicking [aut]",
       "Maintainer": "Simon Potter <simon@sjp.co.nz>",
@@ -4564,7 +4578,7 @@
     },
     "sf": {
       "Package": "sf",
-      "Version": "1.1-2",
+      "Version": "1.1-3",
       "Source": "Repository",
       "Title": "Simple Features for R",
       "Authors@R": "c(person(given = \"Edzer\", family = \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\", comment = c(ORCID = \"0000-0001-8049-7069\")), person(given = \"Roger\", family = \"Bivand\", role = \"ctb\", comment = c(ORCID = \"0000-0003-2392-6140\")), person(given = \"Etienne\", family = \"Racine\", role = \"ctb\"), person(given = \"Michael\", family = \"Sumner\", role = \"ctb\"), person(given = \"Ian\", family = \"Cook\", role = \"ctb\"), person(given = \"Tim\", family = \"Keitt\", role = \"ctb\"), person(given = \"Robin\", family = \"Lovelace\", role = \"ctb\"), person(given = \"Hadley\", family = \"Wickham\", role = \"ctb\"), person(given = \"Jeroen\", family = \"Ooms\", role = \"ctb\", comment = c(ORCID = \"0000-0002-4035-0289\")), person(given = \"Kirill\", family = \"M\\u00fcller\", role = \"ctb\"), person(given = \"Thomas Lin\", family = \"Pedersen\", role = \"ctb\"), person(given = \"Dan\", family = \"Baston\", role = \"ctb\"), person(given = \"Dewey\", family = \"Dunnington\", role = \"ctb\", comment = c(ORCID = \"0000-0002-9415-4582\")), person(given = \"Alexandre\", family = \"Courtiol\", role = \"ctb\", comment = c(ORCID = \"0000-0003-0637-2959\")) )",
@@ -4590,7 +4604,6 @@
       ],
       "Suggests": [
         "blob",
-        "nanoarrow",
         "covr",
         "dplyr (>= 1.0.0)",
         "ggplot2",
@@ -4600,6 +4613,7 @@
         "mapview",
         "Matrix",
         "microbenchmark",
+        "nanoarrow",
         "odbc",
         "pbapply",
         "pillar",
@@ -4633,9 +4647,10 @@
       "Encoding": "UTF-8",
       "Config/testthat/edition": "2",
       "Config/needs/coverage": "XML",
+      "Config/roxygen2/markdown": "TRUE",
+      "Config/roxygen2/version": "8.1.0",
       "SystemRequirements": "GDAL (>= 2.0.1), GEOS (>= 3.4.0), PROJ (>= 4.8.0), sqlite3",
       "Collate": "'RcppExports.R' 'init.R' 'import-standalone-s3-register.R' 'crs.R' 'bbox.R' 'read.R' 'db.R' 'sfc.R' 'sfg.R' 'sf.R' 'bind.R' 'wkb.R' 'wkt.R' 'plot.R' 'geom-measures.R' 'geom-predicates.R' 'geom-transformers.R' 'transform.R' 'proj.R' 'sp.R' 'grid.R' 'arith.R' 'tidyverse.R' 'tidyverse-vctrs.R' 'cast_sfg.R' 'cast_sfc.R' 'graticule.R' 'datasets.R' 'aggregate.R' 'agr.R' 'maps.R' 'join.R' 'sample.R' 'valid.R' 'collection_extract.R' 'jitter.R' 'sgbp.R' 'spatstat.R' 'stars.R' 'crop.R' 'gdal_utils.R' 'nearest.R' 'normalize.R' 'sf-package.R' 'defunct.R' 'z_range.R' 'm_range.R' 'shift_longitude.R' 'make_grid.R' 's2.R' 'terra.R' 'geos-overlayng.R' 'break_antimeridian.R'",
-      "Config/roxygen2/version": "8.0.0",
       "NeedsCompilation": "yes",
       "Author": "Edzer Pebesma [aut, cre] (ORCID: <https://orcid.org/0000-0001-8049-7069>), Roger Bivand [ctb] (ORCID: <https://orcid.org/0000-0003-2392-6140>), Etienne Racine [ctb], Michael Sumner [ctb], Ian Cook [ctb], Tim Keitt [ctb], Robin Lovelace [ctb], Hadley Wickham [ctb], Jeroen Ooms [ctb] (ORCID: <https://orcid.org/0000-0002-4035-0289>), Kirill Müller [ctb], Thomas Lin Pedersen [ctb], Dan Baston [ctb], Dewey Dunnington [ctb] (ORCID: <https://orcid.org/0000-0002-9415-4582>), Alexandre Courtiol [ctb] (ORCID: <https://orcid.org/0000-0003-0637-2959>)",
       "Maintainer": "Edzer Pebesma <edzer.pebesma@uni-muenster.de>",
@@ -4897,7 +4912,7 @@
     },
     "sp": {
       "Package": "sp",
-      "Version": "2.2-3",
+      "Version": "2.2-4",
       "Source": "Repository",
       "Title": "Classes and Methods for Spatial Data",
       "Authors@R": "c(person(\"Edzer\", \"Pebesma\", role = c(\"aut\", \"cre\"), email = \"edzer.pebesma@uni-muenster.de\"), person(\"Roger\", \"Bivand\", role = \"aut\", email = \"Roger.Bivand@nhh.no\"), person(\"Barry\", \"Rowlingson\", role = \"ctb\"), person(\"Virgilio\", \"Gomez-Rubio\", role = \"ctb\"), person(\"Robert\", \"Hijmans\", role = \"ctb\"), person(\"Michael\", \"Sumner\", role = \"ctb\"), person(\"Don\", \"MacQueen\", role = \"ctb\"), person(\"Jim\", \"Lemon\", role = \"ctb\"), person(\"Finn\", \"Lindgren\", role = \"ctb\"), person(\"Josh\", \"O'Brien\", role = \"ctb\"), person(\"Joseph\", \"O'Rourke\", role = \"ctb\"), person(\"Patrick\", \"Hausmann\", role = \"ctb\"), person(\"Sebastian\", \"Meyer\", role = \"ctb\"))",
@@ -5536,7 +5551,7 @@
     },
     "tinytex": {
       "Package": "tinytex",
-      "Version": "0.60",
+      "Version": "0.61",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Helper Functions to Install and Maintain TeX Live, and Compile LaTeX Documents",
@@ -5938,7 +5953,7 @@
     },
     "xfun": {
       "Package": "xfun",
-      "Version": "0.60",
+      "Version": "0.62",
       "Source": "Repository",
       "Type": "Package",
       "Title": "Supporting Functions for Packages Maintained by 'Yihui Xie'",
@@ -5961,7 +5976,6 @@
         "tinytex (>= 0.30)",
         "mime",
         "litedown (>= 0.6)",
-        "commonmark",
         "knitr (>= 1.50)",
         "remotes",
         "pak",
@@ -5978,7 +5992,7 @@
       "BugReports": "https://github.com/yihui/xfun/issues",
       "Encoding": "UTF-8",
       "VignetteBuilder": "litedown",
-      "Config/roxygen2/version": "8.0.0",
+      "Config/roxygen2/version": "8.1.1",
       "NeedsCompilation": "yes",
       "Author": "Yihui Xie [aut, cre, cph] (ORCID: <https://orcid.org/0000-0003-0645-5666>, URL: https://yihui.org), Wush Wu [ctb], Daijiang Li [ctb], Xianying Tan [ctb], Salim Brüggemann [ctb] (ORCID: <https://orcid.org/0000-0002-5329-5987>), Christophe Dervieux [ctb]",
       "Maintainer": "Yihui Xie <xie@yihui.name>",
