@@ -150,9 +150,9 @@ Model <- function(
   beta = FALSE,
   info,
   doc,
-  risk_period,
+  risk_period = NULL,
   biofix = NULL,
-  validate,
+  validate = NULL,
   ycol,
   yrange
 ) {
@@ -200,7 +200,7 @@ model_list <- list(
     group = "field",
     info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/tar-spot.md",
-    risk_period = c("Jul 1", "Aug 15"),
+    # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
@@ -222,7 +222,7 @@ model_list <- list(
     group = "field",
     info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/gray-leaf-spot.md",
-    risk_period = c("Jul 1", "Aug 15"),
+    # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
@@ -261,7 +261,7 @@ model_list <- list(
     group = "field",
     info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/white-mold.md",
-    risk_period = c("Jun 15", "Aug 7"),
+    # risk_period = c("Jun 15", "Aug 7"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jun 15", "Aug 7"))
       if (!any(overlap)) {
@@ -283,7 +283,7 @@ model_list <- list(
     group = "field",
     info = "<b>Soybean is vulnerable to frogeye leaf spot when in the growth stages R1-R5 (flowering - beginning seed).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature and daily hours of high humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/frogeye.md",
-    risk_period = c("Jun 15", "Sep 7"),
+    # risk_period = c("Jun 15", "Sep 7"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jun 15", "Sep 7"))
       if (!any(overlap)) {
@@ -1017,13 +1017,10 @@ build_red_crown_rot <- function(daily, r1_date) {
   veg_start <- r1_date - n
   rep_end <- r1_date + n - 1
 
-  # vegetative window precipitation, pro-rated if any days are missing
+  # vegetative window precipitation
   veg <- daily |>
     filter(between(date, veg_start, r1_date - 1)) |>
-    summarize(
-      veg_total = calc_mean(precipitation_daily) * n,
-      .by = grid_id
-    )
+    summarize(veg_total = sum(precipitation_daily), .by = grid_id)
 
   daily |>
     arrange(grid_id, date) |>

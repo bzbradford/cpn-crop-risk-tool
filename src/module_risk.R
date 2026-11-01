@@ -492,7 +492,7 @@ riskServer <- function(rv, rx) {
       })
 
       ## date_range_ui ----
-      LAST_N_DAYS <- 60
+      LAST_N_DAYS <- 30
 
       long_date_range <- reactive({
         dates <- rx$dates()
@@ -511,7 +511,7 @@ riskServer <- function(rv, rx) {
             inputId = ns("date_range_clamp"),
             label = NULL,
             choices = choices,
-            selected = isolate(input$date_range_clamp) %||% TRUE,
+            selected = isolate(input$date_range_clamp) %||% FALSE,
             inline = TRUE
           )
         )
