@@ -437,11 +437,21 @@ riskServer <- function(rv, rx) {
       # Plot feed --------------------------------------------------------------
 
       ## results_ui ----
+      # TRUE once plots_ui has put plots on screen. Not reactive: reset here
+      # because every results_ui render recreates plots_ui empty, so it always
+      # reflects whether the current plots_ui instance has content to hold.
+      plots_shown <- FALSE
+
+      # only gates on sites (not on loading state) so it never re-renders, and
+      # recreates its children, while weather loads; plots_ui handles the rest
       output$results_ui <- renderUI({
-        validate(
-          need(rv$sites_ready, OPTS$validation_sites_ready),
-          need(rv$weather_ready, OPTS$validation_weather_ready)
-        )
+        plots_shown <<- FALSE
+        if (!rv$sites_ready) {
+          return(build_notice_box(list(
+            type = "info",
+            msg = OPTS$validation_sites_ready
+          )))
+        }
 
         tagList(
           uiOutput(ns("plot_feed_opts")),
@@ -547,6 +557,18 @@ riskServer <- function(rv, rx) {
       ## plots_ui ----
       # generate the feed of mini plots by site
       output$plots_ui <- renderUI({
+        # while weather loads, hold existing plots (dimmed)
+        if (rv$wx_pending && plots_shown) {
+          req(FALSE, cancelOutput = "progress")
+        }
+        plots_shown <<- FALSE
+
+        # otherwise show why there's nothing to plot (loading, failed, no data)
+        notice <- rv$data_notice
+        if (!is.null(notice)) {
+          return(build_notice_box(notice))
+        }
+
         model <- selected_model()
         model_data <- joined_data() |>
           rename(model_value = !!first(model$ycol))
@@ -705,6 +727,8 @@ riskServer <- function(rv, rx) {
             div(class = "site-data-content", content)
           )
         })
+
+        plots_shown <<- TRUE
 
         div(
           class = "flex-down",

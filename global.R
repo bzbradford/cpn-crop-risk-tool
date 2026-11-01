@@ -148,6 +148,12 @@ OPTS <- lst(
   max_sites = 25,
   validation_sites_ready = "No sites selected, click on the map or load sites in the sidebar.",
   validation_weather_ready = "No weather data downloaded yet for the selected dates.",
+  validation_weather_loading = "Loading weather data...",
+
+  ## weather fetching ----
+  weather_timeout_secs = 120, # backstop for a hung historical fetch
+  forecast_timeout_secs = 60, # backstop for a hung forecast fetch
+  forecast_retry_secs = 300, # cooldown before retrying a failed forecast grid
 
   ## data tab ----
   data_type_choices = list(
@@ -966,6 +972,24 @@ build_warning_box <- function(content) {
 
 if (FALSE) {
   build_warning_box("alert")
+}
+
+#' "contact us" line shown alongside fetch problems
+contact_html <- function() {
+  HTML(sprintf(
+    "If the problem persists, <a href='mailto:%s?subject=CPN Tool problem'>contact us</a> to report the issue.",
+    OPTS$contact_email
+  ))
+}
+
+#' Message box shown in place of data views that have nothing to display
+#' @param notice list(type = "info" | "error", msg = text or tags), see
+#'   rv$data_notice in server.R
+build_notice_box <- function(notice) {
+  if (is.null(notice)) {
+    return()
+  }
+  div(class = paste0("notice-box notice-box--", notice$type), notice$msg)
 }
 
 

@@ -455,13 +455,20 @@ table {
   max-width: 90vw;
 }
 
-.shiny-output-error-validation {
+.shiny-output-error-validation,
+.notice-box {
   border: 1px solid rgb(39, 128, 227);
   border-radius: 5px;
   margin: 20px 0px;
   padding: 10px;
   background: rgb(236, 244, 252);
   color: #222;
+}
+
+.notice-box--error {
+  border-color: #d9534f;
+  background: #fdecea;
+  color: #a94442;
 }
 
 /* site results feed */
@@ -511,6 +518,20 @@ table {
   border-color: #d9534f;
   background: #fdecea;
   color: #a94442;
+}
+
+.app-status--warning {
+  border-color: #f0ad4e;
+  background: #fff4e5;
+  color: #8a5300;
+}
+
+.app-status__retry,
+.app-status__retry:hover,
+.app-status__retry:focus {
+  color: inherit;
+  font-weight: bold;
+  white-space: nowrap;
 }
 
 .app-status__contact {

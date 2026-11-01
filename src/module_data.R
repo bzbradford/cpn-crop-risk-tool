@@ -139,6 +139,9 @@ dataServer <- function(rv, rx) {
     function(input, output, session) {
       ns <- session$ns
 
+      # call rx$wx() into a variable before passing it on: it can raise a
+      # req() hold, which must not be forced inside a lazy function argument
+
       wx_hourly <- reactive({
         rx$wx()$hourly
       })
@@ -148,13 +151,13 @@ dataServer <- function(rv, rx) {
       })
 
       ma_center <- reactive({
-        rx$wx()$daily_full |>
-          build_ma_from_daily("center")
+        wx <- rx$wx()
+        build_ma_from_daily(wx$daily_full, "center")
       })
 
       ma_right <- reactive({
-        rx$wx()$daily_full |>
-          build_ma_from_daily("right")
+        wx <- rx$wx()
+        build_ma_from_daily(wx$daily_full, "right")
       })
 
       ma <- reactive({
@@ -174,7 +177,8 @@ dataServer <- function(rv, rx) {
       })
 
       gdd <- reactive({
-        rx$wx()$daily |> build_gdd_from_daily()
+        wx <- rx$wx()
+        build_gdd_from_daily(wx$daily)
       })
 
       all_data <- reactive({
@@ -358,21 +362,57 @@ dataServer <- function(rv, rx) {
       })
 
       ## main_ui ----
+      # TRUE once data_plot has put a plot on screen. Not reactive: reset here
+      # because every main_ui render recreates data_plot empty, so it always
+      # reflects whether the current data_plot instance has content to hold.
+      plot_shown <- FALSE
+
+      # only gates on sites (not on loading state) so it never re-renders, and
+      # recreates its children, while weather loads; the plot area is swapped
+      # for a notice client-side via conditionalPanel
       output$main_ui <- renderUI({
-        validate(need(rv$sites_ready, OPTS$validation_sites_ready))
-        validate(need(rv$weather_ready, OPTS$validation_weather_ready))
+        plot_shown <<- FALSE
+        if (!rv$sites_ready) {
+          return(build_notice_box(list(
+            type = "info",
+            msg = OPTS$validation_sites_ready
+          )))
+        }
 
         tagList(
           # shown if more than one site
           uiOutput(ns("plot_sites_ui")),
-          div(
-            class = "plotly-container",
-            style = "margin-top: 1rem;",
-            plotlyOutput(ns("data_plot"))
-          ),
-          uiOutput(ns("downloads"))
+          uiOutput(ns("plot_notice_ui")),
+          conditionalPanel(
+            "output.show_plot",
+            ns = ns,
+            div(
+              class = "plotly-container",
+              style = "margin-top: 1rem;",
+              plotlyOutput(ns("data_plot"))
+            ),
+            uiOutput(ns("downloads"))
+          )
         )
       })
+
+      ## plot_notice ----
+      # why there's no plot (loading, failed, no data), or NULL to show the
+      # plot area: either there's data, or a plot on screen is being held
+      plot_notice <- reactive({
+        notice <- rv$data_notice
+        holding <- rv$wx_pending && plot_shown
+        if (holding) NULL else notice
+      })
+
+      output$plot_notice_ui <- renderUI({
+        build_notice_box(plot_notice())
+      })
+
+      output$show_plot <- reactive({
+        is.null(plot_notice())
+      })
+      outputOptions(output, "show_plot", suspendWhenHidden = FALSE)
 
       ## plot_cols - reactive ----
       plot_cols <- reactive({
@@ -515,12 +555,22 @@ dataServer <- function(rv, rx) {
 
       ## data_plot - renderPlotly ----
       output$data_plot <- renderPlotly({
+        # while weather loads, hold the existing plot (dimmed); otherwise the
+        # plot area is hidden behind plot_notice_ui when there's a notice
+        if (rv$wx_pending && plot_shown) {
+          req(FALSE, cancelOutput = "progress")
+        }
+        plot_shown <<- FALSE
+        req(is.null(rv$data_notice))
+
         data <- plot_data()
         data$opts$filename <- paste0(
           dl_fname(data = data$df, desc = "plot"),
           ".png"
         )
-        build_data_plot(data$df, data$sites, data$opts)
+        plt <- build_data_plot(data$df, data$sites, data$opts)
+        plot_shown <<- TRUE
+        plt
       })
 
       # Download buttons ----

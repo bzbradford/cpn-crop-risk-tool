@@ -13,6 +13,10 @@ server <- function(input, output, session) {
     last_fetch_key = NULL, # track last weather params attempted to fetch
     last_fetch_time = NULL, # only try again on fail after 30 sec
     forecasts = list(), # per-grid forecast data, list keyed by grid_id
+    forecast_tried = numeric(), # last forecast attempt time per grid_id
+    wx_pending = FALSE, # TRUE while a weather or forecast fetch is outstanding
+    fetch_retries = 0, # bumped by the retry button, part of the fetch key
+    data_notice = NULL, # why data views have nothing to show, NULL if they should
     sites = sites_template, # table storing site locations
     sites_ready = FALSE, # toggle to TRUE if at least 1 site
     site_locs = NULL, # unique list of lat/lng for sites
@@ -113,6 +117,194 @@ server <- function(input, output, session) {
       return(FALSE)
     }
     any(sites$needs_download, na.rm = TRUE)
+  })
+
+  ## has_visible_sites() ----
+  # guard for the fetch requests: read rv$sites directly rather than
+  # rv$sites_ready, which is set by an observer and can lag within a flush
+  has_visible_sites <- reactive({
+    nrow(filter(rv$sites, !hidden)) > 0
+  })
+
+  ## weather_request() ----
+  # grids needing weather and the expanded date range to fetch them over, or
+  # NULL if nothing is needed. Shared by the fetch trigger and wx_pending so
+  # both agree on what's outstanding.
+  weather_request <- reactive({
+    if (
+      !has_visible_sites() || is.null(rv$start_date) || is.null(rv$end_date)
+    ) {
+      return(NULL)
+    }
+    if (!need_weather()) {
+      return(NULL)
+    }
+
+    # Fetch by grid, not by site: dedupe sites sharing a cell and carry the
+    # canonical centroid (grid_lat/grid_lng) so the request hits the expected
+    # O1280 cell and results can be stamped with our own grid identity.
+    grids <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
+      distinct(grid_id, grid_lat, grid_lng) |>
+      semi_join(
+        sites_with_status() |>
+          sf::st_drop_geometry() |>
+          filter(needs_download) |>
+          distinct(grid_id),
+        join_by(grid_id)
+      )
+    if (nrow(grids) == 0) {
+      return(NULL)
+    }
+
+    dates <- expanded_dates()
+    start_date <- as.Date(dates$start)
+    end_date <- min(as.Date(dates$end), today())
+    # includes the retry count so a manual retry reads as a new request
+    key <- paste(
+      paste(sort(grids$grid_id), collapse = ","),
+      start_date,
+      end_date,
+      rv$fetch_retries,
+      sep = "|"
+    )
+    lst(grids, start_date, end_date, key)
+  })
+
+  ## forecast_request() ----
+  # site grids with no forecast yet, minus grids attempted within the retry
+  # cooldown (so failed or empty responses don't loop), or NULL if none
+  forecast_request <- reactive({
+    if (!has_visible_sites()) {
+      return(NULL)
+    }
+    tried <- rv$forecast_tried
+    recent <- names(tried)[
+      as.numeric(now()) - tried < OPTS$forecast_retry_secs
+    ]
+    grids <- sites_with_grid() |>
+      sf::st_drop_geometry() |>
+      distinct(grid_id, grid_lat, grid_lng) |>
+      drop_na(grid_id) |>
+      filter(
+        !grid_id %in% names(rv$forecasts),
+        !grid_id %in% recent
+      )
+    if (nrow(grids) == 0) {
+      return(NULL)
+    }
+    grids
+  })
+
+  ## rv$wx_pending ----
+  # TRUE while weather is about to be fetched or is in flight, so wx_data can
+  # hold instead of computing on incomplete data. Derived from the requests
+  # themselves (not just task status) so it's already TRUE in the same flush
+  # that a date/site change opens a gap. A request whose key was already tried
+  # (failed, or succeeded but still incomplete) doesn't count, so the hold
+  # always releases. Forecasts only count when wx_data would use them.
+  weather_pending <- reactive({
+    if (task_weather$status() == "running") {
+      return(TRUE)
+    }
+    request <- weather_request()
+    !is.null(request) && !identical(request$key, rv$last_fetch_key)
+  })
+
+  forecast_pending <- reactive({
+    if (is.null(rv$end_date) || rv$end_date != today()) {
+      return(FALSE)
+    }
+    task_forecast$status() == "running" || !is.null(forecast_request())
+  })
+
+  # high priority so the flag updates before any output reads wx_data in the
+  # same flush; only writes on change to avoid spurious invalidations
+  observe(
+    {
+      pending <- weather_pending() || forecast_pending()
+      if (!identical(rv$wx_pending, pending)) {
+        rv$wx_pending <- pending
+      }
+    },
+    priority = 100
+  )
+
+  ## weather_failed() / forecast_failed() ----
+  # TRUE when the active request was already attempted and isn't running, yet
+  # data is still missing. om_fetch_* swallow network/HTTP failures and return
+  # partial or no data, so task status alone can't detect them. Scoped to the
+  # current sites/dates by construction: a past failure that's no longer part
+  # of the active request doesn't count.
+  weather_failed <- reactive({
+    request <- weather_request()
+    !is.null(request) &&
+      identical(request$key, rv$last_fetch_key) &&
+      task_weather$status() != "running"
+  })
+
+  forecast_failed <- reactive({
+    if (
+      !has_visible_sites() || is.null(rv$end_date) || rv$end_date != today()
+    ) {
+      return(FALSE)
+    }
+    if (task_forecast$status() == "running") {
+      return(FALSE)
+    }
+    grid_ids <- unique(sites_with_grid()$grid_id)
+    missing <- setdiff(grid_ids, names(rv$forecasts))
+    any(missing %in% names(rv$forecast_tried))
+  })
+
+  ## wx_available() ----
+  # TRUE if any visible site has weather within the selected dates
+  wx_available <- reactive({
+    sites <- sites_with_status()
+    "days_actual" %in% names(sites) && any(coalesce(sites$days_actual, 0L) > 0)
+  })
+
+  ## rv$data_notice ----
+  # Single decision for what the data views (risk feed, data plot) should say
+  # when they have no content to show: list(type, msg), or NULL when there is
+  # weather to show. Modules display it in place of content, except while
+  # holding content that's already on screen. Priority below the wx_pending
+  # observer (reads its flag) but above outputs; only writes on change.
+  observe(
+    {
+      notice <- if (!has_visible_sites()) {
+        list(type = "info", msg = OPTS$validation_sites_ready)
+      } else if (rv$wx_pending) {
+        list(type = "info", msg = OPTS$validation_weather_loading)
+      } else if (wx_available()) {
+        NULL
+      } else if (weather_failed()) {
+        list(
+          type = "error",
+          msg = tagList(
+            "Could not get any weather data for your selected sites and dates.",
+            "Check your network connection and click Retry in the status box to try again.",
+            contact_html()
+          )
+        )
+      } else {
+        list(type = "info", msg = OPTS$validation_weather_ready)
+      }
+      if (!identical(rv$data_notice, notice)) {
+        rv$data_notice <- notice
+      }
+    },
+    priority = 90
+  )
+
+  ## Retry failed fetches ----
+  # a new fetch key re-requests weather; clearing the forecast attempts for
+  # the active grids re-requests their forecasts
+  observeEvent(input$retry_fetch, {
+    rv$fetch_retries <- rv$fetch_retries + 1
+    grid_ids <- unique(sites_with_grid()$grid_id)
+    tried <- rv$forecast_tried
+    rv$forecast_tried <- tried[!names(tried) %in% grid_ids]
   })
 
   # Date handlers --------------------------------------------------------------
@@ -320,7 +512,9 @@ server <- function(input, output, session) {
         om_merge_wx(wx, new_wx)
       },
       .GlobalEnv,
-      .args = lst(grids, start_date, end_date, wx)
+      .args = lst(grids, start_date, end_date, wx),
+      # a hung fetch becomes a task error, which releases rv$wx_pending
+      .timeout = OPTS$weather_timeout_secs * 1000
     )
   })
 
@@ -348,52 +542,32 @@ server <- function(input, output, session) {
   #   })
   # })
 
+  # Runs from any non-running state, including after an error, so a changed
+  # request (new dates/sites) always gets a fresh attempt.
   observe({
-    req(rv$sites_ready)
-    req(need_weather())
-    # Fetch by grid, not by site: dedupe sites sharing a cell and carry the
-    # canonical centroid (grid_lat/grid_lng) so the request hits the expected
-    # O1280 cell and results can be stamped with our own grid identity.
-    grids_need <- sites_with_grid() |>
-      sf::st_drop_geometry() |>
-      distinct(grid_id, grid_lat, grid_lng) |>
-      semi_join(
-        sites_with_status() |>
-          sf::st_drop_geometry() |>
-          filter(needs_download) |>
-          distinct(grid_id),
-        join_by(grid_id)
-      )
-    req(nrow(grids_need) > 0)
-    dates <- expanded_dates()
-    start_date <- as.Date(dates$start)
-    end_date <- min(as.Date(dates$end), today())
-
-    req(task_weather$status() %in% c("initial", "success"))
+    request <- req(weather_request())
+    req(task_weather$status() != "running")
 
     # Debounce: bail if the same (grids, dates) was fetched in the last 30s.
     # Defense against feedback loops where post-fetch state still reads as
     # needing weather.
-    fetch_key <- paste(
-      paste(sort(grids_need$grid_id), collapse = ","),
-      start_date,
-      end_date,
-      sep = "|"
+    recent <- isolate(
+      identical(rv$last_fetch_key, request$key) &&
+        !is.null(rv$last_fetch_time) &&
+        as.numeric(now() - rv$last_fetch_time, units = "secs") < 30
     )
-    recent <- identical(rv$last_fetch_key, fetch_key) &&
-      !is.null(rv$last_fetch_time) &&
-      as.numeric(now() - rv$last_fetch_time, units = "secs") < 30
     if (recent) {
       return()
     }
-    rv$last_fetch_key <- fetch_key
-    rv$last_fetch_time <- now()
 
     isolate({
+      rv$last_fetch_key <- request$key
+      rv$last_fetch_time <- now()
+
       task_weather$invoke(
-        grids_need,
-        start_date,
-        end_date,
+        request$grids,
+        request$start_date,
+        request$end_date,
         rv$weather
       )
     })
@@ -416,13 +590,18 @@ server <- function(input, output, session) {
   })
 
   ## Handle weather request response ----
-  observe({
-    req(task_weather$status() == "success")
-    res <- task_weather$result()
-    if (!identical(rv$weather, res)) {
-      rv$weather <- res
-    }
-  })
+  # priority above the rv$wx_pending observer so the new weather is in place
+  # before pending is re-evaluated on task success
+  observe(
+    {
+      req(task_weather$status() == "success")
+      res <- task_weather$result()
+      if (!identical(rv$weather, res)) {
+        rv$weather <- res
+      }
+    },
+    priority = 200
+  )
 
   # Forecast ExtendedTask -------------------------------------------------------
 
@@ -432,7 +611,9 @@ server <- function(input, output, session) {
         om_fetch_forecast(grids)
       },
       .GlobalEnv,
-      .args = lst(grids)
+      .args = lst(grids),
+      # a hung fetch becomes a task error, which releases rv$wx_pending
+      .timeout = OPTS$forecast_timeout_secs * 1000
     )
   })
 
@@ -442,54 +623,53 @@ server <- function(input, output, session) {
 
   ## Invoke forecast fetch ----
   observe({
-    sites <- sites_with_grid()
-    grids <- sites |>
-      distinct(grid_id, .keep_all = TRUE) |>
-      drop_na(grid_id)
-
-    req(nrow(grids) > 0)
+    grids <- req(forecast_request())
     req(task_forecast$status() != "running")
 
-    already_fetched <- names(rv$forecasts)
-    grids_df <- sf::st_drop_geometry(grids) |>
-      select(grid_id, grid_lat, grid_lng) |>
-      filter(!grid_id %in% already_fetched)
+    # record the attempt so a failed or empty response isn't retried until
+    # the cooldown passes (this also drops the grids from forecast_request)
+    isolate({
+      tried <- rv$forecast_tried
+      tried[grids$grid_id] <- as.numeric(now())
+      rv$forecast_tried <- tried
+    })
 
-    req(nrow(grids_df) > 0)
-
-    # populate each pending forecast slot to prevent retry loop
-    for (i in seq_len(nrow(grids_df))) {
-      gid <- slice(grids_df, i)[["grid_id"]]
-      if (is.null(rv$forecasts[[gid]])) {
-        rv$forecasts[[gid]] <- NULL
-      }
-    }
-
-    task_forecast$invoke(grids_df)
+    task_forecast$invoke(grids)
   })
 
   ## Handle forecast response ----
-  observe({
-    req(task_forecast$status() == "success")
-    result <- task_forecast$result()
-    req(!is.null(result), nrow(result) > 0)
+  # priority above the rv$wx_pending observer, same as the weather handler
+  observe(
+    {
+      req(task_forecast$status() == "success")
+      result <- task_forecast$result()
+      req(!is.null(result), nrow(result) > 0)
 
-    isolate({
-      fc <- rv$forecasts
-      for (gid in unique(result$grid_id)) {
-        fc[[gid]] <- result |> filter(grid_id == gid)
-      }
-      if (!identical(rv$forecasts, fc)) {
-        rv$forecasts <- fc
-      }
-    })
-  })
+      isolate({
+        fc <- rv$forecasts
+        for (gid in unique(result$grid_id)) {
+          fc[[gid]] <- result |> filter(grid_id == gid)
+        }
+        if (!identical(rv$forecasts, fc)) {
+          rv$forecasts <- fc
+        }
+      })
+    },
+    priority = 200
+  )
 
   # Weather data ---------------------------------------------------------------
 
   ## wx_data ----
   # dependency on unique lat/lngs vs site ids, names, hide state, etc
   wx_data <- reactive({
+    # Hold while a fetch is outstanding. "progress" leaves dependent outputs
+    # showing their previous content in Shiny's recalculating (dimmed) state
+    # rather than clearing them, the same way ExtendedTask$result() does.
+    # Outputs with nothing on screen yet should check rv$wx_pending first and
+    # show a loading message instead.
+    req(!rv$wx_pending, cancelOutput = "progress")
+
     weather <- rv$weather
     sites <- sites_with_grid() |>
       sf::st_drop_geometry() |>
@@ -1094,40 +1274,48 @@ server <- function(input, output, session) {
   ## user_status ----
   # unified, priority-ordered status (drives status_ui)
   status_msg <- reactive({
-    Status <- function(type, msg, contact = FALSE) {
-      icon <- if (type == "error") {
-        icon("x")
-      } else if (str_detect(msg, "Getting")) {
-        icon("hourglass")
-      } else {
-        icon("check")
-      }
-      lst(type, msg, icon, contact)
+    Status <- function(type, msg, icon_name, contact = FALSE, retry = FALSE) {
+      lst(type, msg, icon = icon(icon_name), contact, retry)
     }
 
     # check for date error
     date_err <- date_error()
     if (!is.null(date_err)) {
-      return(Status("error", date_err$msg))
-    }
-
-    # check for weather error
-    wx_err <- weather_error()
-    if (!is.null(wx_err)) {
-      return(Status("error", wx_err, contact = TRUE))
+      return(Status("error", date_err$msg, "x"))
     }
 
     # if weather running
     if (task_weather$status() == "running") {
-      return(Status("info", "Getting weather..."))
+      return(Status("info", "Getting weather...", "hourglass"))
     }
 
     # if forecast running
     if (task_forecast$status() == "running") {
-      return(Status("info", "Getting forecasts..."))
+      return(Status("info", "Getting forecasts...", "hourglass"))
     }
 
-    Status("info", "Everything up to date.")
+    # failed fetches for the active sites/dates (task errors are logged to the
+    # console by the weather_error observer)
+    if (weather_failed()) {
+      return(Status(
+        "warning",
+        "Could not fetch weather data.",
+        "triangle-exclamation",
+        contact = TRUE,
+        retry = TRUE
+      ))
+    }
+    if (forecast_failed()) {
+      return(Status(
+        "warning",
+        "Could not fetch forecast data.",
+        "triangle-exclamation",
+        contact = TRUE,
+        retry = TRUE
+      ))
+    }
+
+    Status("info", "Everything up to date.", "check")
   })
 
   ## status_ui ----
@@ -1138,21 +1326,24 @@ server <- function(input, output, session) {
     req(rv$start_date, rv$end_date)
 
     status <- status_msg()
-    contact <- if (isTRUE(status$show_contact)) {
-      tags$div(
-        class = "app-status__contact",
-        HTML(sprintf(
-          "If the problem persists, <a href='mailto:%s?subject=CPN Tool problem'>contact us</a> to report the issue.",
-          OPTS$contact_email
-        ))
-      )
+    contact <- if (isTRUE(status$contact)) {
+      tags$div(class = "app-status__contact", contact_html())
     }
     tags$div(
       class = paste0("app-status app-status--", status$type),
       tags$div(
         class = "app-status__msg",
         HTML(status$msg),
-        status$icon
+        if (isTRUE(status$retry)) {
+          actionLink(
+            "retry_fetch",
+            "Retry",
+            icon = icon("rotate-right"),
+            class = "app-status__retry"
+          )
+        } else {
+          status$icon
+        }
       ),
       contact
     )

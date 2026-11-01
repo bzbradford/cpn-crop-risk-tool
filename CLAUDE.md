@@ -39,6 +39,7 @@ An R Shiny web application for agricultural weather monitoring and crop disease 
 
 ### State Management
 - `rv$` reactive values object in `server.R` holds all app state
+- `rv$wx_pending` is TRUE while a historical or forecast fetch is outstanding (derived from the same `weather_request()`/`forecast_request()` reactives that trigger the fetches; already-attempted requests don't count, and the fetches have mirai timeouts, so it always releases). `wx_data()` holds with `req(cancelOutput = "progress")` while pending, so outputs keep their previous content dimmed instead of computing on incomplete data. `rv$data_notice` is the single decision for why the data views have nothing to show (no sites, loading, fetch failed, no data; NULL when there's weather); module outputs display it via `build_notice_box()` unless they're holding content already on screen (tracked by a non-reactive flag reset by the parent `renderUI`). Fetch failures are detected from state (the active request was attempted but data is still missing), since the fetch functions swallow network errors; the status bar then offers a Retry.
 - `rv$settings` holds user settings from the settings modal, including the shared `metric` display unit toggle used by the data and risk modules
 - Sites persist across sessions via browser cookies (JSON-encoded)
 
