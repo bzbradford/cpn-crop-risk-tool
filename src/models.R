@@ -911,16 +911,14 @@ SOYBEAN_CERCOSPORA_ATTR <- tribble(
 #' @param min_temp_5day 5-day average daily minimum air temperature
 #' @param mean_dpd_5day 5-day average daily dewpoint depression
 #' @param max_dpd_5day 5-day average daily maximum dewpoint depression
-#' @param max_wind_14day 14-day average of the daily maximum wind speed, km/h
-#'   (deliberate: the authors' document labels it m/s, but the C. cf. sigesbeckiae
-#'   fit only makes sense in km/h; see docs)
+#' @param max_wind_14day 14-day average of the daily maximum wind speed, m/s
 #' @param hours_rh90_10day 10-day average daily hours of relative humidity >= 90%
 #' @param hours_rh90_14day 14-day average daily hours of relative humidity >= 90%
 predict_soybean_cercospora <- function(
   min_temp_5day,
   mean_dpd_5day,
   max_dpd_5day,
-  max_wind_14day, # km/h, see above
+  max_wind_14day, # m/s
   hours_rh90_10day,
   hours_rh90_14day
 ) {
@@ -964,7 +962,7 @@ build_soybean_cercospora <- function(daily) {
         min_temp_5day,
         mean_dpd_5day,
         max_dpd_5day,
-        max_wind_14day,
+        kmh_to_mps(max_wind_14day),
         hours_rh90_10day,
         hours_rh90_14day
       ),
