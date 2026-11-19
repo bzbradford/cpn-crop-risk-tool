@@ -201,7 +201,7 @@ model_list <- list(
     name = "Tar spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on the probability that recent weather has favored tar spot severity increasing (Webster et al. 2023); it doesn't say whether the fungus is present in your area. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/tar-spot.md",
     # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {
@@ -337,7 +337,7 @@ model_list <- list(
     name = "Wheat scab FHB",
     crop = "Wheat",
     group = "field",
-    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity. The value on each day is the risk for a field that flowers that day. Read it on or near your field's flowering date; values on other days, including winter, don't describe a crop.",
     doc = "docs/wheat-scab.md",
     risk_period = NULL,
     validate = NULL,
@@ -462,7 +462,7 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting.",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting. The model was built assuming untreated seed. Nearly all commercial seed is treated, and fungicide seed treatments support higher stands, so the model may overstate the risk for treated seed. The risk levels (Moderate from 20 %, High from 35 %) are provisional.",
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
@@ -579,7 +579,6 @@ test_plot <- function(
 
 #' Vulnerable growth stages V10-R3
 #' Risk criteria: Low 0-20%, Med 20-35%, High >35%
-#' No risk: Fungicide in last 14 days, temperature <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param mean_temp_30ma Mean daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
@@ -631,7 +630,6 @@ if (FALSE) {
 
 #' Vulnerable growth stages V10-R3
 #' Risk criteria: Low 0-40%, Med 40-60%, High >60%
-#' No risk: Fungicide app in last 14 days, min temp <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param min_temp_21ma minimum daily temperature, 21-day moving average, Celsius
 #' @param min_dewpoint_30ma minimum dew point temperature, 30-day moving average, Celsius
@@ -860,7 +858,6 @@ if (FALSE) {
 # Frogeye leaf spot (soybean) --------------------------------------------------
 
 #' Vulnerable growth stages R1-R5, ~Jun 15 - Sep 7
-#' No risk: Fungicide in last 14 days, temperature <32F
 #' Risk criteria: Low 1-40%, Med 40-50%, High >50%
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
@@ -906,7 +903,7 @@ if (FALSE) {
 SOYBEAN_CERCOSPORA_ATTR <- tribble(
   ~id  , ~species          ,
   "cf" , "C. flagellaris"  ,
-  "cs" , "C. sigesbeckiae" ,
+  "cs" , "C. cf. sigesbeckiae" ,
   "ck" , "C. kikuchii"     ,
 )
 
@@ -914,14 +911,16 @@ SOYBEAN_CERCOSPORA_ATTR <- tribble(
 #' @param min_temp_5day 5-day average daily minimum air temperature
 #' @param mean_dpd_5day 5-day average daily dewpoint depression
 #' @param max_dpd_5day 5-day average daily maximum dewpoint depression
-#' @param max_wind_14day 14-day average daily maximum wind speed
+#' @param max_wind_14day 14-day average of the daily maximum wind speed, km/h
+#'   (deliberate: the authors' document labels it m/s, but the C. cf. sigesbeckiae
+#'   fit only makes sense in km/h; see docs)
 #' @param hours_rh90_10day 10-day average daily hours of relative humidity >= 90%
 #' @param hours_rh90_14day 14-day average daily hours of relative humidity >= 90%
 predict_soybean_cercospora <- function(
   min_temp_5day,
   mean_dpd_5day,
   max_dpd_5day,
-  max_wind_14day, # need to convert from km/h to m/s
+  max_wind_14day, # km/h, see above
   hours_rh90_10day,
   hours_rh90_14day
 ) {
@@ -944,7 +943,7 @@ predict_soybean_cercospora <- function(
   )
 }
 
-# Build wheat scab risk probability from daily weather
+# Build soybean Cercospora risk probabilities from daily weather
 #' @param daily daily weather data
 build_soybean_cercospora <- function(daily) {
   req(nrow(daily) > 0)
@@ -1125,7 +1124,7 @@ if (FALSE) {
 #' Wheat scab model - fusarium head blight
 #' Relevant during wheat flowering
 #' Risk criteria: Low 1-24%, Med 24-32%, High >32%
-#' Credit: Erick DeWolf, U. Kentucky
+#' Credit: Erick De Wolf, Kansas State University
 
 # resistance names and prediction constants
 WHEAT_SCAB_ATTR <- tribble(

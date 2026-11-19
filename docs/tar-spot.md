@@ -15,7 +15,7 @@ Residue management, rotation, and avoiding susceptible hybrids may reduce tar sp
 
 ### Model details
 
-The tarspot model is based on logistic equations described by Webster et al 2023 which calculate the probability of spore presence. Risk scores are assigned based on these probabilities.
+The tar spot model averages two logistic equations from Webster et al. (2023), fitted to whether tar spot severity increased between two ratings of the same field in Midwest plots and fields. One uses the 30-day average daily mean temperature and daily maximum relative humidity; the other the 30-day average temperature and the 14-day average of night hours (8 pm to 6 am) with relative humidity at or above 90 %. In both, warmer weather and more humid nights lower the probability, as the authors found. Because the equations rise toward 100 % in cold weather, when corn isn't growing, this tool scales the probability down in proportion when the 21-day average daily low is below 50°F (10°C), and to 0 below 32°F (0°C). That scaling is the tool's addition, not part of Webster et al.'s model; it has no effect from July to mid-August. Risk levels: Low from 1 %, Moderate from 20 %, High from 35 %.
 
 ### More information
 
