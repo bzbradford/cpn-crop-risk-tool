@@ -71,11 +71,12 @@ riskServer <- function(rv, rx) {
           ),
           div(
             style = "flex: 1; font-weight: bold;",
-            selectInput(
+            selectizeInput(
               inputId = ns("model"),
               label = NULL,
               choices = choices,
-              selected = first_truthy(input$model, first(choices))
+              selected = first_truthy(input$model, first(choices)),
+              options = list(onInitialize = I("selectizeNoAutofill"))
             )
           )
         )

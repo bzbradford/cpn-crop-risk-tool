@@ -15,36 +15,21 @@ $(document).on('shown.bs.modal', function () {
   $('.modal a').attr('target', '_blank');
 });
 
-// keep password managers out of selectize dropdowns. Selectize's search box is
-// <input autocomplete="new-password"> (to stop Chrome autofill), which password
-// managers read as a new-password field and offer to fill a generated password.
-// Selectize boxes are created whenever a select is (re)rendered, so tag them as
-// they appear.
-const PW_IGNORE_ATTRS = {
-  'data-bwignore': 'true', // Bitwarden
-  'data-1p-ignore': 'true', // 1Password
-  'data-lpignore': 'true', // LastPass
-  'data-form-type': 'other', // Dashlane
-};
-
-function tagSelectizeInputs(root) {
-  $(root)
-    .find('.selectize-input > input')
-    .addBack('.selectize-input > input')
-    .not('[data-bwignore]')
-    .attr(PW_IGNORE_ATTRS);
+// Keep password managers out of selectize dropdowns. Selectize's search box is
+// <input autocomplete="new-password">, which Bitwarden and others read as a
+// new-password field and offer to fill with a generated password. Pass as the
+// selectize `onInitialize` option, eg in R:
+//   options = list(onInitialize = I("selectizeNoAutofill"))
+// It runs while selectize builds the input, before any extension sees it.
+function selectizeNoAutofill() {
+  this.$control_input.attr({
+    autocomplete: 'off',
+    'data-bwignore': 'true', // Bitwarden
+    'data-1p-ignore': 'true', // 1Password
+    'data-lpignore': 'true', // LastPass
+    'data-form-type': 'other', // Dashlane
+  });
 }
-
-$(function () {
-  tagSelectizeInputs(document.body);
-  new MutationObserver((mutations) => {
-    for (const m of mutations) {
-      for (const node of m.addedNodes) {
-        if (node.nodeType === 1) tagSelectizeInputs(node);
-      }
-    }
-  }).observe(document.body, { childList: true, subtree: true });
-});
 
 // helper to send values to the shiny server
 function sendShiny(inputId, content) {
