@@ -658,6 +658,16 @@ test_that("build_botrytis", {
   })
 })
 
+test_that("pecan scab hours count at 90 % and 70 F", {
+  h <- tibble(
+    grid_id = "x",
+    date = ymd("2025-05-01"),
+    relative_humidity = c(90, 91, 89, 95),
+    temperature = c(21.2, 22, 25, 21.1)
+  )
+  expect_equal(build_pecan_scab(h)$daily_scab_hours, 2)
+})
+
 test_that("predict_rye_biomass", {
   expect_silent({
     expand_grid(

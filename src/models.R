@@ -474,7 +474,7 @@ model_list <- list(
     name = "Pecan scab",
     crop = "Pecan",
     group = "tree",
-    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
+    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature at or above 70°F and relative humidity at or above 90%. Scab hours add up from the start date: set it to March 1 or your last fungicide spray. The Mesonet also recommends spraying only once it has been 30 days after March 1, or 5 to 14 days after the last spray; this tool doesn't check those waiting periods. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
     doc = "docs/pecan-scab.md",
     risk_period = c("Mar 1", "Aug 31"),
     validate = function(params) {
@@ -1832,8 +1832,8 @@ build_pecan_scab <- function(hourly) {
 
   hourly |>
     mutate(
-      high_rh = relative_humidity >= 92,
-      high_temp = temperature > 21.1
+      high_rh = relative_humidity >= 90,
+      high_temp = temperature >= f_to_c(70)
     ) |>
     summarize(
       hours_high_rh = sum(high_rh),
