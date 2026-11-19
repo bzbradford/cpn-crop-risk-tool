@@ -21,6 +21,8 @@ Each variable predicts incidence separately, and the three predictions are combi
 
 Provisional risk categories: Very low (less than 5% incidence), Low (5-30%), Moderate (30-60%), and High (60% or greater). Incidence above 60% has been associated with considerable yield loss. These thresholds have not been validated in the United States. Past history of red crown rot in a field was the strongest predictor of disease in the original study, and is not included in this model.
 
+Because each of the three predictions is limited by the weather it uses, the combined incidence can't fall below about 7 %: even with no rain in the 31 days before R1, very cool weather and heavy rain after it, the model gives 7.3 %. The Very low category (below 5 %) therefore never appears, and Low needs a cool month after R1.
+
 ### References
 
 - Ochi, S., Kishi, S., Kawaguchi, A., and Akamatsu, H. 2026. Meteorological and agronomic factors analysis on the field-level incidence of red crown rot of soybean. Phytopathology 116:1405-1413. <https://doi.org/10.1094/PHYTO-06-25-0207-R>

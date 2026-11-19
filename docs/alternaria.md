@@ -7,10 +7,14 @@
 
 ### Model details
 
-This Alternaria model is an implementation of the TOMCAST model described in Pitblado 1992, which builds on the FAST forecaster described by Madden et al 1978. The model generates daily Disease Severity Values (DSVs) based on the mean temperature and duration of leaf wetness periods (eg continuous hours with relative humidity \>90%).
+This Alternaria model is an implementation of the TOMCAST model described in Pitblado 1992, which builds on the FAST forecaster described by Madden et al 1978. The model generates daily Disease Severity Values (DSVs) based on the mean temperature and duration of leaf wetness periods (hours with relative humidity at or above 90 %, from 8 pm the evening before, used in place of leaf wetness).
+
+The daily values follow the FAST table of Madden et al. (1978). The risk level comes from the last 7 days' total. Guides and trials time sprays by the total since the last spray: the Midwest Vegetable Production Guide uses 15 DSVs, Cornell suggests spraying again once more than 15 have built up, and in Wisconsin trials spraying after each 15 to 20 DSVs cut fungicide use by 30 to 50 % from weekly sprays without losing control or yield. A High week that began before a recent spray may not call for another, and a total can reach 15 over several weeks while each week stays Low or Moderate. FAST and TOMCAST were developed for early blight of tomato; their use for carrot leaf blights rests on extension practice and trials.
+
+Updated November 2026: humid hours and their mean temperature now come from the same window (from 8 pm the evening before), and the daily values follow FAST's published table.
 
 ### References
 
 -   Pitblado 1992: TOM-CAST Tomato Disease Forecaster <https://atrium.lib.uoguelph.ca/server/api/core/bitstreams/5c7ec712-43ef-4b73-b8b8-e85c29d3d58b/content>
--   Madden et al 1978: FAST, a Forecast System for Alternaria solani on Tomato <https://www.apsnet.org/publications/phytopathology/backissues/Documents/1978Articles/Phyto68n09_1354.PDF>
+-   Madden et al 1978: FAST, a Forecast System for Alternaria solani on Tomato. Phytopathology 68:1354. <https://doi.org/10.1094/Phyto-68-1354>
 -   More information: <https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/>

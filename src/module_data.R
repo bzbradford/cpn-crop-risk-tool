@@ -445,7 +445,10 @@ dataServer <- function(rv, rx) {
                   cols[1]
                 ),
                 multiple = TRUE,
-                options = list(plugins = list("remove_button"))
+                options = list(
+                  plugins = list("remove_button"),
+                  onInitialize = I("selectizeNoAutofill")
+                )
               )
             ),
             div(

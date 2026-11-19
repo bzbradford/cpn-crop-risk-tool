@@ -587,7 +587,11 @@ mapServer <- function(rv, rx) {
                 model_text = if_else(
                   is.na(model_name),
                   "No model data",
-                  sprintf("%s: %s", model_name, value_label)
+                  sprintf(
+                    "%s: %s",
+                    model_name,
+                    gsub("\n", ", ", value_label, fixed = TRUE)
+                  )
                 )
               ) |>
               mutate(label = paste0(label, "<br>", model_text))

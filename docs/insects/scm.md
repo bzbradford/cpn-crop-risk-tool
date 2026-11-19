@@ -11,8 +11,10 @@ Seed corn maggots overwinter as pupae in the soil. Adult flies begin emerging in
 
 The larval portion of the SCM life cycle occurs below ground over the course of a few weeks. Once hatched larvae burrow into the soil 6-8 cm to locate food resources. A complete life cycle for SCM can range from 15-77 days, in a typical season 16-21 days is sufficient. In Wisconsin, there are typically 3-5 generations per year.
 
-We use a base 39.2°F (4°C) degree day model.
+We use a base 39.2°F (4°C) degree day model from January 1. The base temperature and development times follow Sanborn, Wyman and Chapman (1982); the flight peaks follow Sanborn's Wisconsin field observations as reported by Funderburk, Higley and Pedigo (1984).
 
 ### More Information
 
+- Sanborn, S. M., Wyman, J. A. and Chapman, R. K. 1982. Annals of the Entomological Society of America 75:103. <https://doi.org/10.1093/aesa/75.1.103>
+- Funderburk, J. E., Higley, L. G. and Pedigo, L. P. 1984. Environmental Entomology 13:105. <https://doi.org/10.1093/ee/13.1.105>
 - <https://vegento.russell.wisc.edu/pests/seedcorn-maggot/>

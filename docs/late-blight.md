@@ -9,9 +9,15 @@
 
 ### Model details
 
-Late blight daily disease severity values (DSVs) are calculated based on the BLITECAST algorithm described by Krause, Massie, and Hyre in 1975 and based on work previously conducted by Wallins. The risk of late blight is then based on the season total and rolling 14-day accumulated DSVs.
+Late blight daily disease severity values (DSVs) are calculated based on the BLITECAST algorithm described by Krause, Massie, and Hyre in 1975 and based on Wallin's (1962) disease severity values. The risk of late blight is then based on the season total and rolling 14-day accumulated DSVs.
+
+Risk: Very high with 21 or more DSVs in the last 14 days once the season total reaches 30; High with 14 or more once it reaches 18; Moderate once the season total reaches 18, the usual first-spray threshold; Low with any DSV in the last 14 days. Hours with relative humidity at or above 90 %, from 8 pm the evening before, stand in for leaf wetness. Set the start date to crop emergence or the last fungicide spray, whichever is more recent.
+
+Updated November 2026: humid hours and their mean temperature now come from the same window (from 8 pm the evening before).
 
 ### References
 
+-   Wallin, J. R. 1962. Summary of recent progress in predicting late blight epidemics in United States and Canada. American Potato Journal 39:306–312. <https://doi.org/10.1007/BF02862155>
+-   Krause, R. A., Massie, L. B. and Hyre, R. A. 1975. Blitecast: a computerized forecast of potato late blight. Plant Disease Reporter 59:95–98.
 -   BLITECAST model: <https://www.google.com/books/edition/The_Plant_Disease_Reporter/ow9BD6P2KZ4C?hl=en&gbpv=1&pg=PA95&printsec=frontcover>
 -   More information about late blight: <https://vegpath.plantpath.wisc.edu/diseases/potato-late-blight/>

@@ -300,7 +300,9 @@ plot_risk <- function(
   }
 
   # primary traces only use rows with a model value; additional columns use all rows
-  primary_df <- filter(df, !is.na(y))
+  # hover text is HTML, so labels' line breaks must be <br>
+  primary_df <- filter(df, !is.na(y)) |>
+    mutate(value_label = gsub("\n", "<br>", value_label, fixed = TRUE))
   plt <- plot_ly(primary_df, x = ~date, y = ~y, height = plt_height)
 
   if (is.null(group)) {

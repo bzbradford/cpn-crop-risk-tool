@@ -2,6 +2,26 @@
 
 # Weather data ----
 
+test_that("humid hours and their temperature come from the same window", {
+  d <- test_hourly_wx |>
+    filter(grid_id == "44.815,-91.530") |>
+    build_daily()
+  # the window's mean temperature exists exactly when the window has humid hours
+  expect_equal(
+    is.na(d$temperature_mean_rh_over_90),
+    d$hours_rh_over_90_since_night == 0
+  )
+
+  # matches AgWeather v2 on the 2025 Eau Claire weather, May 15 - Sep 30
+  d <- d |> filter(between(date, ymd("2025-05-15"), ymd("2025-09-30")))
+  lb <- build_late_blight(d)
+  expect_equal(sum(lb$dsv), 53)
+  expect_equal(min(lb$date[lb$total >= 18]), ymd("2025-07-16"))
+  expect_equal(sum(build_alternaria(d)$dsv), 97)
+  expect_equal(sum(build_cercospora(d)$dsv), 102)
+  expect_equal(sum(build_botrytis(d)$dsv), 46)
+})
+
 test_that("build_daily", {
   expect_silent({
     test_daily_wx |>
@@ -143,6 +163,27 @@ test_that("build_don", {
   })
 })
 
+test_that("build_don counts RH at 80 and reports missing rain", {
+  d <- test_daily_wx |> filter(grid_id == "44.815,-91.530") |> arrange(date)
+  d$relative_humidity_mean[between(d$date, ymd("2025-07-02"), ymd("2025-07-15"))] <- 70
+  d$relative_humidity_mean[d$date == ymd("2025-07-10")] <- 80
+  d$precipitation_daily[d$date %in% (ymd("2025-07-01") + 0:3)] <- NA
+  res <- build_don(d)
+  # W0 covers July 2 - 15
+  on <- res |> filter(date == ymd("2025-07-15"))
+  expect_equal(on$days_rh_over_80_14day, 1)
+  # W-7 covers June 22 - July 5
+  later <- res |> filter(date == ymd("2025-07-12"))
+  expect_match(later$value_label, "4 days of missing rain counted as dry")
+  # missing rain stays missing in the displayed trace
+  expect_true(all(is.na(res$precipitation_daily[res$date %in% (ymd("2025-07-01") + 0:3)])))
+  # no note when the window is complete
+  expect_no_match(
+    res$value_label[res$date == ymd("2025-06-15")],
+    "missing rain"
+  )
+})
+
 # White mold ----
 
 test_that("predict_white_mold_dry", {
@@ -188,6 +229,21 @@ test_that("build_white_mold", {
       build_white_mold(irrigated = TRUE, row_spacing = "15") |>
       test_plot()
   })
+})
+
+test_that("predict_white_mold_dry follows the 2025 algorithm", {
+  # argument order: max_temp_30ma, max_wind_30ma, max_rh_30ma
+  expect_equal(predict_white_mold_dry(25, 3, 90), 0.711644, tolerance = 1e-5)
+  expect_equal(predict_white_mold_dry(26, 5, 95), 0.360578, tolerance = 1e-5)
+  expect_equal(predict_white_mold_dry(24, 5, 97), 0.651490, tolerance = 1e-5)
+})
+
+test_that("build_white_mold is inactive at a 30-day mean high of 10 C or below", {
+  cold <- test_daily_wx |> mutate(temperature_max = 5)
+  for (irrig in c(TRUE, FALSE)) {
+    res <- build_white_mold(cold, irrigated = irrig, row_spacing = "30")
+    expect_true(all(res$probability == 0))
+  }
 })
 
 # Frogeye leaf spot ----
@@ -388,6 +444,13 @@ test_that("calc_pdays", {
   })
 })
 
+test_that("calc_pdays weighs the high in the last term", {
+  expect_equal(calc_pdays(10, 30), 6.920459, tolerance = 1e-6)
+  expect_equal(calc_pdays(15, 25), 9.231206, tolerance = 1e-6)
+  expect_equal(calc_pdays(5, 20), 5.240221, tolerance = 1e-6)
+  expect_equal(calc_pdays(18, 32), 6.889362, tolerance = 1e-6)
+})
+
 test_that("risk_for_early_blight", {
   expect_silent({
     tibble(
@@ -457,6 +520,23 @@ test_that("calc_alternaria_dsv", {
   })
 })
 
+test_that("calc_alternaria_dsv follows FAST's table", {
+  expect_equal(calc_alternaria_dsv(15, 7), 1)
+  expect_equal(calc_alternaria_dsv(15, 6), 0)
+  expect_equal(calc_alternaria_dsv(19, 4), 1)
+  expect_equal(calc_alternaria_dsv(17.9, 16), 2) # 17.9 C is in the 13-17 band
+  expect_equal(calc_alternaria_dsv(18, 4), 1) # 18 C is in the 18-20 band
+  expect_equal(calc_alternaria_dsv(20.5, 4), 1) # 20.5 C is in the 18-20 band
+  expect_equal(calc_alternaria_dsv(21, 3), 1) # 21 C is in the 21-25 band
+  expect_equal(calc_alternaria_dsv(25.5, 3), 1) # 25.5 C is in the 21-25 band
+  expect_equal(calc_alternaria_dsv(26, 3), 0) # 26 C is in the 26-29 band
+  expect_equal(calc_alternaria_dsv(26, 4), 1)
+  expect_equal(calc_alternaria_dsv(29.5, 23), 4)
+  expect_equal(calc_alternaria_dsv(30, 23), 0) # above FAST's table
+  expect_equal(calc_alternaria_dsv(NA, 0), 0)
+  expect_equal(calc_alternaria_dsv(20, 0), 0)
+})
+
 test_that("risk_for_alternaria", {
   expect_silent({
     tibble(
@@ -489,6 +569,11 @@ test_that("calc_cercospora_div", {
       scale_fill_viridis_c() +
       coord_cartesian(expand = F)
   })
+})
+
+test_that("calc_cercospora_div gives 0 with no humid hours", {
+  expect_equal(calc_cercospora_div(25, 0), 0) # 77 F
+  expect_equal(calc_cercospora_div(25, 6), 2) # 1 + (h > 5)
 })
 
 test_that("risk_for_cercospora", {
@@ -573,6 +658,16 @@ test_that("build_botrytis", {
   })
 })
 
+test_that("pecan scab hours count at 90 % and 70 F", {
+  h <- tibble(
+    grid_id = "x",
+    date = ymd("2025-05-01"),
+    relative_humidity = c(90, 91, 89, 95),
+    temperature = c(21.2, 22, 25, 21.1)
+  )
+  expect_equal(build_pecan_scab(h)$daily_scab_hours, 2)
+})
+
 test_that("predict_rye_biomass", {
   expect_silent({
     expand_grid(
@@ -587,6 +682,103 @@ test_that("predict_rye_biomass", {
           gdd_total = gdd_total
         )
       )
+  })
+})
+
+test_that("rye biomass is 0 once the numerator goes negative", {
+  # numerator 423.1 - 1.031*300 - 0.2878*precip is 0 at about 395 mm
+  expect_gt(predict_rye_biomass(300, 300, 2000), predict_rye_biomass(300, 380, 2000))
+  expect_gt(predict_rye_biomass(300, 380, 2000), 0)
+  expect_equal(predict_rye_biomass(300, 400, 2000), 0)
+  expect_equal(predict_rye_biomass(300, 800, 2000), 0)
+})
+
+# Fitted insects ----
+
+test_that("CPB curves read the fits as AgWeather does", {
+  m <- insect_models$cpb
+  at <- c(0, 220, 500, 810, 1350, 2310, 3000)
+  near <- function(x, y) expect_true(all(abs(x - y) < 1e-3))
+  near(
+    read_curve(m$curves$adults_larvae, "value", at),
+    c(0, 0.00009, 1.702998, 6.531334, 6.877155, 1.553555, 1.553555)
+  )
+  near(
+    read_curve(m$curves$adults_larvae, "activity", at),
+    c(0, 0.000013, 0.247631, 0.949715, 1, 0.225901, 0.225901)
+  )
+  near(
+    read_curve(m$curves$adults, "value", at),
+    c(0, 0.017871, 1.638913, 1.417361, 3.471703, 1.101732, 1.101732)
+  )
+  near(
+    read_curve(m$curves$eggs, "value", at),
+    c(0, 0, 1.046227, 0.534127, 0.100740, 0, 0)
+  )
+  near(
+    read_curve(m$curves$larvae, "value", at),
+    c(0, 0, 0.265097, 5.046128, 2.927658, 0.318086, 0.318086)
+  )
+  expect_equal(m$curves$adults_larvae$peak_dd, 1350)
+  near(m$curves$adults_larvae$peak, 6.877155)
+  expect_true(is.na(read_curve(m$curves$adults, "value", NA_real_)))
+})
+
+test_that("build_fitted_insect reproduces AgWeather for CPB on the 2025 Eau Claire weather", {
+  wx <- test_daily_wx |> filter(grid_id == "44.815,-91.530")
+  res <- build_fitted_insect(wx, insect_models$cpb)
+  expect_equal(round(max(res$cum_gdd), 1), 2515.5)
+  first <- function(t) min(res$date[res$activity >= t])
+  expect_equal(first(0.05), ymd("2025-06-02"))
+  expect_equal(first(0.25), ymd("2025-06-17"))
+  expect_equal(first(0.5), ymd("2025-06-21"))
+  expect_equal(first(0.75), ymd("2025-06-24"))
+  expect_equal(res$date[which.max(res$activity)], ymd("2025-07-27"))
+  expect_equal(
+    as.vector(table(factor(res$severity, levels = 0:4))),
+    c(203, 62, 21, 31, 48)
+  )
+  expect_equal(min(res$date[res$freeze < 1]), ymd("2025-10-24"))
+  expect_equal(min(res$date[res$freeze == 0]), ymd("2025-11-11"))
+  expect_true(all(insect_models$cpb$ycol %in% names(res)))
+})
+
+test_that("PVY curve reads the fit as AgWeather does", {
+  cv <- insect_models$pvy$curves$pvy
+  at <- c(0, 289, 290, 730, 2515, 3580, 5490, 6000)
+  expect_true(all(
+    abs(
+      read_curve(cv, "activity", at) -
+        c(0, 0, 0.126383, 0.251586, 0.632632, 1, 0.282652, 0.282652)
+    ) <
+      1e-3
+  ))
+  expect_true(abs(cv$peak - 1.483525) < 1e-4)
+  expect_equal(cv$peak_dd, 3580)
+})
+
+test_that("PVY on the 2025 Eau Claire weather", {
+  wx <- test_daily_wx |> filter(grid_id == "44.815,-91.530")
+  res <- build_fitted_insect(wx, insect_models$pvy)
+  expect_equal(round(max(res$cum_gdd), 1), 5029.7)
+  first <- function(t) min(res$date[res$activity >= t])
+  expect_equal(first(0.05), ymd("2025-04-24")) # total 289.8: the 289-290 ramp
+  expect_equal(first(0.25), ymd("2025-05-19"))
+  expect_equal(first(0.5), ymd("2025-07-14"))
+  expect_equal(first(0.75), ymd("2025-07-27"))
+  expect_equal(res$date[which.max(res$activity)], ymd("2025-08-23"))
+  expect_equal(
+    as.vector(table(factor(res$severity, levels = 0:4))),
+    c(164, 26, 73, 43, 59)
+  )
+  expect_true(all(insect_models$pvy$ycol %in% names(res)))
+})
+
+test_that("build_fitted_insect runs on all test grids", {
+  expect_silent({
+    test_daily_wx |>
+      build_fitted_insect(insect_models$cpb) |>
+      test_plot("activity")
   })
 })
 

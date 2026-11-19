@@ -9,7 +9,11 @@ Primary infection occurs from *B. squamosa* spores that overwinter in infected i
 
 ### Model details
 
-The Botrytis leaf blight model is based on the BOTCAST algorithm described in Sutton et al 1986. The model describes a two-step algorithm, where the first determies if inoculum is likely to be present or not, and the second estimates the risk of infection when potentially present.
+The Botrytis leaf blight model is based on the BOTCAST algorithm described in Sutton et al 1986. The model describes a two-step algorithm, where the first determines if inoculum is likely to be present or not, and the second estimates the risk of infection when potentially present.
+
+The model adds up daily severity index values (DSI) from crop emergence. UW Vegetable Pathology's guidance on the season total: 21 to 30 (Moderate) is a warning, and no spray is needed unless rain is forecast or you irrigate overhead; 31 to 40 (High) means a high risk of rapid disease development, so apply the first spray as soon as possible; above 40 (Very high) the risk is extremely high. BOTCAST times the first spray only; after that, scout for leaf spots. The line between Very low (10 or less) and Low (11 to 20) is this tool's, not BOTCAST's or UW's. Hours with relative humidity at or above 90 % stand in for leaf wetness; onion fields on muck soils or under overhead irrigation may stay wet longer than the weather data show.
+
+Updated November 2026: humid hours and their mean temperature now come from the same window (from 8 pm the evening before).
 
 ### References
 

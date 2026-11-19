@@ -15,6 +15,22 @@ $(document).on('shown.bs.modal', function () {
   $('.modal a').attr('target', '_blank');
 });
 
+// Keep password managers out of selectize dropdowns. Selectize's search box is
+// <input autocomplete="new-password">, which Bitwarden and others read as a
+// new-password field and offer to fill with a generated password. Pass as the
+// selectize `onInitialize` option, eg in R:
+//   options = list(onInitialize = I("selectizeNoAutofill"))
+// It runs while selectize builds the input, before any extension sees it.
+function selectizeNoAutofill() {
+  this.$control_input.attr({
+    autocomplete: 'off',
+    'data-bwignore': 'true', // Bitwarden
+    'data-1p-ignore': 'true', // 1Password
+    'data-lpignore': 'true', // LastPass
+    'data-form-type': 'other', // Dashlane
+  });
+}
+
 // helper to send values to the shiny server
 function sendShiny(inputId, content) {
   Shiny.setInputValue(inputId, content, { priority: 'event' });

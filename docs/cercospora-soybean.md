@@ -7,7 +7,11 @@
 
 ### Model details
 
-This model predicts the probability of spore presence for each of three species: *C. flagellaris*, *C. sigesbeckiae*, and *C. kikuchii*.
+This model predicts the probability of spore presence for each of three species: *C. flagellaris*, *C.* cf. *sigesbeckiae*, and *C. kikuchii*.
+
+The three models come from the 2026 Soybean Cercospora Leaf Blight Modeling Algorithms (Webster, North Dakota State University), written for this tool. Risk levels: *C. flagellaris* Low from 1 %, Moderate from 10 %, High from 15 %; *C.* cf. *sigesbeckiae* and *C. kikuchii* Low from 1 %, Moderate from 5 %, High from 10 %. The models are unpublished and in testing; no growth-stage window has been given for them yet.
+
+The *C.* cf. *sigesbeckiae* model uses the 14-day average of the daily maximum wind speed. The algorithm document labels it in m/s, but read that way the model predicts 63–89 % on every realistic day (always High), so this tool uses km/h, the unit of the weather data, until the authors confirm.
 
 ### References
 

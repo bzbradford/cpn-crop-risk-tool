@@ -103,6 +103,9 @@ build_daily <- function(hourly) {
     summarize(
       hours_rh_over_80_night = sum(night & rh80),
       hours_rh_over_90_night = sum(night & rh90),
+      # humid hours over the same window as their mean temperature below
+      hours_rh_over_80_since_night = sum(rh80),
+      hours_rh_over_90_since_night = sum(rh90),
       temperature_mean_rh_over_80 = if_else(
         sum(rh80) > 0,
         sum(temperature * (rh80)) / sum(rh80),
@@ -198,7 +201,7 @@ model_list <- list(
     name = "Tar spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on probability of spore presence. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Corn is susceptible to tar spot when in the growth stages V10-R3 (10th leaf - milk).</b> Risk is based on the probability that recent weather has favored tar spot severity increasing (Webster et al. 2023); it doesn't say whether the fungus is present in your area. Model depends on temperature and relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/tar-spot.md",
     # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {
@@ -220,13 +223,13 @@ model_list <- list(
     name = "Gray leaf spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage. With the current equation the probability is above 99% on nearly every day from July to mid-August in the Corn Belt, so it doesn't separate higher- from lower-risk weeks. We've asked the model's authors to check it.",
     doc = "docs/gray-leaf-spot.md",
     # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
-        "Corn is only vulnerable to tar spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+        "Corn is only vulnerable to gray leaf spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
     ycol = c("probability", "temperature_min_21day", "dew_point_min_30day"),
@@ -259,7 +262,7 @@ model_list <- list(
     name = "White mold",
     crop = "Soybean",
     group = "field",
-    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on the probability that apothecia, the small mushroom-like structures that release the spores, are present in the field. The model is inactive when the 30-day average daily high is 50 °F (10 °C) or lower. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/white-mold.md",
     # risk_period = c("Jun 15", "Aug 7"),
     validate = function(params) {
@@ -334,7 +337,7 @@ model_list <- list(
     name = "Wheat scab FHB",
     crop = "Wheat",
     group = "field",
-    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Wheat is susceptible to Fusarium head blight when flowering (anthesis).</b> Risk is based on disease probability. Model depends on 14-day moving average relative humidity. The value on each day is the risk for a field that flowers that day. Read it on or near your field's flowering date; values on other days, including winter, don't describe a crop.",
     doc = "docs/wheat-scab.md",
     risk_period = NULL,
     validate = NULL,
@@ -356,7 +359,11 @@ model_list <- list(
         "Ensure start date is set to approximate crop emergence date."
       }
     },
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -382,11 +389,15 @@ model_list <- list(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
     group = "vegetable",
-    info = "<b>Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles.</b> Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
+    info = "<b>Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles.</b> Risk depends on the disease severity values (DSVs) of the last 7 days (Low from 5, Moderate from 10, High from 15, Very high from 20). Spray programs usually go by the total since the last spray instead: spray again once 15 to 20 DSVs have built up. Set the start date to your last spray and watch the total in the chart labels. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -394,11 +405,15 @@ model_list <- list(
     name = "Cercospora leaf spot",
     crop = "Beet",
     group = "vegetable",
-    info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
+    info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on daily infection values (DIVs, 0â€“7) averaged over the past 2 and 7 days: Very high when the 7-day average reaches 5 or the 2-day average 5.5, High from 3 or 3.5, Moderate from 1.5 or 2, Low from 0.5 or 1. Sugar beet guides read two-day totals: 7 or more means a strong chance of infection. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora-beet.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -410,7 +425,11 @@ model_list <- list(
     doc = "docs/botrytis.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -443,7 +462,7 @@ model_list <- list(
     name = "Cotton planting risk model",
     crop = "Cotton",
     group = "field",
-    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting.",
+    info = "Maintaining uniform seedling emergence within the first 40 days after planting is often considered one of the most critical factors influencing cotton yield. This model estimates the probability of an emerged stand falling below the target final stand, based on seeding rate, <i>Pythium</i> presence, minimum temperatures in the 9 days after planting, and rainfall in the 3 days after planting. The model was built assuming untreated seed. Nearly all commercial seed is treated, and fungicide seed treatments support higher stands, so the model may overstate the risk for treated seed. The risk levels (Moderate from 20 %, High from 35 %) are provisional.",
     doc = "docs/cotton-planting.md",
     risk_period = NULL,
     validate = NULL,
@@ -455,7 +474,7 @@ model_list <- list(
     name = "Pecan scab",
     crop = "Pecan",
     group = "tree",
-    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature > 70°F and relative humidity > 90%. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
+    info = "<b>Pecan is susceptible to pecan scab at all growth stages, but most damaging to shucks and nuts.</b> Risk is based on the number of hours with temperature at or above 70°F and relative humidity at or above 90%. Scab hours add up from the start date: set it to March 1 or your last fungicide spray. The Mesonet also recommends spraying only once it has been 30 days after March 1, or 5 to 14 days after the last spray; this tool doesn't check those waiting periods. Spray thresholds depend on pecan variety susceptibility: Highly susceptible: 10 scab hours; Moderately susceptible: 20 scab hours; Low susceptibility: 30 scab hours. This model is well-documented on the Oklahoma mesonet, but is in testing here on this tool.",
     doc = "docs/pecan-scab.md",
     risk_period = c("Mar 1", "Aug 31"),
     validate = function(params) {
@@ -560,7 +579,6 @@ test_plot <- function(
 
 #' Vulnerable growth stages V10-R3
 #' Risk criteria: Low 0-20%, Med 20-35%, High >35%
-#' No risk: Fungicide in last 14 days, temperature <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param mean_temp_30ma Mean daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
@@ -612,7 +630,6 @@ if (FALSE) {
 
 #' Vulnerable growth stages V10-R3
 #' Risk criteria: Low 0-40%, Med 40-60%, High >60%
-#' No risk: Fungicide app in last 14 days, min temp <32F
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param min_temp_21ma minimum daily temperature, 21-day moving average, Celsius
 #' @param min_dewpoint_30ma minimum dew point temperature, 30-day moving average, Celsius
@@ -657,9 +674,9 @@ if (FALSE) {
 #' @param w7_max_temp mean maximum temperature, w7 window
 #' @param w7_min_temp mean minimum temperature, w7 window
 #' @param w7_days_temp_over_25 n days temperature over 25C, w7 window
-#' @param w7_days_precip n days with precip, w7 window
+#' @param w7_days_precip n days with precipitation > 0 mm, w7 window (missing days count as dry)
 #' @param w0_mean_rh mean RH, w0 window
-#' @param w0_days_rh_over_80 n days RH > 80%, w0 window
+#' @param w0_days_rh_over_80 n days with mean RH >= 80%, w0 window
 #' @returns probability of ear rot and deoxynivalenol concentration > 1 ppm in grain
 predict_don <- function(
   w7_max_temp,
@@ -686,15 +703,16 @@ build_don <- function(daily) {
   req(nrow(daily) > 0)
 
   daily |>
-    replace_na(list(precipitation_daily = 0)) |>
     mutate(
       date = date,
       temp_max_14day = roll_mean(temperature_max, 14),
       temp_min_14day = roll_mean(temperature_min, 14),
       days_temp_over_25_14day = roll_sum(temperature_mean >= 25, 14),
-      days_precip_14day = roll_sum(precipitation_daily > 0, 14),
+      # missing rain counts as no rain, but is reported in the label
+      days_precip_14day = roll_sum(coalesce(precipitation_daily, 0) > 0, 14),
+      days_precip_missing_14day = roll_sum(is.na(precipitation_daily), 14),
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
-      days_rh_over_80_14day = roll_sum(relative_humidity_mean > 80, 14),
+      days_rh_over_80_14day = roll_sum(relative_humidity_mean >= 80, 14),
       probability = predict_don(
         lag(temp_max_14day, 7),
         lag(temp_min_14day, 7),
@@ -704,6 +722,17 @@ build_don <- function(daily) {
         days_rh_over_80_14day
       ),
       risk_from_prob(probability, 1, 20, 40),
+      w7_precip_missing = lag(days_precip_missing_14day, 7),
+      value_label = if_else(
+        w7_precip_missing > 0,
+        sprintf(
+          "%s; %d days of missing rain counted as dry",
+          value_label,
+          as.integer(w7_precip_missing)
+        ),
+        value_label,
+        missing = value_label
+      ),
       .by = grid_id,
       .keep = "used"
     ) |>
@@ -719,28 +748,31 @@ if (FALSE) {
 # White mold (soybean) ---------------------------------------------------------
 
 #' Vulnerable growth stages: R1-R3, ~Jun 15 - Aug 7
-#' No risk: Fungicide app in last 14 days, min temp <32F
+#' Models run only when the 30-day mean daily max temperature is above 10 C
+#' Algorithm: 2025 Soybean White Mold Model Algorithm (Smith, Willbur, Webster),
+#'   building on Willbur et al. 2018
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 
-#' Non-irrigated model
+#' Non-irrigated model (2025 Soybean White Mold Model Algorithm)
+#' Mean of three logistic models
 #' Risk criteria: Low 1-20%, Med 20-35%, High >35%
 #' @param max_temp_30ma 30-day moving average of daily maximum temperature, Celsius
 #' @param max_wind_30ma 30-day moving average of daily maximum wind speed, m/s
 #' @param max_rh_30ma 30-day moving average of daily maximum relative humidity, 0-100%
-#' @returns probability of spore presence
+#' @returns probability of apothecial presence
 predict_white_mold_dry <- function(max_temp_30ma, max_wind_30ma, max_rh_30ma) {
   m1 <- -0.47 * max_temp_30ma - 1.01 * max_wind_30ma + 16.65
   m2 <- -0.68 * max_temp_30ma + 17.19
-  m3 <- -0.86 * max_temp_30ma + 0.1 * max_rh_30ma - 0.75 * max_wind_30ma + 8.2
+  m3 <- -0.56 * max_temp_30ma + 0.1 * max_rh_30ma - 0.75 * max_wind_30ma + 8.2
   (logistic(m1) + logistic(m2) + logistic(m3)) / 3
 }
 
-#' Irrigated model
+#' Irrigated model (2025 Soybean White Mold Model Algorithm)
 #' Risk criteria: Low 1-5%, Med 5-10%, High >10%
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
 #' @param row_spacing "30" or "15" inches
-#' @returns probability of spore presence
+#' @returns probability of apothecial presence
 predict_white_mold_irrig <- function(
   max_temp_30ma,
   max_rh_30ma,
@@ -752,6 +784,14 @@ predict_white_mold_irrig <- function(
     0.65 * max_temp_30ma +
     0.38 * max_rh_30ma
   logistic(mu)
+}
+
+#' Models are inactive (probability 0) when the 30-day mean daily max temperature
+#' is 10 C or lower
+#' @param prob model probability
+#' @param tmax30 30-day moving average of daily maximum temperature, Celsius
+white_mold_gate <- function(prob, tmax30) {
+  if_else(tmax30 > 10, prob, if_else(is.na(tmax30), NA_real_, 0))
 }
 
 #' Build from weather
@@ -769,7 +809,6 @@ build_white_mold <- function(
     mutate(
       date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
-      temperature_min_21day = roll_mean(temperature_min, 21),
       wind_speed_max_30day = roll_mean(wind_speed_max, 30),
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
       .by = grid_id,
@@ -783,7 +822,8 @@ build_white_mold <- function(
           temperature_max_30day,
           relative_humidity_max_30day,
           row_spacing
-        ),
+        ) |>
+          white_mold_gate(temperature_max_30day),
         risk_from_prob(probability, 1, 5, 10),
         .by = grid_id
       )
@@ -795,7 +835,7 @@ build_white_mold <- function(
           kmh_to_mps(wind_speed_max_30day),
           relative_humidity_max_30day
         ) |>
-          attenuate_prob(temperature_min_21day),
+          white_mold_gate(temperature_max_30day),
         risk_from_prob(probability, 1, 20, 35),
         .by = grid_id
       )
@@ -818,7 +858,6 @@ if (FALSE) {
 # Frogeye leaf spot (soybean) --------------------------------------------------
 
 #' Vulnerable growth stages R1-R5, ~Jun 15 - Sep 7
-#' No risk: Fungicide in last 14 days, temperature <32F
 #' Risk criteria: Low 1-40%, Med 40-50%, High >50%
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
@@ -864,7 +903,7 @@ if (FALSE) {
 SOYBEAN_CERCOSPORA_ATTR <- tribble(
   ~id  , ~species          ,
   "cf" , "C. flagellaris"  ,
-  "cs" , "C. sigesbeckiae" ,
+  "cs" , "C. cf. sigesbeckiae" ,
   "ck" , "C. kikuchii"     ,
 )
 
@@ -872,14 +911,16 @@ SOYBEAN_CERCOSPORA_ATTR <- tribble(
 #' @param min_temp_5day 5-day average daily minimum air temperature
 #' @param mean_dpd_5day 5-day average daily dewpoint depression
 #' @param max_dpd_5day 5-day average daily maximum dewpoint depression
-#' @param max_wind_14day 14-day average daily maximum wind speed
+#' @param max_wind_14day 14-day average of the daily maximum wind speed, km/h
+#'   (deliberate: the authors' document labels it m/s, but the C. cf. sigesbeckiae
+#'   fit only makes sense in km/h; see docs)
 #' @param hours_rh90_10day 10-day average daily hours of relative humidity >= 90%
 #' @param hours_rh90_14day 14-day average daily hours of relative humidity >= 90%
 predict_soybean_cercospora <- function(
   min_temp_5day,
   mean_dpd_5day,
   max_dpd_5day,
-  max_wind_14day, # need to convert from km/h to m/s
+  max_wind_14day, # km/h, see above
   hours_rh90_10day,
   hours_rh90_14day
 ) {
@@ -902,7 +943,7 @@ predict_soybean_cercospora <- function(
   )
 }
 
-# Build wheat scab risk probability from daily weather
+# Build soybean Cercospora risk probabilities from daily weather
 #' @param daily daily weather data
 build_soybean_cercospora <- function(daily) {
   req(nrow(daily) > 0)
@@ -1083,7 +1124,7 @@ if (FALSE) {
 #' Wheat scab model - fusarium head blight
 #' Relevant during wheat flowering
 #' Risk criteria: Low 1-24%, Med 24-32%, High >32%
-#' Credit: Erick DeWolf, U. Kentucky
+#' Credit: Erick De Wolf, Kansas State University
 
 # resistance names and prediction constants
 WHEAT_SCAB_ATTR <- tribble(
@@ -1152,6 +1193,10 @@ if (FALSE) {
 
 # Early blight (Solanum) -------------------------------------------------------
 
+#' P-days: Sands, Hackett and Nix 1979, Field Crops Research 2:309-331
+#'   https://doi.org/10.1016/0378-4290(79)90031-5
+#' 300 P-day spray threshold: Pscheidt and Stevenson 1986, Plant Disease 70:915-920
+#'   https://doi.org/10.1094/PD-70-915
 #' Pscheidt and Stevenson 1988: https://link.springer.com/article/10.1007/BF02854357
 #' More information: https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/
 
@@ -1175,7 +1220,7 @@ calc_pdays <- function(tmin, tmax) {
   a <- 5 * pday(tmin)
   b <- 8 * pday((2 * tmin / 3) + (tmax / 3))
   c <- 8 * pday((2 * tmax / 3) + (tmin / 3))
-  d <- 3 * pday(tmin)
+  d <- 3 * pday(tmax)
   (a + b + c + d) / 24.0
 }
 
@@ -1234,7 +1279,7 @@ if (FALSE) {
 
 # Late blight (Solanum) --------------------------------------------------------
 
-#' Based on the Wallins BLITECAST model:
+#' Based on BLITECAST (Krause, Massie and Hyre 1975), using Wallin's (1962) DSVs:
 #' - https://www.google.com/books/edition/The_Plant_Disease_Reporter/ow9BD6P2KZ4C?hl=en&gbpv=1&pg=PA95&printsec=frontcover
 #' - https://ipm.ucanr.edu/DISEASE/DATABASE/potatolateblight.html
 #' More information:
@@ -1242,7 +1287,7 @@ if (FALSE) {
 
 #' Calculate disease severity values
 #' @param t Mean temperature during hours where RH > 90%, Celsius
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns numeric 0-4 disease severity values
 calc_late_blight_dsv <- function(t, h) {
   case_when(
@@ -1290,7 +1335,7 @@ build_late_blight <- function(daily) {
       date = date,
       dsv = calc_late_blight_dsv(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_late_blight(dsv),
       .by = grid_id,
@@ -1312,17 +1357,20 @@ if (FALSE) {
 #'   https://www.apsnet.org/publications/phytopathology/backissues/Documents/1978Articles/Phyto68n09_1354.PDF
 
 #' Calculate disease severity values for a day
+#' FAST Table 1 (Madden et al. 1978) by whole-degree band, read as half-open
+#' ranges of the unrounded temperature (eg 17.9 C is in the 13-17 band).
+#' Above 29 C, where FAST's table stops, scores 0.
 #' @param temp Mean temperature during hours where RH > 90%, Celsius
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns numeric 0-4 dsv
 calc_alternaria_dsv <- function(temp, h) {
   case_when(
-    is.na(temp) | is.na(h) ~ 0,
+    is.na(temp) | is.na(h) | h == 0 ~ 0,
     temp < 13 ~ 0,
-    temp <= 17 ~ (h >= 7) + (h >= 16) + (h >= 21),
-    temp <= 20 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
-    temp <= 25 ~ (h >= 3) + (h >= 6) + (h >= 13) + (h >= 21),
-    temp <= 29 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    temp < 18 ~ (h >= 7) + (h >= 16) + (h >= 21),
+    temp < 21 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    temp < 26 ~ (h >= 3) + (h >= 6) + (h >= 13) + (h >= 21),
+    temp < 30 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
     TRUE ~ 0
   )
 }
@@ -1358,7 +1406,7 @@ build_alternaria <- function(daily) {
       date = date,
       dsv = calc_alternaria_dsv(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_alternaria(dsv),
       .by = grid_id,
@@ -1375,16 +1423,17 @@ if (FALSE) {
 # Cercospora leaf blight (beet) ------------------------------------------------
 
 # Based on Windels 1998: https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716
-# More information: https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/
+# More information: https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/
 
 #' Calculate daily infection values
 #' @param t Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns 0-7 div
 calc_cercospora_div <- function(t, h) {
   t <- c_to_f(t)
   case_when(
     is.na(t) | is.na(h) ~ 0,
+    h == 0 ~ 0,
     t <= 60 ~ 0,
     t <= 61 ~ (h > 21),
     t <= 62 ~ (h > 19) + (h > 22),
@@ -1441,7 +1490,7 @@ build_cercospora <- function(daily) {
       date = date,
       dsv = calc_cercospora_div(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_cercospora(dsv),
       .by = grid_id,
@@ -1464,13 +1513,13 @@ if (FALSE) {
 
 #' Botcast daily innoculum value
 #' this determines if innoculum is predicted to be present
-#' A) if temp > 30 for >= 4 hrs on any of past 5 days => 0
+#' A) if temp >= 30 for >= 4 hrs on any of past 5 days => 0
 #' B) if h < 5 => 0
 #' C) if h > 12 => 1
 #' D) if prev day dry (<70% rh for >= 6 hrs) and no rain => 0 else 1
-#' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
+#' @param hot T/F temp >= 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
-#' @param hours_rh90 hours rh > 90 during past day
+#' @param hours_rh90 hours with RH >= 90% since 8 pm the previous evening
 botcast_dinov <- function(hot, dry, hours_rh90) {
   case_when(
     hot ~ 0,
@@ -1505,9 +1554,9 @@ botcast_dinfv <- function(t, h) {
 }
 
 # Final botrytis disease severity index calculation
-#' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
+#' @param hot T/F temp >= 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
-#' @param hours_rh_over_90 hours with RH > 90% over past day
+#' @param hours_rh_over_90 hours with RH >= 90% since 8 pm the previous evening
 #' @param mean_temp_rh90 mean air temperature for hours with RH > 90%
 calc_botrytis_dsi <- function(hot, dry, hours_rh_over_90, mean_temp_rh90) {
   dinov <- botcast_dinov(hot, lag(dry, default = FALSE), hours_rh_over_90)
@@ -1545,7 +1594,7 @@ build_botrytis <- function(daily) {
       dsv = calc_botrytis_dsi(
         hot_past_5_days,
         dry,
-        hours_rh_over_90,
+        hours_rh_over_90_since_night,
         temperature_mean_rh_over_90
       ),
       risk_for_botrytis(dsv),
@@ -1586,9 +1635,10 @@ predict_rye_biomass <- function(plant_doy, precip_fall, gdd_total) {
   k <- 3.663e-03
   x0 <- 1.049e+03
 
-  # predict from inputs
-  pred <- (b0 + b_pd * plant_doy + b_pf * precip_fall) /
-    (1 + exp(-k * (gdd_total - x0)))
+  # predict from inputs; biomass is 0 once the numerator goes negative (late
+  # planting and a very wet fall), rather than rising again when squared
+  height <- b0 + b_pd * plant_doy + b_pf * precip_fall
+  pred <- pmax(height, 0) / (1 + exp(-k * (gdd_total - x0)))
   pred^2
 }
 
@@ -1782,8 +1832,8 @@ build_pecan_scab <- function(hourly) {
 
   hourly |>
     mutate(
-      high_rh = relative_humidity >= 92,
-      high_temp = temperature > 21.1
+      high_rh = relative_humidity >= 90,
+      high_temp = temperature >= f_to_c(70)
     ) |>
     summarize(
       hours_high_rh = sum(high_rh),
@@ -1881,7 +1931,7 @@ build_insect <- function(
         label,
         if_else(
           kill == 1,
-          ".\nRecent freezing temperatures may reduce insect populations.",
+          "\nReduced by recent freezes",
           ""
         )
       )
@@ -1910,7 +1960,156 @@ if (FALSE) {
   validate_biofix(1)(list(start_date = today()))
 }
 
+## Fitted insect models --------------------------------------------------------
+# Curves fitted to field counts by degree days (GAM fits from UW Vegetable
+# Entomology), evaluated as in AgWeather v2:
+# - tabulate the fit on a 1-degree-day grid, linear between rows, holding the
+#   last value; back-transform; 0 before the first row
+# - activity = value / its maximum over the grid
+# - read a day's cumulative degree days off the grid
+# - scale by a fall freeze factor
+# - risk levels from activity at 0.05, 0.25, 0.5, 0.75
+
+FITTED_DD_GRID <- seq(0, 10000, by = 1)
+
+#' Tabulate a fitted curve on a 1-degree-day grid
+#' @param gdd degree days (F) of the fit's rows, increasing
+#' @param fit the fit on its link scale at those degree days
+#' @param transform "log1p" (fit is log(count + 1)) or "log" (fit is the log of
+#'   the fitted mean)
+#' @returns list of value, activity, peak, peak_dd
+fitted_curve <- function(gdd, fit, transform = c("log1p", "log")) {
+  transform <- match.arg(transform)
+  stopifnot(!is.unsorted(gdd), length(gdd) == length(fit))
+  x <- FITTED_DD_GRID
+  y <- approx(gdd, fit, xout = x, rule = 2)$y
+  value <- if (transform == "log1p") expm1(pmax(y, 0)) else exp(y)
+  value[x < gdd[1]] <- 0
+  list(
+    value = value,
+    activity = value / max(value),
+    peak = max(value),
+    peak_dd = x[which.max(value)]
+  )
+}
+
+#' Read a fitted curve at cumulative degree days
+#' @param curve from `fitted_curve()`
+#' @param what "value" or "activity"
+#' @param total cumulative degree days (F)
+read_curve <- function(curve, what, total) {
+  out <- rep(NA_real_, length(total))
+  ok <- !is.na(total)
+  if (any(ok)) {
+    out[ok] <- approx(FITTED_DD_GRID, curve[[what]], xout = total[ok], rule = 2)$y
+  }
+  out
+}
+
+#' Fall freeze factor: 1 until fall freezes, then max(0, 1 - f/4) for f days in
+#' the last 14 at or below -2 C after day of year 250, held at its lowest so far
+#' (call within a grid and year)
+#' @param tmin daily minimum temperature, Celsius
+#' @param yday day of year
+freeze_factor <- function(tmin, yday) {
+  f <- roll_sum(tmin <= -2, 14)
+  raw <- if_else(yday > 250, pmax(0, 1 - coalesce(f, 0) / 4), 1)
+  cummin(raw)
+}
+
+#' Format typical counts for labels: "0" when it rounds to zero, one decimal
+#' below 10, whole numbers above
+fmt_count <- function(x) {
+  case_when(
+    is.na(x) ~ "NA",
+    round(x, 1) == 0 ~ "0",
+    x < 10 ~ sprintf("%.1f", x),
+    TRUE ~ sprintf("%.0f", x)
+  )
+}
+
+#' Build a fitted insect model from daily weather
+#' @param daily daily weather data
+#' @param model a model from `FittedInsect()`
+build_fitted_insect <- function(daily, model) {
+  req(nrow(daily) > 0)
+
+  res <- daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      gdd_f = gdd_sine(temperature_min, temperature_max, model$tmin, model$tmax) *
+        1.8,
+      cum_gdd = cumsum(gdd_f),
+      freeze = freeze_factor(temperature_min, yday(date)),
+      .by = c(grid_id, year),
+      .keep = "used"
+    )
+
+  for (id in names(model$curves)) {
+    curve <- model$curves[[id]]
+    res[[paste0("count_", id)]] <- read_curve(curve, "value", res$cum_gdd) *
+      res$freeze
+    res[[paste0("activity_", id)]] <- read_curve(curve, "activity", res$cum_gdd) *
+      res$freeze
+  }
+
+  res |>
+    mutate(
+      activity = .data[[paste0("activity_", model$risk_curve)]],
+      severity = (activity >= 0.05) +
+        (activity >= 0.25) +
+        (activity >= 0.5) +
+        (activity >= 0.75),
+      risk_from_severity(severity),
+      value_label = paste0(
+        sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
+        model$describe(pick(everything())),
+        if_else(freeze < 1, "\nReduced by recent freezes", "")
+      )
+    )
+}
+
 ## Insect defs -----------------------------------------------------------------
+
+#' Insect model read from fitted curves, see `build_fitted_insect()`
+#' @param curves named list of `fitted_curve()` results
+#' @param risk_curve name of the curve whose activity sets the risk
+#' @param describe function of the results data frame returning a label per row
+FittedInsect <- function(
+  name,
+  crop = NULL,
+  info,
+  doc,
+  tmin,
+  tmax = 30,
+  curves,
+  risk_curve,
+  describe
+) {
+  m <- Model(
+    name = name,
+    crop = crop,
+    group = "insect",
+    info = info,
+    doc = doc,
+    risk_period = NULL,
+    biofix = 1,
+    validate = validate_biofix(1),
+    ycol = c("activity", "cum_gdd", paste0("count_", names(curves))),
+    yrange = c(0, 1)
+  )
+  stopifnot(tmin < tmax)
+  stopifnot(risk_curve %in% names(curves))
+  stopifnot(is.function(describe))
+  m$tmin <- tmin
+  m$tmax <- tmax
+  m$curves <- curves
+  m$risk_curve <- risk_curve
+  m$describe <- describe
+  m
+}
+
 
 Insect <- function(
   name,
@@ -1946,7 +2145,7 @@ insect_models <- list(
   scm = Insect(
     name = "Seedcorn maggot",
     crop = "Corn, bean, other",
-    info = "In Wisconsin there are typically 3-5 generations per year, with maximum risk coinciding with peak adult flight times: First (overwintering) generation flight peaks around 360 FDD, second generation flight peaks around 1080 FDD, third generation peaks around 1800 FDD. Wait 450 FDD after peak flight for larval pupation and minimum risk to crops.",
+    info = "In Wisconsin there are typically 3 to 5 generations a year. Risk is highest around peak adult flight: the overwintered generation's flight peaks around 340 degree days (base 39°F, from January 1), the second around 1,050 and the third around 1,750. Larvae feed for a few weeks after each flight; avoid planting susceptible crops during flights, especially into fields with fresh manure or incorporated green manure.",
     doc = "docs/insects/scm.md",
     tmin = 4,
     tmax = 30,
@@ -1981,7 +2180,7 @@ insect_models <- list(
   afw = Insect(
     "Alfalfa weevil",
     crop = "Alfalfa",
-    info = "Alfalfa weevil egg hatch begins around 300 FDD. Light feeding damage expected during 1st and 2nd instar life stages (350-500 FDD). Heavy feeding damage expected during 3rd and 4th instar development, approx. 400-600 FDD.",
+    info = "Degree days are counted from January 1 (single sine, base 48°F (9°C), cutoff 86°F). Egg hatch begins around 300 degree days: start scouting. Larvae reach the second stage around 370, the third around 440 and the fourth, largest stage, which does most of the feeding, around 505. Pupation begins around 595, adults emerge around 815 and leave the field by about 1,000. UW–Madison puts the heaviest feeding at about 600 to 800 degree days, later than the model's peak, so keep checking fields while larvae are still feeding.",
     doc = "docs/insects/alfalfa-weevil.md",
     tmin = 9,
     tmax = 30,
@@ -1996,25 +2195,63 @@ insect_models <- list(
         1000 ,    0 , "Adult diapause"            ,
     )
   ),
-  cpb = Insect(
-    "Colorado Potato Beetle",
-    crop = "Potato",
-    info = "Our Colorado potato beetle risk model was derived from 10 years of scouting data in the Central Sands and uses a base 50°F degree day model. The indicated risk score represents the estimated total abundance of adults and larvae. First adult colonization of crops is typically around 265 FDD with peak first-generation populations observed around 895 FDD. Total populations decline slightly through 1115 FDD during the period between generations. Populations peak again around 1375 FDD during second generation adult emergence and decline through the end of the season.",
-    doc = "docs/insects/cpb.md",
-    tmin = 10,
-    tmax = 30,
-    key = tribble(
-      ~start , ~sev , ~label                            ,
-         200 ,    1 , "1st gen adult colonization"      ,
-         350 ,    2 , "1st gen egg hatch"               ,
-         600 ,    3 , "1st gen peak adults"             ,
-         800 ,    4 , "1st gen peak larvae"             ,
-         935 ,    2 , "1st gen pupation"                ,
-        1100 ,    3 , "2nd gen adult emergence"         ,
-        1470 ,    4 , "2nd gen peak adults"             ,
-        1800 ,    3 , "2nd gen adult feeding continues" ,
-        1970 ,    2 , "2nd gen adults begin dispersing" ,
-        2265 ,    1 , "2nd gen adults mostly dispersed" ,
+  cpb = local({
+    # the scouting data end at 2,311 degree days; later rows are extrapolation
+    fit <- read_csv(
+      "data/insects/colorado_potato_beetle_fit.csv",
+      show_col_types = FALSE
+    ) |>
+      filter(gdd <= 2311)
+    FittedInsect(
+      name = "Colorado Potato Beetle",
+      crop = "Potato",
+      info = "This model shows how many Colorado potato beetles a typical field has at each point in the season, from curves fitted to scouting counts in commercial potato fields in Wisconsin's Central Sands, 2014–2025. It counts degree days from January 1 (single sine, base 52°F, cutoff 86°F). Risk compares today's typical count of adults and larvae with the season's peak. Overwintered adults colonize fields at about 210 degree days; egg masses peak near 580; larvae hatch from about 375 and peak near 795; adults peak near 590 and again near 1,480 as the summer generation emerges. Adults and larvae together peak near 810 and 1,350 and stay near their highest between, so risk stays high through midsummer.",
+      doc = "docs/insects/cpb.md",
+      tmin = f_to_c(52),
+      tmax = 30,
+      curves = list(
+        adults_larvae = fitted_curve(fit$gdd, fit$adults_larvae, "log1p"),
+        adults = fitted_curve(fit$gdd, fit$adults, "log1p"),
+        eggs = fitted_curve(fit$gdd, fit$eggs, "log1p"),
+        larvae = fitted_curve(fit$gdd, fit$larvae, "log1p")
+      ),
+      risk_curve = "adults_larvae",
+      describe = function(df) {
+        paste0(
+          sprintf(
+            "%s adults, %s larvae per 25 sweeps",
+            fmt_count(df$count_adults),
+            fmt_count(df$count_larvae)
+          ),
+          if_else(
+            round(df$count_eggs, 1) > 0,
+            sprintf("\n%s egg masses per 10 plants", fmt_count(df$count_eggs)),
+            ""
+          )
+        )
+      }
     )
-  )
+  }),
+  pvy = local({
+    fit <- read_csv(
+      "data/insects/aphid_pvy_vectors_fit.csv",
+      show_col_types = FALSE
+    )
+    FittedInsect(
+      name = "Aphid PVY vectors",
+      crop = "Potato",
+      info = "Potato virus Y (PVY) is spread by winged aphids probing leaves as they move through a field, mostly species that don't colonize potato, such as the soybean aphid. This model shows how much PVY-spreading aphid flight a typical Wisconsin season has at each point, as a share of the season's peak, from suction trap catches in 2016–2023. It counts degree days from January 1 (single sine, base 39.2°F, cutoff 86°F). It shows typical pressure for the time of year and when the flight usually begins; it doesn't forecast when this year's flight will peak. Current trap catches are the better guide when they're available.",
+      doc = "docs/insects/pvy.md",
+      tmin = 4, # 39.2 F
+      tmax = 30,
+      curves = list(pvy = fitted_curve(fit$gdd, fit$log_risk, "log")),
+      risk_curve = "pvy",
+      describe = function(df) {
+        sprintf(
+          "%.0f%% of a typical season's peak",
+          df$activity_pvy * 100
+        )
+      }
+    )
+  })
 )

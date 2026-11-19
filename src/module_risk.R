@@ -71,11 +71,12 @@ riskServer <- function(rv, rx) {
           ),
           div(
             style = "flex: 1; font-weight: bold;",
-            selectInput(
+            selectizeInput(
               inputId = ns("model"),
               label = NULL,
               choices = choices,
-              selected = first_truthy(input$model, first(choices))
+              selected = first_truthy(input$model, first(choices)),
+              options = list(onInitialize = I("selectizeNoAutofill"))
             )
           )
         )
@@ -311,7 +312,11 @@ riskServer <- function(rv, rx) {
         req(nrow(daily) > 0)
 
         results <- if (model$group == "insect") {
-          build_insect(daily, model$tmin, model$tmax, model$key)
+          if (!is.null(model$curves)) {
+            build_fitted_insect(daily, model)
+          } else {
+            build_insect(daily, model$tmin, model$tmax, model$key)
+          }
         } else {
           switch(
             model$slug,
@@ -712,7 +717,7 @@ riskServer <- function(rv, rx) {
                 sprintf(
                   "For %s: %s",
                   format(last_value$date, "%b %d, %Y"),
-                  last_value$value_label
+                  gsub("\n", ", ", last_value$value_label, fixed = TRUE)
                 )
               ),
               plt
