@@ -163,6 +163,27 @@ test_that("build_don", {
   })
 })
 
+test_that("build_don counts RH at 80 and reports missing rain", {
+  d <- test_daily_wx |> filter(grid_id == "44.815,-91.530") |> arrange(date)
+  d$relative_humidity_mean[between(d$date, ymd("2025-07-02"), ymd("2025-07-15"))] <- 70
+  d$relative_humidity_mean[d$date == ymd("2025-07-10")] <- 80
+  d$precipitation_daily[d$date %in% (ymd("2025-07-01") + 0:3)] <- NA
+  res <- build_don(d)
+  # W0 covers July 2 - 15
+  on <- res |> filter(date == ymd("2025-07-15"))
+  expect_equal(on$days_rh_over_80_14day, 1)
+  # W-7 covers June 22 - July 5
+  later <- res |> filter(date == ymd("2025-07-12"))
+  expect_match(later$value_label, "4 days of missing rain counted as dry")
+  # missing rain stays missing in the displayed trace
+  expect_true(all(is.na(res$precipitation_daily[res$date %in% (ymd("2025-07-01") + 0:3)])))
+  # no note when the window is complete
+  expect_no_match(
+    res$value_label[res$date == ymd("2025-06-15")],
+    "missing rain"
+  )
+})
+
 # White mold ----
 
 test_that("predict_white_mold_dry", {

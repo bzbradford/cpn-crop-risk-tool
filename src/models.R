@@ -676,9 +676,9 @@ if (FALSE) {
 #' @param w7_max_temp mean maximum temperature, w7 window
 #' @param w7_min_temp mean minimum temperature, w7 window
 #' @param w7_days_temp_over_25 n days temperature over 25C, w7 window
-#' @param w7_days_precip n days with precip, w7 window
+#' @param w7_days_precip n days with precipitation > 0 mm, w7 window (missing days count as dry)
 #' @param w0_mean_rh mean RH, w0 window
-#' @param w0_days_rh_over_80 n days RH > 80%, w0 window
+#' @param w0_days_rh_over_80 n days with mean RH >= 80%, w0 window
 #' @returns probability of ear rot and deoxynivalenol concentration > 1 ppm in grain
 predict_don <- function(
   w7_max_temp,
@@ -705,15 +705,16 @@ build_don <- function(daily) {
   req(nrow(daily) > 0)
 
   daily |>
-    replace_na(list(precipitation_daily = 0)) |>
     mutate(
       date = date,
       temp_max_14day = roll_mean(temperature_max, 14),
       temp_min_14day = roll_mean(temperature_min, 14),
       days_temp_over_25_14day = roll_sum(temperature_mean >= 25, 14),
-      days_precip_14day = roll_sum(precipitation_daily > 0, 14),
+      # missing rain counts as no rain, but is reported in the label
+      days_precip_14day = roll_sum(coalesce(precipitation_daily, 0) > 0, 14),
+      days_precip_missing_14day = roll_sum(is.na(precipitation_daily), 14),
       rh_mean_14day = roll_mean(relative_humidity_mean, 14),
-      days_rh_over_80_14day = roll_sum(relative_humidity_mean > 80, 14),
+      days_rh_over_80_14day = roll_sum(relative_humidity_mean >= 80, 14),
       probability = predict_don(
         lag(temp_max_14day, 7),
         lag(temp_min_14day, 7),
@@ -723,6 +724,17 @@ build_don <- function(daily) {
         days_rh_over_80_14day
       ),
       risk_from_prob(probability, 1, 20, 40),
+      w7_precip_missing = lag(days_precip_missing_14day, 7),
+      value_label = if_else(
+        w7_precip_missing > 0,
+        sprintf(
+          "%s; %d days of missing rain counted as dry",
+          value_label,
+          as.integer(w7_precip_missing)
+        ),
+        value_label,
+        missing = value_label
+      ),
       .by = grid_id,
       .keep = "used"
     ) |>
