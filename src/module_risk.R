@@ -717,7 +717,7 @@ riskServer <- function(rv, rx) {
                 sprintf(
                   "For %s: %s",
                   format(last_value$date, "%b %d, %Y"),
-                  last_value$value_label
+                  gsub("\n", ", ", last_value$value_label, fixed = TRUE)
                 )
               ),
               plt

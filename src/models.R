@@ -1929,7 +1929,7 @@ build_insect <- function(
         label,
         if_else(
           kill == 1,
-          ".\nRecent freezing temperatures may reduce insect populations.",
+          "\nReduced by recent freezes",
           ""
         )
       )
@@ -2015,6 +2015,17 @@ freeze_factor <- function(tmin, yday) {
   cummin(raw)
 }
 
+#' Format typical counts for labels: "0" when it rounds to zero, one decimal
+#' below 10, whole numbers above
+fmt_count <- function(x) {
+  case_when(
+    is.na(x) ~ "NA",
+    round(x, 1) == 0 ~ "0",
+    x < 10 ~ sprintf("%.1f", x),
+    TRUE ~ sprintf("%.0f", x)
+  )
+}
+
 #' Build a fitted insect model from daily weather
 #' @param daily daily weather data
 #' @param model a model from `FittedInsect()`
@@ -2052,11 +2063,7 @@ build_fitted_insect <- function(daily, model) {
       value_label = paste0(
         sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
         model$describe(pick(everything())),
-        if_else(
-          freeze < 1,
-          "\nRecent freezing temperatures have reduced insect activity.",
-          ""
-        )
+        if_else(freeze < 1, "\nReduced by recent freezes", "")
       )
     )
 }
@@ -2208,12 +2215,17 @@ insect_models <- list(
       ),
       risk_curve = "adults_larvae",
       describe = function(df) {
-        sprintf(
-          "Typical counts: %.1f adults and larvae per 25 sweeps (%.1f adults, %.1f larvae); %.1f egg masses per 10 plants",
-          df$count_adults_larvae,
-          df$count_adults,
-          df$count_larvae,
-          df$count_eggs
+        paste0(
+          sprintf(
+            "%s adults, %s larvae per 25 sweeps",
+            fmt_count(df$count_adults),
+            fmt_count(df$count_larvae)
+          ),
+          if_else(
+            round(df$count_eggs, 1) > 0,
+            sprintf("\n%s egg masses per 10 plants", fmt_count(df$count_eggs)),
+            ""
+          )
         )
       }
     )
@@ -2234,7 +2246,7 @@ insect_models <- list(
       risk_curve = "pvy",
       describe = function(df) {
         sprintf(
-          "Vector pressure: %.0f%% of a typical season's peak",
+          "%.0f%% of a typical season's peak",
           df$activity_pvy * 100
         )
       }
