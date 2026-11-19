@@ -1996,7 +1996,7 @@ insect_models <- list(
   scm = Insect(
     name = "Seedcorn maggot",
     crop = "Corn, bean, other",
-    info = "In Wisconsin there are typically 3-5 generations per year, with maximum risk coinciding with peak adult flight times: First (overwintering) generation flight peaks around 360 FDD, second generation flight peaks around 1080 FDD, third generation peaks around 1800 FDD. Wait 450 FDD after peak flight for larval pupation and minimum risk to crops.",
+    info = "In Wisconsin there are typically 3 to 5 generations a year. Risk is highest around peak adult flight: the overwintered generation's flight peaks around 340 degree days (base 39°F, from January 1), the second around 1,050 and the third around 1,750. Larvae feed for a few weeks after each flight; avoid planting susceptible crops during flights, especially into fields with fresh manure or incorporated green manure.",
     doc = "docs/insects/scm.md",
     tmin = 4,
     tmax = 30,
@@ -2031,7 +2031,7 @@ insect_models <- list(
   afw = Insect(
     "Alfalfa weevil",
     crop = "Alfalfa",
-    info = "Alfalfa weevil egg hatch begins around 300 FDD. Light feeding damage expected during 1st and 2nd instar life stages (350-500 FDD). Heavy feeding damage expected during 3rd and 4th instar development, approx. 400-600 FDD.",
+    info = "Degree days are counted from January 1 (single sine, base 48°F (9°C), cutoff 86°F). Egg hatch begins around 300 degree days: start scouting. Larvae reach the second stage around 370, the third around 440 and the fourth, largest stage, which does most of the feeding, around 505. Pupation begins around 595, adults emerge around 815 and leave the field by about 1,000. UW–Madison puts the heaviest feeding at about 600 to 800 degree days, later than the model's peak, so keep checking fields while larvae are still feeding.",
     doc = "docs/insects/alfalfa-weevil.md",
     tmin = 9,
     tmax = 30,
