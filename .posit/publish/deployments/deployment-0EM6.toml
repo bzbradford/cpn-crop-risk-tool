@@ -2,7 +2,7 @@
 "$schema" = "https://cdn.posit.co/publisher/schemas/posit-publishing-record-schema-v3.json"
 server_type = "connect"
 server_url = "https://connect.doit.wisc.edu"
-client_version = "2.13.24"
+client_version = "2.13.33"
 created_at = "2026-02-19T22:31:37.478Z"
 type = "r-shiny"
 configuration_name = "Crop Risk Tool-TGSR"
@@ -10,14 +10,16 @@ id = "4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 dashboard_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c"
 direct_url = "https://connect.doit.wisc.edu/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/"
 logs_url = "https://connect.doit.wisc.edu/connect/#/apps/4064e9bc-241e-4b46-b5a8-e8b95220d41c/logs"
-deployed_at = "2026-11-01T22:21:40.293Z"
-bundle_id = "5358"
-bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/5358/download"
+deployed_at = "2026-11-19T18:19:22.705Z"
+bundle_id = "5395"
+bundle_url = "https://connect.doit.wisc.edu/__api__/v1/content/4064e9bc-241e-4b46-b5a8-e8b95220d41c/bundles/5395/download"
 files = [
     ".Renviron",
     ".posit/publish/Crop Risk Tool-TGSR.toml",
     ".posit/publish/deployments/deployment-0EM6.toml",
     "README.md",
+    "data/aphid_pvy_vectors_fit.csv",
+    "data/colorado_potato_beetle_fit.csv",
     "docs/alternaria-carrot.png",
     "docs/alternaria.md",
     "docs/botrytis-onion.png",
@@ -40,6 +42,7 @@ files = [
     "docs/insects/alfalfa-weevil.md",
     "docs/insects/cpb.jpg",
     "docs/insects/cpb.md",
+    "docs/insects/pvy.md",
     "docs/insects/scm.jpg",
     "docs/insects/scm.md",
     "docs/late-blight-potato.png",
@@ -108,12 +111,13 @@ files = [
     "/docs",
     "/www",
     "/tests",
+    "/data",
 ]
 validate = true
 product_type = "connect"
 
 [configuration.r]
-version = "4.6.1"
+version = "4.6.2"
 package_manager = "renv"
 requires_r = "~=4.6.0"
 

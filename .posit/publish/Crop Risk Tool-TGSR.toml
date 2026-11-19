@@ -18,6 +18,7 @@ files = [
     "/docs",
     "/www",
     "/tests",
+    "/data",
 ]
 validate = true
 product_type = "connect"

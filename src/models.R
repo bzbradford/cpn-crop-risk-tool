@@ -901,10 +901,10 @@ if (FALSE) {
 #' Credit: Richard (Wade) Webster, North Dakota State
 
 SOYBEAN_CERCOSPORA_ATTR <- tribble(
-  ~id  , ~species          ,
-  "cf" , "C. flagellaris"  ,
+  ~id  , ~species              ,
+  "cf" , "C. flagellaris"      ,
   "cs" , "C. cf. sigesbeckiae" ,
-  "ck" , "C. kikuchii"     ,
+  "ck" , "C. kikuchii"         ,
 )
 
 
@@ -2001,7 +2001,12 @@ read_curve <- function(curve, what, total) {
   out <- rep(NA_real_, length(total))
   ok <- !is.na(total)
   if (any(ok)) {
-    out[ok] <- approx(FITTED_DD_GRID, curve[[what]], xout = total[ok], rule = 2)$y
+    out[ok] <- approx(
+      FITTED_DD_GRID,
+      curve[[what]],
+      xout = total[ok],
+      rule = 2
+    )$y
   }
   out
 }
@@ -2038,7 +2043,12 @@ build_fitted_insect <- function(daily, model) {
     arrange(grid_id, date) |>
     mutate(
       date = date,
-      gdd_f = gdd_sine(temperature_min, temperature_max, model$tmin, model$tmax) *
+      gdd_f = gdd_sine(
+        temperature_min,
+        temperature_max,
+        model$tmin,
+        model$tmax
+      ) *
         1.8,
       cum_gdd = cumsum(gdd_f),
       freeze = freeze_factor(temperature_min, yday(date)),
@@ -2050,7 +2060,11 @@ build_fitted_insect <- function(daily, model) {
     curve <- model$curves[[id]]
     res[[paste0("count_", id)]] <- read_curve(curve, "value", res$cum_gdd) *
       res$freeze
-    res[[paste0("activity_", id)]] <- read_curve(curve, "activity", res$cum_gdd) *
+    res[[paste0("activity_", id)]] <- read_curve(
+      curve,
+      "activity",
+      res$cum_gdd
+    ) *
       res$freeze
   }
 
@@ -2198,7 +2212,7 @@ insect_models <- list(
   cpb = local({
     # the scouting data end at 2,311 degree days; later rows are extrapolation
     fit <- read_csv(
-      "data/insects/colorado_potato_beetle_fit.csv",
+      "data/colorado_potato_beetle_fit.csv",
       show_col_types = FALSE
     ) |>
       filter(gdd <= 2311)
@@ -2234,7 +2248,7 @@ insect_models <- list(
   }),
   pvy = local({
     fit <- read_csv(
-      "data/insects/aphid_pvy_vectors_fit.csv",
+      "data/aphid_pvy_vectors_fit.csv",
       show_col_types = FALSE
     )
     FittedInsect(
