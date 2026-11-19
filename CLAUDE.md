@@ -51,7 +51,7 @@ Insect models build from growing degree days. Defined in `src/models.R` and docu
 
 ## Key Conventions
 - Indentation: 2 spaces
-- R 4.5.3, dependencies managed with `renv` (see `renv.lock`)
+- R version and dependencies managed with `renv` (see `renv.lock`)
 - Test fixtures stored as `.rds` files in `tests/testthat/`
 - Assume the development environment is Windows
 
