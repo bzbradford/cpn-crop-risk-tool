@@ -229,7 +229,7 @@ model_list <- list(
     validate = function(params) {
       overlap <- check_date_overlap(params$date_range, c("Jul 1", "Aug 15"))
       if (!any(overlap)) {
-        "Corn is only vulnerable to tar spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
+        "Corn is only vulnerable to gray leaf spot between V10 and R3. Risk estimates are only valid when they overlap with the susceptible period of the crop's lifecycle."
       }
     },
     ycol = c("probability", "temperature_min_21day", "dew_point_min_30day"),
