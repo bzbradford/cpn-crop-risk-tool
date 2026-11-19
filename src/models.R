@@ -1280,7 +1280,7 @@ if (FALSE) {
 
 # Late blight (Solanum) --------------------------------------------------------
 
-#' Based on the Wallins BLITECAST model:
+#' Based on BLITECAST (Krause, Massie and Hyre 1975), using Wallin's (1962) DSVs:
 #' - https://www.google.com/books/edition/The_Plant_Disease_Reporter/ow9BD6P2KZ4C?hl=en&gbpv=1&pg=PA95&printsec=frontcover
 #' - https://ipm.ucanr.edu/DISEASE/DATABASE/potatolateblight.html
 #' More information:
@@ -1514,11 +1514,11 @@ if (FALSE) {
 
 #' Botcast daily innoculum value
 #' this determines if innoculum is predicted to be present
-#' A) if temp > 30 for >= 4 hrs on any of past 5 days => 0
+#' A) if temp >= 30 for >= 4 hrs on any of past 5 days => 0
 #' B) if h < 5 => 0
 #' C) if h > 12 => 1
 #' D) if prev day dry (<70% rh for >= 6 hrs) and no rain => 0 else 1
-#' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
+#' @param hot T/F temp >= 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
 #' @param hours_rh90 hours with RH >= 90% since 8 pm the previous evening
 botcast_dinov <- function(hot, dry, hours_rh90) {
@@ -1555,7 +1555,7 @@ botcast_dinfv <- function(t, h) {
 }
 
 # Final botrytis disease severity index calculation
-#' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
+#' @param hot T/F temp >= 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
 #' @param hours_rh_over_90 hours with RH >= 90% since 8 pm the previous evening
 #' @param mean_temp_rh90 mean air temperature for hours with RH > 90%
