@@ -1636,9 +1636,10 @@ predict_rye_biomass <- function(plant_doy, precip_fall, gdd_total) {
   k <- 3.663e-03
   x0 <- 1.049e+03
 
-  # predict from inputs
-  pred <- (b0 + b_pd * plant_doy + b_pf * precip_fall) /
-    (1 + exp(-k * (gdd_total - x0)))
+  # predict from inputs; biomass is 0 once the numerator goes negative (late
+  # planting and a very wet fall), rather than rising again when squared
+  height <- b0 + b_pd * plant_doy + b_pf * precip_fall
+  pred <- pmax(height, 0) / (1 + exp(-k * (gdd_total - x0)))
   pred^2
 }
 

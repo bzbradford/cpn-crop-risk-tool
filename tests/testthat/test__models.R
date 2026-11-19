@@ -685,6 +685,14 @@ test_that("predict_rye_biomass", {
   })
 })
 
+test_that("rye biomass is 0 once the numerator goes negative", {
+  # numerator 423.1 - 1.031*300 - 0.2878*precip is 0 at about 395 mm
+  expect_gt(predict_rye_biomass(300, 300, 2000), predict_rye_biomass(300, 380, 2000))
+  expect_gt(predict_rye_biomass(300, 380, 2000), 0)
+  expect_equal(predict_rye_biomass(300, 400, 2000), 0)
+  expect_equal(predict_rye_biomass(300, 800, 2000), 0)
+})
+
 # test_that("predict_rye_biomass", {
 #   expect_silent({
 #     expand_grid(
