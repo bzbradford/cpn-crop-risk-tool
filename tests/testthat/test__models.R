@@ -444,6 +444,13 @@ test_that("calc_pdays", {
   })
 })
 
+test_that("calc_pdays weighs the high in the last term", {
+  expect_equal(calc_pdays(10, 30), 6.920459, tolerance = 1e-6)
+  expect_equal(calc_pdays(15, 25), 9.231206, tolerance = 1e-6)
+  expect_equal(calc_pdays(5, 20), 5.240221, tolerance = 1e-6)
+  expect_equal(calc_pdays(18, 32), 6.889362, tolerance = 1e-6)
+})
+
 test_that("risk_for_early_blight", {
   expect_silent({
     tibble(

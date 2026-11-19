@@ -1194,6 +1194,10 @@ if (FALSE) {
 
 # Early blight (Solanum) -------------------------------------------------------
 
+#' P-days: Sands, Hackett and Nix 1979, Field Crops Research 2:309-331
+#'   https://doi.org/10.1016/0378-4290(79)90031-5
+#' 300 P-day spray threshold: Pscheidt and Stevenson 1986, Plant Disease 70:915-920
+#'   https://doi.org/10.1094/PD-70-915
 #' Pscheidt and Stevenson 1988: https://link.springer.com/article/10.1007/BF02854357
 #' More information: https://vegpath.plantpath.wisc.edu/diseases/potato-early-blight/
 
@@ -1217,7 +1221,7 @@ calc_pdays <- function(tmin, tmax) {
   a <- 5 * pday(tmin)
   b <- 8 * pday((2 * tmin / 3) + (tmax / 3))
   c <- 8 * pday((2 * tmax / 3) + (tmin / 3))
-  d <- 3 * pday(tmin)
+  d <- 3 * pday(tmax)
   (a + b + c + d) / 24.0
 }
 
