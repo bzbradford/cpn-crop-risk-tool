@@ -11,7 +11,9 @@ No soybean variety is completely resistant to white mold, but varieties do range
 
 ### Model details
 
-The white mold model is based on logistic equations described in Willbur et al 2018 which calculate the probability of spore presence. Risk scores are assigned based on these probabilities.
+The white mold model follows the 2025 Sporecaster algorithm (Smith, Willbur and Webster), which builds on the logistic models of Willbur et al. (2018). These predict the probability that apothecia of *Sclerotinia sclerotiorum* are present in a field from 30-day averages of the daily maximum temperature, maximum relative humidity and, for non-irrigated fields, maximum wind speed. The non-irrigated prediction averages three models; the irrigated one is a single model that also uses row spacing. Risk levels: non-irrigated Low from 1 %, Moderate from 20 % and High from 35 %; irrigated Low from 1 %, Moderate from 5 % and High from 10 %. The model is inactive when the 30-day average daily high is 50 °F (10 °C) or lower. It applies from flowering (R1) through beginning pod (R3), when the canopy is closing.
+
+Updated November 2026: corrected a temperature coefficient in the third non-irrigated model and replaced a cold-weather scaling with the algorithm's 10 °C activity threshold.
 
 ### More information
 

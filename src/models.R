@@ -259,7 +259,7 @@ model_list <- list(
     name = "White mold",
     crop = "Soybean",
     group = "field",
-    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on probability of spore presence. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Soybean is vulnerable to white mold when in the growth stages R1-R3 (flowering - beginning pod).</b> Risk is based on the probability that apothecia, the small mushroom-like structures that release the spores, are present in the field. The model is inactive when the 30-day average daily high is 50 °F (10 °C) or lower. Model depends on 30-day moving average maximum temperature, relative humidity, and wind speed (non-irrigated model only). Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
     doc = "docs/white-mold.md",
     # risk_period = c("Jun 15", "Aug 7"),
     validate = function(params) {
@@ -719,28 +719,31 @@ if (FALSE) {
 # White mold (soybean) ---------------------------------------------------------
 
 #' Vulnerable growth stages: R1-R3, ~Jun 15 - Aug 7
-#' No risk: Fungicide app in last 14 days, min temp <32F
+#' Models run only when the 30-day mean daily max temperature is above 10 C
+#' Algorithm: 2025 Soybean White Mold Model Algorithm (Smith, Willbur, Webster),
+#'   building on Willbur et al. 2018
 #' Credit: Damon Smith UW-Madison, Wade Webster NDSU
 
-#' Non-irrigated model
+#' Non-irrigated model (2025 Soybean White Mold Model Algorithm)
+#' Mean of three logistic models
 #' Risk criteria: Low 1-20%, Med 20-35%, High >35%
 #' @param max_temp_30ma 30-day moving average of daily maximum temperature, Celsius
 #' @param max_wind_30ma 30-day moving average of daily maximum wind speed, m/s
 #' @param max_rh_30ma 30-day moving average of daily maximum relative humidity, 0-100%
-#' @returns probability of spore presence
+#' @returns probability of apothecial presence
 predict_white_mold_dry <- function(max_temp_30ma, max_wind_30ma, max_rh_30ma) {
   m1 <- -0.47 * max_temp_30ma - 1.01 * max_wind_30ma + 16.65
   m2 <- -0.68 * max_temp_30ma + 17.19
-  m3 <- -0.86 * max_temp_30ma + 0.1 * max_rh_30ma - 0.75 * max_wind_30ma + 8.2
+  m3 <- -0.56 * max_temp_30ma + 0.1 * max_rh_30ma - 0.75 * max_wind_30ma + 8.2
   (logistic(m1) + logistic(m2) + logistic(m3)) / 3
 }
 
-#' Irrigated model
+#' Irrigated model (2025 Soybean White Mold Model Algorithm)
 #' Risk criteria: Low 1-5%, Med 5-10%, High >10%
 #' @param max_temp_30ma Maximum daily temperature, 30-day moving average, Celsius
 #' @param max_rh_30ma Maximum daily relative humidity, 30-day moving average, 0-100%
 #' @param row_spacing "30" or "15" inches
-#' @returns probability of spore presence
+#' @returns probability of apothecial presence
 predict_white_mold_irrig <- function(
   max_temp_30ma,
   max_rh_30ma,
@@ -752,6 +755,14 @@ predict_white_mold_irrig <- function(
     0.65 * max_temp_30ma +
     0.38 * max_rh_30ma
   logistic(mu)
+}
+
+#' Models are inactive (probability 0) when the 30-day mean daily max temperature
+#' is 10 C or lower
+#' @param prob model probability
+#' @param tmax30 30-day moving average of daily maximum temperature, Celsius
+white_mold_gate <- function(prob, tmax30) {
+  if_else(tmax30 > 10, prob, if_else(is.na(tmax30), NA_real_, 0))
 }
 
 #' Build from weather
@@ -769,7 +780,6 @@ build_white_mold <- function(
     mutate(
       date = date,
       temperature_max_30day = roll_mean(temperature_max, 30),
-      temperature_min_21day = roll_mean(temperature_min, 21),
       wind_speed_max_30day = roll_mean(wind_speed_max, 30),
       relative_humidity_max_30day = roll_mean(relative_humidity_max, 30),
       .by = grid_id,
@@ -783,7 +793,8 @@ build_white_mold <- function(
           temperature_max_30day,
           relative_humidity_max_30day,
           row_spacing
-        ),
+        ) |>
+          white_mold_gate(temperature_max_30day),
         risk_from_prob(probability, 1, 5, 10),
         .by = grid_id
       )
@@ -795,7 +806,7 @@ build_white_mold <- function(
           kmh_to_mps(wind_speed_max_30day),
           relative_humidity_max_30day
         ) |>
-          attenuate_prob(temperature_min_21day),
+          white_mold_gate(temperature_max_30day),
         risk_from_prob(probability, 1, 20, 35),
         .by = grid_id
       )

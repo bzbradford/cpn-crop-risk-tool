@@ -190,6 +190,21 @@ test_that("build_white_mold", {
   })
 })
 
+test_that("predict_white_mold_dry follows the 2025 algorithm", {
+  # argument order: max_temp_30ma, max_wind_30ma, max_rh_30ma
+  expect_equal(predict_white_mold_dry(25, 3, 90), 0.711644, tolerance = 1e-5)
+  expect_equal(predict_white_mold_dry(26, 5, 95), 0.360578, tolerance = 1e-5)
+  expect_equal(predict_white_mold_dry(24, 5, 97), 0.651490, tolerance = 1e-5)
+})
+
+test_that("build_white_mold is inactive at a 30-day mean high of 10 C or below", {
+  cold <- test_daily_wx |> mutate(temperature_max = 5)
+  for (irrig in c(TRUE, FALSE)) {
+    res <- build_white_mold(cold, irrigated = irrig, row_spacing = "30")
+    expect_true(all(res$probability == 0))
+  }
+})
+
 # Frogeye leaf spot ----
 
 test_that("predict_fls", {
