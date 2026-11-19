@@ -1,0 +1,34 @@
+Package: cpnrisktool
+Title: Crop Disease and Insect Risk Tool
+Version: 0.0.0.9000
+Description: R Shiny app for agricultural weather monitoring and crop
+    disease risk forecasting. Not an installable package; this file lists
+    dependencies so CI can install them (local and deploy use renv.lock).
+License: file LICENSE
+Encoding: UTF-8
+Imports:
+    data.table,
+    fst,
+    htmltools,
+    htmlwidgets,
+    httr2,
+    janitor,
+    jsonlite,
+    leaflet,
+    leaflet.extras,
+    markdown,
+    mirai,
+    plotly,
+    sf,
+    shiny,
+    shinyalert,
+    shinyjs,
+    shinythemes,
+    shinyWidgets,
+    snakecase,
+    statmod,
+    tictoc,
+    tidyverse,
+    vctrs
+Suggests:
+    testthat

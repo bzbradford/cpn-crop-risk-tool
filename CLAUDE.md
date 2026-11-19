@@ -52,6 +52,7 @@ Insect models build from growing degree days. Defined in `src/models.R` and docu
 ## Key Conventions
 - Indentation: 2 spaces
 - R version and dependencies managed with `renv` (see `renv.lock`)
+- `DESCRIPTION` lists package dependencies for GitHub Actions CI, which installs current CRAN binaries via `setup-r-dependencies` rather than restoring `renv.lock`; add new packages there too
 - Test fixtures stored as `.rds` files in `tests/testthat/`
 - Assume the development environment is Windows
 
