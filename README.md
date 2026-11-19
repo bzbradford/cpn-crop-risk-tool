@@ -30,6 +30,7 @@ Selected field crops and vegetable disease model outputs are provided. These mod
   - Seedcorn maggot
   - Alfalfa weevil
   - Colorado potato beetle
+  - Aphid PVY vectors
 
 ### Data and methods
 

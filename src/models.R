@@ -1958,7 +1958,149 @@ if (FALSE) {
   validate_biofix(1)(list(start_date = today()))
 }
 
+## Fitted insect models --------------------------------------------------------
+# Curves fitted to field counts by degree days (GAM fits from UW Vegetable
+# Entomology), evaluated as in AgWeather v2:
+# - tabulate the fit on a 1-degree-day grid, linear between rows, holding the
+#   last value; back-transform; 0 before the first row
+# - activity = value / its maximum over the grid
+# - read a day's cumulative degree days off the grid
+# - scale by a fall freeze factor
+# - risk levels from activity at 0.05, 0.25, 0.5, 0.75
+
+FITTED_DD_GRID <- seq(0, 10000, by = 1)
+
+#' Tabulate a fitted curve on a 1-degree-day grid
+#' @param gdd degree days (F) of the fit's rows, increasing
+#' @param fit the fit on its link scale at those degree days
+#' @param transform "log1p" (fit is log(count + 1)) or "log" (fit is the log of
+#'   the fitted mean)
+#' @returns list of value, activity, peak, peak_dd
+fitted_curve <- function(gdd, fit, transform = c("log1p", "log")) {
+  transform <- match.arg(transform)
+  stopifnot(!is.unsorted(gdd), length(gdd) == length(fit))
+  x <- FITTED_DD_GRID
+  y <- approx(gdd, fit, xout = x, rule = 2)$y
+  value <- if (transform == "log1p") expm1(pmax(y, 0)) else exp(y)
+  value[x < gdd[1]] <- 0
+  list(
+    value = value,
+    activity = value / max(value),
+    peak = max(value),
+    peak_dd = x[which.max(value)]
+  )
+}
+
+#' Read a fitted curve at cumulative degree days
+#' @param curve from `fitted_curve()`
+#' @param what "value" or "activity"
+#' @param total cumulative degree days (F)
+read_curve <- function(curve, what, total) {
+  out <- rep(NA_real_, length(total))
+  ok <- !is.na(total)
+  if (any(ok)) {
+    out[ok] <- approx(FITTED_DD_GRID, curve[[what]], xout = total[ok], rule = 2)$y
+  }
+  out
+}
+
+#' Fall freeze factor: 1 until fall freezes, then max(0, 1 - f/4) for f days in
+#' the last 14 at or below -2 C after day of year 250, held at its lowest so far
+#' (call within a grid and year)
+#' @param tmin daily minimum temperature, Celsius
+#' @param yday day of year
+freeze_factor <- function(tmin, yday) {
+  f <- roll_sum(tmin <= -2, 14)
+  raw <- if_else(yday > 250, pmax(0, 1 - coalesce(f, 0) / 4), 1)
+  cummin(raw)
+}
+
+#' Build a fitted insect model from daily weather
+#' @param daily daily weather data
+#' @param model a model from `FittedInsect()`
+build_fitted_insect <- function(daily, model) {
+  req(nrow(daily) > 0)
+
+  res <- daily |>
+    arrange(grid_id, date) |>
+    mutate(
+      date = date,
+      gdd_f = gdd_sine(temperature_min, temperature_max, model$tmin, model$tmax) *
+        1.8,
+      cum_gdd = cumsum(gdd_f),
+      freeze = freeze_factor(temperature_min, yday(date)),
+      .by = c(grid_id, year),
+      .keep = "used"
+    )
+
+  for (id in names(model$curves)) {
+    curve <- model$curves[[id]]
+    res[[paste0("count_", id)]] <- read_curve(curve, "value", res$cum_gdd) *
+      res$freeze
+    res[[paste0("activity_", id)]] <- read_curve(curve, "activity", res$cum_gdd) *
+      res$freeze
+  }
+
+  res |>
+    mutate(
+      activity = .data[[paste0("activity_", model$risk_curve)]],
+      severity = (activity >= 0.05) +
+        (activity >= 0.25) +
+        (activity >= 0.5) +
+        (activity >= 0.75),
+      risk_from_severity(severity),
+      value_label = paste0(
+        sprintf("%.0f gdd (+%.0f)\n", cum_gdd, gdd_f),
+        model$describe(pick(everything())),
+        if_else(
+          freeze < 1,
+          "\nRecent freezing temperatures have reduced insect activity.",
+          ""
+        )
+      )
+    )
+}
+
 ## Insect defs -----------------------------------------------------------------
+
+#' Insect model read from fitted curves, see `build_fitted_insect()`
+#' @param curves named list of `fitted_curve()` results
+#' @param risk_curve name of the curve whose activity sets the risk
+#' @param describe function of the results data frame returning a label per row
+FittedInsect <- function(
+  name,
+  crop = NULL,
+  info,
+  doc,
+  tmin,
+  tmax = 30,
+  curves,
+  risk_curve,
+  describe
+) {
+  m <- Model(
+    name = name,
+    crop = crop,
+    group = "insect",
+    info = info,
+    doc = doc,
+    risk_period = NULL,
+    biofix = 1,
+    validate = validate_biofix(1),
+    ycol = c("activity", "cum_gdd", paste0("count_", names(curves))),
+    yrange = c(0, 1)
+  )
+  stopifnot(tmin < tmax)
+  stopifnot(risk_curve %in% names(curves))
+  stopifnot(is.function(describe))
+  m$tmin <- tmin
+  m$tmax <- tmax
+  m$curves <- curves
+  m$risk_curve <- risk_curve
+  m$describe <- describe
+  m
+}
+
 
 Insect <- function(
   name,
@@ -2044,25 +2186,58 @@ insect_models <- list(
         1000 ,    0 , "Adult diapause"            ,
     )
   ),
-  cpb = Insect(
-    "Colorado Potato Beetle",
-    crop = "Potato",
-    info = "Our Colorado potato beetle risk model was derived from 10 years of scouting data in the Central Sands and uses a base 50°F degree day model. The indicated risk score represents the estimated total abundance of adults and larvae. First adult colonization of crops is typically around 265 FDD with peak first-generation populations observed around 895 FDD. Total populations decline slightly through 1115 FDD during the period between generations. Populations peak again around 1375 FDD during second generation adult emergence and decline through the end of the season.",
-    doc = "docs/insects/cpb.md",
-    tmin = 10,
-    tmax = 30,
-    key = tribble(
-      ~start , ~sev , ~label                            ,
-         200 ,    1 , "1st gen adult colonization"      ,
-         350 ,    2 , "1st gen egg hatch"               ,
-         600 ,    3 , "1st gen peak adults"             ,
-         800 ,    4 , "1st gen peak larvae"             ,
-         935 ,    2 , "1st gen pupation"                ,
-        1100 ,    3 , "2nd gen adult emergence"         ,
-        1470 ,    4 , "2nd gen peak adults"             ,
-        1800 ,    3 , "2nd gen adult feeding continues" ,
-        1970 ,    2 , "2nd gen adults begin dispersing" ,
-        2265 ,    1 , "2nd gen adults mostly dispersed" ,
+  cpb = local({
+    # the scouting data end at 2,311 degree days; later rows are extrapolation
+    fit <- read_csv(
+      "data/insects/colorado_potato_beetle_fit.csv",
+      show_col_types = FALSE
+    ) |>
+      filter(gdd <= 2311)
+    FittedInsect(
+      name = "Colorado Potato Beetle",
+      crop = "Potato",
+      info = "This model shows how many Colorado potato beetles a typical field has at each point in the season, from curves fitted to scouting counts in commercial potato fields in Wisconsin's Central Sands, 2014–2025. It counts degree days from January 1 (single sine, base 52°F, cutoff 86°F). Risk compares today's typical count of adults and larvae with the season's peak. Overwintered adults colonize fields at about 210 degree days; egg masses peak near 580; larvae hatch from about 375 and peak near 795; adults peak near 590 and again near 1,480 as the summer generation emerges. Adults and larvae together peak near 810 and 1,350 and stay near their highest between, so risk stays high through midsummer.",
+      doc = "docs/insects/cpb.md",
+      tmin = f_to_c(52),
+      tmax = 30,
+      curves = list(
+        adults_larvae = fitted_curve(fit$gdd, fit$adults_larvae, "log1p"),
+        adults = fitted_curve(fit$gdd, fit$adults, "log1p"),
+        eggs = fitted_curve(fit$gdd, fit$eggs, "log1p"),
+        larvae = fitted_curve(fit$gdd, fit$larvae, "log1p")
+      ),
+      risk_curve = "adults_larvae",
+      describe = function(df) {
+        sprintf(
+          "Typical counts: %.1f adults and larvae per 25 sweeps (%.1f adults, %.1f larvae); %.1f egg masses per 10 plants",
+          df$count_adults_larvae,
+          df$count_adults,
+          df$count_larvae,
+          df$count_eggs
+        )
+      }
     )
-  )
+  }),
+  pvy = local({
+    fit <- read_csv(
+      "data/insects/aphid_pvy_vectors_fit.csv",
+      show_col_types = FALSE
+    )
+    FittedInsect(
+      name = "Aphid PVY vectors",
+      crop = "Potato",
+      info = "Potato virus Y (PVY) is spread by winged aphids probing leaves as they move through a field, mostly species that don't colonize potato, such as the soybean aphid. This model shows how much PVY-spreading aphid flight a typical Wisconsin season has at each point, as a share of the season's peak, from suction trap catches in 2016–2023. It counts degree days from January 1 (single sine, base 39.2°F, cutoff 86°F). It shows typical pressure for the time of year and when the flight usually begins; it doesn't forecast when this year's flight will peak. Current trap catches are the better guide when they're available.",
+      doc = "docs/insects/pvy.md",
+      tmin = 4, # 39.2 F
+      tmax = 30,
+      curves = list(pvy = fitted_curve(fit$gdd, fit$log_risk, "log")),
+      risk_curve = "pvy",
+      describe = function(df) {
+        sprintf(
+          "Vector pressure: %.0f%% of a typical season's peak",
+          df$activity_pvy * 100
+        )
+      }
+    )
+  })
 )

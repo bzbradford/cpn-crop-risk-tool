@@ -693,6 +693,95 @@ test_that("rye biomass is 0 once the numerator goes negative", {
   expect_equal(predict_rye_biomass(300, 800, 2000), 0)
 })
 
+# Fitted insects ----
+
+test_that("CPB curves read the fits as AgWeather does", {
+  m <- insect_models$cpb
+  at <- c(0, 220, 500, 810, 1350, 2310, 3000)
+  near <- function(x, y) expect_true(all(abs(x - y) < 1e-3))
+  near(
+    read_curve(m$curves$adults_larvae, "value", at),
+    c(0, 0.00009, 1.702998, 6.531334, 6.877155, 1.553555, 1.553555)
+  )
+  near(
+    read_curve(m$curves$adults_larvae, "activity", at),
+    c(0, 0.000013, 0.247631, 0.949715, 1, 0.225901, 0.225901)
+  )
+  near(
+    read_curve(m$curves$adults, "value", at),
+    c(0, 0.017871, 1.638913, 1.417361, 3.471703, 1.101732, 1.101732)
+  )
+  near(
+    read_curve(m$curves$eggs, "value", at),
+    c(0, 0, 1.046227, 0.534127, 0.100740, 0, 0)
+  )
+  near(
+    read_curve(m$curves$larvae, "value", at),
+    c(0, 0, 0.265097, 5.046128, 2.927658, 0.318086, 0.318086)
+  )
+  expect_equal(m$curves$adults_larvae$peak_dd, 1350)
+  near(m$curves$adults_larvae$peak, 6.877155)
+  expect_true(is.na(read_curve(m$curves$adults, "value", NA_real_)))
+})
+
+test_that("build_fitted_insect reproduces AgWeather for CPB on the 2025 Eau Claire weather", {
+  wx <- test_daily_wx |> filter(grid_id == "44.815,-91.530")
+  res <- build_fitted_insect(wx, insect_models$cpb)
+  expect_equal(round(max(res$cum_gdd), 1), 2515.5)
+  first <- function(t) min(res$date[res$activity >= t])
+  expect_equal(first(0.05), ymd("2025-06-02"))
+  expect_equal(first(0.25), ymd("2025-06-17"))
+  expect_equal(first(0.5), ymd("2025-06-21"))
+  expect_equal(first(0.75), ymd("2025-06-24"))
+  expect_equal(res$date[which.max(res$activity)], ymd("2025-07-27"))
+  expect_equal(
+    as.vector(table(factor(res$severity, levels = 0:4))),
+    c(203, 62, 21, 31, 48)
+  )
+  expect_equal(min(res$date[res$freeze < 1]), ymd("2025-10-24"))
+  expect_equal(min(res$date[res$freeze == 0]), ymd("2025-11-11"))
+  expect_true(all(insect_models$cpb$ycol %in% names(res)))
+})
+
+test_that("PVY curve reads the fit as AgWeather does", {
+  cv <- insect_models$pvy$curves$pvy
+  at <- c(0, 289, 290, 730, 2515, 3580, 5490, 6000)
+  expect_true(all(
+    abs(
+      read_curve(cv, "activity", at) -
+        c(0, 0, 0.126383, 0.251586, 0.632632, 1, 0.282652, 0.282652)
+    ) <
+      1e-3
+  ))
+  expect_true(abs(cv$peak - 1.483525) < 1e-4)
+  expect_equal(cv$peak_dd, 3580)
+})
+
+test_that("PVY on the 2025 Eau Claire weather", {
+  wx <- test_daily_wx |> filter(grid_id == "44.815,-91.530")
+  res <- build_fitted_insect(wx, insect_models$pvy)
+  expect_equal(round(max(res$cum_gdd), 1), 5029.7)
+  first <- function(t) min(res$date[res$activity >= t])
+  expect_equal(first(0.05), ymd("2025-04-24")) # total 289.8: the 289-290 ramp
+  expect_equal(first(0.25), ymd("2025-05-19"))
+  expect_equal(first(0.5), ymd("2025-07-14"))
+  expect_equal(first(0.75), ymd("2025-07-27"))
+  expect_equal(res$date[which.max(res$activity)], ymd("2025-08-23"))
+  expect_equal(
+    as.vector(table(factor(res$severity, levels = 0:4))),
+    c(164, 26, 73, 43, 59)
+  )
+  expect_true(all(insect_models$pvy$ycol %in% names(res)))
+})
+
+test_that("build_fitted_insect runs on all test grids", {
+  expect_silent({
+    test_daily_wx |>
+      build_fitted_insect(insect_models$cpb) |>
+      test_plot("activity")
+  })
+})
+
 # test_that("predict_rye_biomass", {
 #   expect_silent({
 #     expand_grid(

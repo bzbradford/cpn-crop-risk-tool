@@ -311,7 +311,11 @@ riskServer <- function(rv, rx) {
         req(nrow(daily) > 0)
 
         results <- if (model$group == "insect") {
-          build_insect(daily, model$tmin, model$tmax, model$key)
+          if (!is.null(model$curves)) {
+            build_fitted_insect(daily, model)
+          } else {
+            build_insect(daily, model$tmin, model$tmax, model$key)
+          }
         } else {
           switch(
             model$slug,

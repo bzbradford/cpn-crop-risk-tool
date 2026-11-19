@@ -47,7 +47,7 @@ An R Shiny web application for agricultural weather monitoring and crop disease 
 Defined in `src/models.R` and documented in `docs/`. Models differ but typically consist of a `predict_` function with base logic applied to computed weather variables, coupled with a `build_` function that generates variables from hourly or daily weather data, applies the `predict_` function, and characterizes the crop risk from the model output as risk words and color codes to be displayed in the app. Some models may include additional helper functions. Model metadata is defined into `model_list` through a `Model()` constructor. A model's `ycol` is a column name or vector of names from the build output: the first is the primary model output (risk coloring, plot sorting, map), and any others are optional extra traces the user can toggle on, drawn by `plot_risk()` on hidden y axes with values shown in the tooltip.
 
 ## Insect Models
-Insect models build from growing degree days. Defined in `src/models.R` and documented in `docs/insects`. Models are defined entirely as specs in `insect_models` constructed by `Insect()`.
+Insect models build from growing degree days. Defined in `src/models.R` and documented in `docs/insects`. Models are defined entirely as specs in `insect_models`, constructed by either `Insect()` (a degree-day step table of severities, built by `build_insect()`) or `FittedInsect()` (curves fitted to field counts, read from CSVs in `data/insects/` and built by `build_fitted_insect()`; risk is the day's activity as a share of the curve's peak, scaled down by fall freezes).
 
 ## Key Conventions
 - Indentation: 2 spaces
