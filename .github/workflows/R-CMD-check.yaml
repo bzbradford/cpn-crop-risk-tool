@@ -36,6 +36,7 @@ jobs:
             libssl-dev \
             libtiff5-dev \
             libudunits2-dev \
+            libuv1-dev \
             libwebp-dev \
             libx11-dev \
             pandoc
