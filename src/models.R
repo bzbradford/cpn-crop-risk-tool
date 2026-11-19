@@ -223,7 +223,7 @@ model_list <- list(
     name = "Gray leaf spot",
     crop = "Corn",
     group = "field",
-    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage.",
+    info = "<b>Corn is susceptible to gray leaf spot when in the growth stages V10-R3 (10th leaf - milk)</b>. Risk is based on probability of spore presence. Model depends on minimum temperature and dew point. Model predictions are only valid when the crop is present and in a vulnerable growth stage. With the current equation the probability is above 99% on nearly every day from July to mid-August in the Corn Belt, so it doesn't separate higher- from lower-risk weeks. We've asked the model's authors to check it.",
     doc = "docs/gray-leaf-spot.md",
     # risk_period = c("Jul 1", "Aug 15"),
     validate = function(params) {

@@ -13,6 +13,8 @@ Resistant hybrids and inbreds are available. Crop rotation and tillage reduce su
 
 The gray leaf spot model is based on logistic equations developed by Smith and Webster which calculate the probability of spore presence. Risk scores are assigned based on these probabilities.
 
+With the current equation the probability is above 99 % on nearly every day from July to mid-August in the Corn Belt, so it doesn't separate higher- from lower-risk weeks. We've asked the model's authors to check it.
+
 ### More information
 
 -   Crop protection network: <https://cropprotectionnetwork.org/encyclopedia/gray-leaf-spot-of-corn>
