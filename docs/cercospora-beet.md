@@ -7,7 +7,11 @@
 
 ### Model details
 
-The Cercospora leaf spot model is based on the algorithm described by Windels et al 1998 which provides a lookup table for Daily Infection Values (DIVs) based on the number of hours in a day where relative humidity is \>90%, and the mean temperature during those hours.
+The Cercospora leaf spot model is based on the algorithm described by Windels et al 1998 which provides a lookup table for Daily Infection Values (DIVs) based on the number of hours in a day where relative humidity is at or above 90 %, and the mean temperature during those hours.
+
+The method was developed for sugar beet in the Red River Valley, with weather stations in the fields. The North Dakota Agricultural Weather Network (NDAWN), whose values the sugar beet industry uses, counts hours at 85 % relative humidity or more, from noon to noon, adjusted to conditions in the crop canopy. This tool counts hours at 90 % or more from 8 pm to 8 pm, without a canopy adjustment, so its values can differ from NDAWN's at the same place. Its use for table beet in Wisconsin hasn't been tested.
+
+Updated November 2026: humid hours and their mean temperature now come from the same window (from 8 pm the evening before).
 
 ### References
 

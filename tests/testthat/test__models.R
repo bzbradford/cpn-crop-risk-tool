@@ -571,6 +571,11 @@ test_that("calc_cercospora_div", {
   })
 })
 
+test_that("calc_cercospora_div gives 0 with no humid hours", {
+  expect_equal(calc_cercospora_div(25, 0), 0) # 77 F
+  expect_equal(calc_cercospora_div(25, 6), 2) # 1 + (h > 5)
+})
+
 test_that("risk_for_cercospora", {
   expect_silent({
     tibble(

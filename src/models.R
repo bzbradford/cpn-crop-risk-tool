@@ -405,7 +405,7 @@ model_list <- list(
     name = "Cercospora leaf spot",
     crop = "Beet",
     group = "vegetable",
-    info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on the average disease severity values in the past 2 days and 7 days. Model depends on temperature and hours of high humidity.",
+    info = "<b>Cercospora leaf spot is a damaging fungal disease affecting beets.</b> Risk depends on daily infection values (DIVs, 0â€“7) averaged over the past 2 and 7 days: Very high when the 7-day average reaches 5 or the 2-day average 5.5, High from 3 or 3.5, Moderate from 1.5 or 2, Low from 0.5 or 1. Sugar beet guides read two-day totals: 7 or more means a strong chance of infection. Model depends on temperature and hours of high humidity.",
     doc = "docs/cercospora-beet.md",
     risk_period = NULL,
     validate = NULL,
@@ -1424,7 +1424,7 @@ if (FALSE) {
 # Cercospora leaf blight (beet) ------------------------------------------------
 
 # Based on Windels 1998: https://apsjournals.apsnet.org/doi/abs/10.1094/PDIS.1998.82.7.716
-# More information: https://vegpath.plantpath.wisc.edu/diseases/carrot-alternaria-and-cercospora-leaf-blights/
+# More information: https://www.vegetables.cornell.edu/pest-management/disease-factsheets/cercospora-leaf-spot-of-table-beet/
 
 #' Calculate daily infection values
 #' @param t Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
@@ -1434,6 +1434,7 @@ calc_cercospora_div <- function(t, h) {
   t <- c_to_f(t)
   case_when(
     is.na(t) | is.na(h) ~ 0,
+    h == 0 ~ 0,
     t <= 60 ~ 0,
     t <= 61 ~ (h > 21),
     t <= 62 ~ (h > 19) + (h > 22),
