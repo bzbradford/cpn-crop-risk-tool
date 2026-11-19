@@ -17,6 +17,7 @@ test_that("humid hours and their temperature come from the same window", {
   lb <- build_late_blight(d)
   expect_equal(sum(lb$dsv), 53)
   expect_equal(min(lb$date[lb$total >= 18]), ymd("2025-07-16"))
+  expect_equal(sum(build_alternaria(d)$dsv), 97)
   expect_equal(sum(build_cercospora(d)$dsv), 102)
   expect_equal(sum(build_botrytis(d)$dsv), 46)
 })
@@ -489,6 +490,23 @@ test_that("calc_alternaria_dsv", {
       scale_fill_viridis_c() +
       coord_cartesian(expand = F)
   })
+})
+
+test_that("calc_alternaria_dsv follows FAST's table", {
+  expect_equal(calc_alternaria_dsv(15, 7), 1)
+  expect_equal(calc_alternaria_dsv(15, 6), 0)
+  expect_equal(calc_alternaria_dsv(19, 4), 1)
+  expect_equal(calc_alternaria_dsv(17.9, 16), 2) # 17.9 C is in the 13-17 band
+  expect_equal(calc_alternaria_dsv(18, 4), 1) # 18 C is in the 18-20 band
+  expect_equal(calc_alternaria_dsv(20.5, 4), 1) # 20.5 C is in the 18-20 band
+  expect_equal(calc_alternaria_dsv(21, 3), 1) # 21 C is in the 21-25 band
+  expect_equal(calc_alternaria_dsv(25.5, 3), 1) # 25.5 C is in the 21-25 band
+  expect_equal(calc_alternaria_dsv(26, 3), 0) # 26 C is in the 26-29 band
+  expect_equal(calc_alternaria_dsv(26, 4), 1)
+  expect_equal(calc_alternaria_dsv(29.5, 23), 4)
+  expect_equal(calc_alternaria_dsv(30, 23), 0) # above FAST's table
+  expect_equal(calc_alternaria_dsv(NA, 0), 0)
+  expect_equal(calc_alternaria_dsv(20, 0), 0)
 })
 
 test_that("risk_for_alternaria", {

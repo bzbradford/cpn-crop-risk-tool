@@ -389,7 +389,7 @@ model_list <- list(
     name = "Alternaria/Cercospora leaf blight",
     crop = "Carrot",
     group = "vegetable",
-    info = "<b>Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles.</b> Risk depends on the number of disease severity values generated in the last 7 days. Model depends on temperature and hours of high humidity.",
+    info = "<b>Alternaria and Cercospora leaf blights are a common fungal disease of carrot leaves and petioles.</b> Risk depends on the disease severity values (DSVs) of the last 7 days (Low from 5, Moderate from 10, High from 15, Very high from 20). Spray programs usually go by the total since the last spray instead: spray again once 15 to 20 DSVs have built up. Set the start date to your last spray and watch the total in the chart labels. Model depends on temperature and hours of high humidity.",
     doc = "docs/alternaria.md",
     risk_period = NULL,
     validate = NULL,
@@ -1342,17 +1342,20 @@ if (FALSE) {
 #'   https://www.apsnet.org/publications/phytopathology/backissues/Documents/1978Articles/Phyto68n09_1354.PDF
 
 #' Calculate disease severity values for a day
+#' FAST Table 1 (Madden et al. 1978) by whole-degree band, read as half-open
+#' ranges of the unrounded temperature (eg 17.9 C is in the 13-17 band).
+#' Above 29 C, where FAST's table stops, scores 0.
 #' @param temp Mean temperature during hours where RH > 90%, Celsius
 #' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns numeric 0-4 dsv
 calc_alternaria_dsv <- function(temp, h) {
   case_when(
-    is.na(temp) | is.na(h) ~ 0,
+    is.na(temp) | is.na(h) | h == 0 ~ 0,
     temp < 13 ~ 0,
-    temp <= 17 ~ (h >= 7) + (h >= 16) + (h >= 21),
-    temp <= 20 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
-    temp <= 25 ~ (h >= 3) + (h >= 6) + (h >= 13) + (h >= 21),
-    temp <= 29 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    temp < 18 ~ (h >= 7) + (h >= 16) + (h >= 21),
+    temp < 21 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
+    temp < 26 ~ (h >= 3) + (h >= 6) + (h >= 13) + (h >= 21),
+    temp < 30 ~ (h >= 4) + (h >= 9) + (h >= 16) + (h >= 23),
     TRUE ~ 0
   )
 }
