@@ -14,7 +14,7 @@ Selected field crops and vegetable disease model outputs are provided. These mod
 
 - **Field crops models**
   - Corn: Tar spot, Gray leaf spot, Gibberella/DON
-  - Soybean: White mold, Frogeye leaf spot, Cercospora (beta)
+  - Soybean: White mold, Frogeye leaf spot, Cercospora (beta), Red crown rot (beta)
   - Wheat: Wheat scab
   - Cotton: Cotton planting risk
 - **Vegetable crop diseases**
