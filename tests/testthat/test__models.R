@@ -2,6 +2,25 @@
 
 # Weather data ----
 
+test_that("humid hours and their temperature come from the same window", {
+  d <- test_hourly_wx |>
+    filter(grid_id == "44.815,-91.530") |>
+    build_daily()
+  # the window's mean temperature exists exactly when the window has humid hours
+  expect_equal(
+    is.na(d$temperature_mean_rh_over_90),
+    d$hours_rh_over_90_since_night == 0
+  )
+
+  # matches AgWeather v2 on the 2025 Eau Claire weather, May 15 - Sep 30
+  d <- d |> filter(between(date, ymd("2025-05-15"), ymd("2025-09-30")))
+  lb <- build_late_blight(d)
+  expect_equal(sum(lb$dsv), 53)
+  expect_equal(min(lb$date[lb$total >= 18]), ymd("2025-07-16"))
+  expect_equal(sum(build_cercospora(d)$dsv), 102)
+  expect_equal(sum(build_botrytis(d)$dsv), 46)
+})
+
 test_that("build_daily", {
   expect_silent({
     test_daily_wx |>

@@ -103,6 +103,9 @@ build_daily <- function(hourly) {
     summarize(
       hours_rh_over_80_night = sum(night & rh80),
       hours_rh_over_90_night = sum(night & rh90),
+      # humid hours over the same window as their mean temperature below
+      hours_rh_over_80_since_night = sum(rh80),
+      hours_rh_over_90_since_night = sum(rh90),
       temperature_mean_rh_over_80 = if_else(
         sum(rh80) > 0,
         sum(temperature * (rh80)) / sum(rh80),
@@ -356,7 +359,11 @@ model_list <- list(
         "Ensure start date is set to approximate crop emergence date."
       }
     },
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -386,7 +393,11 @@ model_list <- list(
     doc = "docs/alternaria.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -398,7 +409,11 @@ model_list <- list(
     doc = "docs/cercospora-beet.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -410,7 +425,11 @@ model_list <- list(
     doc = "docs/botrytis.md",
     risk_period = NULL,
     validate = NULL,
-    ycol = c("severity", "temperature_mean_rh_over_90", "hours_rh_over_90"),
+    ycol = c(
+      "severity",
+      "temperature_mean_rh_over_90",
+      "hours_rh_over_90_since_night"
+    ),
     yrange = c(0, 4)
   ),
 
@@ -1253,7 +1272,7 @@ if (FALSE) {
 
 #' Calculate disease severity values
 #' @param t Mean temperature during hours where RH > 90%, Celsius
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns numeric 0-4 disease severity values
 calc_late_blight_dsv <- function(t, h) {
   case_when(
@@ -1301,7 +1320,7 @@ build_late_blight <- function(daily) {
       date = date,
       dsv = calc_late_blight_dsv(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_late_blight(dsv),
       .by = grid_id,
@@ -1324,7 +1343,7 @@ if (FALSE) {
 
 #' Calculate disease severity values for a day
 #' @param temp Mean temperature during hours where RH > 90%, Celsius
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns numeric 0-4 dsv
 calc_alternaria_dsv <- function(temp, h) {
   case_when(
@@ -1369,7 +1388,7 @@ build_alternaria <- function(daily) {
       date = date,
       dsv = calc_alternaria_dsv(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_alternaria(dsv),
       .by = grid_id,
@@ -1390,7 +1409,7 @@ if (FALSE) {
 
 #' Calculate daily infection values
 #' @param t Mean temperature during hours where RH > 90%, Celsius, converted to Fahrenheit internally
-#' @param h Number of hours where RH > 90%
+#' @param h Number of hours with RH >= 90% since 8 pm the previous evening
 #' @returns 0-7 div
 calc_cercospora_div <- function(t, h) {
   t <- c_to_f(t)
@@ -1452,7 +1471,7 @@ build_cercospora <- function(daily) {
       date = date,
       dsv = calc_cercospora_div(
         temperature_mean_rh_over_90,
-        hours_rh_over_90
+        hours_rh_over_90_since_night
       ),
       risk_for_cercospora(dsv),
       .by = grid_id,
@@ -1481,7 +1500,7 @@ if (FALSE) {
 #' D) if prev day dry (<70% rh for >= 6 hrs) and no rain => 0 else 1
 #' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
-#' @param hours_rh90 hours rh > 90 during past day
+#' @param hours_rh90 hours with RH >= 90% since 8 pm the previous evening
 botcast_dinov <- function(hot, dry, hours_rh90) {
   case_when(
     hot ~ 0,
@@ -1518,7 +1537,7 @@ botcast_dinfv <- function(t, h) {
 # Final botrytis disease severity index calculation
 #' @param hot T/F temp > 30 for >= 4 hrs on any of past 5 days
 #' @param dry T/F previous day dry
-#' @param hours_rh_over_90 hours with RH > 90% over past day
+#' @param hours_rh_over_90 hours with RH >= 90% since 8 pm the previous evening
 #' @param mean_temp_rh90 mean air temperature for hours with RH > 90%
 calc_botrytis_dsi <- function(hot, dry, hours_rh_over_90, mean_temp_rh90) {
   dinov <- botcast_dinov(hot, lag(dry, default = FALSE), hours_rh_over_90)
@@ -1556,7 +1575,7 @@ build_botrytis <- function(daily) {
       dsv = calc_botrytis_dsi(
         hot_past_5_days,
         dry,
-        hours_rh_over_90,
+        hours_rh_over_90_since_night,
         temperature_mean_rh_over_90
       ),
       risk_for_botrytis(dsv),
