@@ -275,6 +275,14 @@ test_that("gdd_sine hand-derivable cases", {
   expect_equal(gdd_sine(25, 5, 10), gdd_sine(5, 25, 10))
 })
 
+test_that("gdd_sine matches AgWeather v2 reference values", {
+  expect_equal(gdd_sine(15, 33, 10, 30), 13.471035, tolerance = 1e-6)
+  expect_equal(gdd_sine(20, 36, f_to_c(52), 30), 15.262410, tolerance = 1e-6)
+  expect_equal(gdd_sine(5, 33, 10, 30), 9.492361, tolerance = 1e-6)
+  expect_equal(gdd_sine(12, 25, 10, 30), 8.5)
+  expect_equal(gdd_sine(5, 20, 10, 30), 3.771224, tolerance = 1e-6)
+})
+
 test_that("gdd_sine properties", {
   grid <- expand.grid(tmin = -5:40, tmax = -5:40)
   grid <- grid[grid$tmax >= grid$tmin, ]
